@@ -49,7 +49,7 @@ gcloud run deploy job-autofill-proxy \
   --source server \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_LOCATION=us-central1,VERTEX_MODEL=gemini-2.0-flash,PROXY_TOKEN=$PROXY_TOKEN"
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_LOCATION=us-central1,VERTEX_MODEL=gemini-2.5-flash,PROXY_TOKEN=$PROXY_TOKEN"
 ```
 
 > `--allow-unauthenticated` only opens it at the network layer; the service
@@ -74,6 +74,20 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 
 So nothing surprises you after the trial credit / 90 days:
 https://console.cloud.google.com/billing → Budgets & alerts → create a small budget.
+
+### Troubleshooting (gotchas seen on fresh projects)
+
+- **Deploy fails with `storage.objects.get` 403** — the Compute service account
+  Cloud Build uses lacks build/storage roles on new projects. Grant them:
+  ```bash
+  SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:$SA" --role="roles/cloudbuild.builds.builder"
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:$SA" --role="roles/storage.objectViewer"
+  ```
+- **`/generate` returns a 404 "Publisher Model ... not found"** — Vertex needs a
+  current model ID, and newer projects only have the latest generation. Use
+  `gemini-2.5-flash` (the default here). The bare `gemini-2.0-flash` alias from
+  AI Studio does **not** work on Vertex.
 
 ---
 

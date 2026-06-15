@@ -5,6 +5,8 @@ import { extractText } from '../lib/documents';
 import { sendToBackground } from '../lib/messages';
 import type { AIResult } from '../lib/messages';
 import { parseResumeJson } from '../lib/resumeImport';
+import { ProxyProvider } from '../lib/ai/proxy';
+import { AIError } from '../lib/ai';
 
 export function Options() {
   const { profile, loaded, saveState, update } = useProfile();
@@ -53,6 +55,27 @@ function OptionsView({
   });
   // Snapshot of the profile taken right before the last import, for undo.
   const [undoSnapshot, setUndoSnapshot] = useState<Profile | null>(null);
+  const [proxyTest, setProxyTest] = useState<{ busy: boolean; msg: string; err: string }>({
+    busy: false,
+    msg: '',
+    err: '',
+  });
+
+  /** Pings the configured proxy with a tiny prompt to verify URL + token. */
+  async function testProxy(): Promise<void> {
+    setProxyTest({ busy: true, msg: '', err: '' });
+    try {
+      const provider = new ProxyProvider(p.ai.proxyUrl, p.ai.proxyToken);
+      const text = await provider.generate({
+        system: 'You are a connectivity test. Reply with exactly: OK',
+        prompt: 'Reply with OK.',
+        maxOutputTokens: 10,
+      });
+      setProxyTest({ busy: false, err: '', msg: `Connected ✓ (model replied: "${text.slice(0, 30)}")` });
+    } catch (e) {
+      setProxyTest({ busy: false, msg: '', err: e instanceof AIError ? e.message : (e as Error).message });
+    }
+  }
 
   /** Sends résumé text to the AI and fills work / education / skills. */
   async function importFromResume(text: string): Promise<void> {
@@ -162,6 +185,13 @@ function OptionsView({
                 your GCP $300 credit via Vertex AI. The token stays on this device.
               </div>
             </Field>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button className="primary" disabled={proxyTest.busy} onClick={testProxy}>
+                {proxyTest.busy ? 'Testing…' : 'Test proxy'}
+              </button>
+              {proxyTest.msg && <span className="saved">{proxyTest.msg}</span>}
+              {proxyTest.err && <span className="warn">{proxyTest.err}</span>}
+            </div>
           </>
         )}
       </section>

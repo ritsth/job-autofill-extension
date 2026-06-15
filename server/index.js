@@ -16,7 +16,9 @@ import { VertexAI } from '@google-cloud/vertexai';
 const PORT = process.env.PORT || 8080;
 const PROJECT = process.env.GOOGLE_CLOUD_PROJECT;
 const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
-const MODEL = process.env.VERTEX_MODEL || 'gemini-2.0-flash';
+// Vertex AI needs versioned/current model IDs (unlike AI Studio's bare aliases).
+// gemini-2.5-flash is broadly available; older 1.5/2.0 IDs 404 on newer projects.
+const MODEL = process.env.VERTEX_MODEL || 'gemini-2.5-flash';
 const PROXY_TOKEN = process.env.PROXY_TOKEN || '';
 
 if (!PROJECT) console.warn('[proxy] GOOGLE_CLOUD_PROJECT is not set');
