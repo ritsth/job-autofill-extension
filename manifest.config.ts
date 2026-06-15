@@ -46,6 +46,8 @@ export default defineManifest({
     ...GREENHOUSE_MATCHES,
     ...LEVER_MATCHES,
     'https://generativelanguage.googleapis.com/*',
+    // Managed-proxy mode (Cloud Run). Lets the service worker call the proxy.
+    'https://*.run.app/*',
   ],
   content_scripts: [
     {

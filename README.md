@@ -13,6 +13,11 @@ structured profile, and uses AI to:
 
 The UI is a **side panel** (stays open while you browse, closes only when you close it).
 
+**AI providers:** Gemini (BYO free key), on-device (Chrome built-in), or a **managed
+proxy** — a small Cloud Run service that relays to **Vertex AI** so you can spend the
+GCP $300 credit (AI Studio's Gemini API is excluded from the credit; Vertex isn't). See
+[`server/README.md`](server/README.md) to deploy it, then pick "Managed proxy" in options.
+
 **Where it runs:** full autofill on **Greenhouse** and **Lever**. The eligibility badge
 runs on **every page** (so no job board is missed), but it self-gates — it only appears
 when the page actually looks like a job posting, and it stays current on single-page

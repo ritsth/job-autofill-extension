@@ -1,0 +1,4 @@
+# Don't upload local deps; Cloud Run buildpacks run `npm install` server-side.
+node_modules
+*.local
+.env

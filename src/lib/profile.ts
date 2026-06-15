@@ -49,12 +49,15 @@ export interface Preferences {
   disabilityStatus: string;
 }
 
-export type AIProviderId = 'gemini' | 'onDevice';
+export type AIProviderId = 'gemini' | 'onDevice' | 'proxy';
 
 export interface AISettings {
   provider: AIProviderId;
   apiKey: string;
   model: string;
+  /** Managed-proxy mode (Cloud Run → Vertex AI). */
+  proxyUrl: string;
+  proxyToken: string;
 }
 
 export interface Profile {
@@ -108,6 +111,8 @@ export const DEFAULT_PROFILE: Profile = {
     provider: 'gemini',
     apiKey: '',
     model: 'gemini-2.0-flash',
+    proxyUrl: '',
+    proxyToken: '',
   },
   scanEnabled: true,
 };

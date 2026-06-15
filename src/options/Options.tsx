@@ -116,6 +116,7 @@ function OptionsView({
           <Field label="Provider">
             <select value={p.ai.provider} onChange={(e) => setAI('provider', e.target.value)}>
               <option value="gemini">Google Gemini (bring your own free key)</option>
+              <option value="proxy">Managed proxy (Vertex AI via Cloud Run)</option>
               <option value="onDevice">On-device (Chrome built-in, no key)</option>
             </select>
           </Field>
@@ -139,6 +140,29 @@ function OptionsView({
               . Free tier is rate-limited but fine for personal use.
             </div>
           </Field>
+        )}
+        {p.ai.provider === 'proxy' && (
+          <>
+            <Field label="Proxy URL">
+              <input
+                value={p.ai.proxyUrl}
+                placeholder="https://job-autofill-proxy-xxxx-uc.a.run.app/generate"
+                onChange={(e) => setAI('proxyUrl', e.target.value)}
+              />
+            </Field>
+            <Field label="Proxy token">
+              <input
+                type="password"
+                value={p.ai.proxyToken}
+                placeholder="The PROXY_TOKEN you set on the Cloud Run service"
+                onChange={(e) => setAI('proxyToken', e.target.value)}
+              />
+              <div className="help">
+                Deploy the proxy from the <code>server/</code> folder (see its README) to use
+                your GCP $300 credit via Vertex AI. The token stays on this device.
+              </div>
+            </Field>
+          </>
         )}
       </section>
 

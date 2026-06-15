@@ -1,0 +1,16 @@
+{
+  "name": "job-autofill-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloud Run proxy that relays generation requests to Vertex AI (Gemini). Keeps the GCP credential server-side; the extension calls it with a shared bearer token.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.9.3"
+  }
+}
