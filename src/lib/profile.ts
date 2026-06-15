@@ -108,10 +108,13 @@ export const DEFAULT_PROFILE: Profile = {
     '[Write a couple of sentences about why you are a great fit.]\n\n' +
     'Sincerely,\n[Your Name]',
   ai: {
-    provider: 'gemini',
+    // Defaults to the managed proxy (Vertex AI via Cloud Run). The URL is
+    // pre-filled; only the proxy token needs to be pasted in options. The token
+    // is the secret, so it is intentionally NOT baked into the source.
+    provider: 'proxy',
     apiKey: '',
     model: 'gemini-2.0-flash',
-    proxyUrl: '',
+    proxyUrl: 'https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/generate',
     proxyToken: '',
   },
   scanEnabled: true,

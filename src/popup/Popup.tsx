@@ -37,7 +37,10 @@ export function Popup() {
       setPage({ supported: false, site: null, company: '', role: '' });
     }
     const profile = await getProfile();
-    setNeedsKey(profile.ai.provider === 'gemini' && !profile.ai.apiKey.trim());
+    const needsConfig =
+      (profile.ai.provider === 'gemini' && !profile.ai.apiKey.trim()) ||
+      (profile.ai.provider === 'proxy' && !profile.ai.proxyToken.trim());
+    setNeedsKey(needsConfig);
     setScanEnabled(profile.scanEnabled);
   }
 
@@ -111,7 +114,8 @@ export function Popup() {
 
       {needsKey && (
         <div className="block warn">
-          No Gemini API key set. <a onClick={openOptions} style={{ cursor: 'pointer' }}>Add one →</a>
+          AI isn't configured yet.{' '}
+          <a onClick={openOptions} style={{ cursor: 'pointer' }}>Set it up →</a>
         </div>
       )}
 
