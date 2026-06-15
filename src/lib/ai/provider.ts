@@ -11,6 +11,8 @@ export interface GenerateInput {
   maxOutputTokens?: number;
   /** Request strict JSON output (sets the model's JSON response mode). */
   json?: boolean;
+  /** Allow the model to "think" before answering (better quality, slower). */
+  thinking?: boolean;
 }
 
 export interface AIProvider {

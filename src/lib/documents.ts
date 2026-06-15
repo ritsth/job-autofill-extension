@@ -30,6 +30,7 @@ async function extractPdf(file: File): Promise<ExtractResult> {
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
   const parts: string[] = [];
+  const links = new Set<string>();
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
@@ -37,17 +38,45 @@ async function extractPdf(file: File): Promise<ExtractResult> {
       .map((item) => ('str' in item ? item.str : ''))
       .join(' ');
     parts.push(pageText);
+    // Hyperlinks (LinkedIn/GitHub/portfolio) live in link annotations, not the
+    // visible text — collect their URLs so the AI gets the real address.
+    const annotations = (await page.getAnnotations()) as Array<{
+      subtype?: string;
+      url?: string;
+      unsafeUrl?: string;
+    }>;
+    for (const a of annotations) {
+      const url = a.url || a.unsafeUrl;
+      if (a.subtype === 'Link' && url) links.add(url);
+    }
   }
-  const text = parts.join('\n\n').replace(/[ \t]+\n/g, '\n').trim();
-  if (!text) {
+  const base = parts.join('\n\n').replace(/[ \t]+\n/g, '\n').trim();
+  if (!base) {
     return { text: '', warning: 'No selectable text found (scanned PDF?). Try a text-based PDF.' };
   }
-  return { text };
+  return { text: appendLinks(base, links) };
 }
 
 async function extractDocx(file: File): Promise<ExtractResult> {
   const mammoth = await import('mammoth');
   const buf = await file.arrayBuffer();
   const result = await mammoth.extractRawText({ arrayBuffer: buf });
-  return { text: result.value.trim() };
+  let text = result.value.trim();
+  // Raw-text extraction drops hyperlink targets; pull them from the HTML.
+  try {
+    const html = (await mammoth.convertToHtml({ arrayBuffer: buf })).value;
+    const urls = new Set<string>();
+    for (const m of html.matchAll(/href="([^"]+)"/g)) urls.add(m[1]);
+    text = appendLinks(text, urls);
+  } catch {
+    // ignore — raw text is still usable
+  }
+  return { text };
+}
+
+/** Appends a deduped list of http(s) URLs found in the document. */
+function appendLinks(text: string, urls: Set<string>): string {
+  const clean = [...urls].filter((u) => /^https?:\/\//i.test(u));
+  if (!clean.length) return text;
+  return `${text}\n\nLinks found in document:\n${clean.join('\n')}`;
 }

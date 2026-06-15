@@ -49,17 +49,17 @@ function readBody(req) {
   });
 }
 
-async function generate({ system, prompt, maxOutputTokens, json }) {
+async function generate({ system, prompt, maxOutputTokens, json, thinking }) {
   const model = vertex.getGenerativeModel({
     model: MODEL,
     systemInstruction: system ? { role: 'system', parts: [{ text: system }] } : undefined,
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: maxOutputTokens ?? 1024,
-      // Disable "thinking" — 2.5 Flash otherwise spends the output budget on
-      // hidden reasoning and returns empty/truncated text for short requests.
-      // Autofill doesn't need it.
-      thinkingConfig: { thinkingBudget: 0 },
+      // Thinking on (dynamic budget) only when asked — better open-ended
+      // answers. Off by default: 2.5 Flash otherwise spends the output budget
+      // on hidden reasoning and truncates/empties short requests.
+      thinkingConfig: { thinkingBudget: thinking ? -1 : 0 },
       // JSON mode for structured extraction (e.g. résumé parsing) so the model
       // returns parseable JSON with no markdown fences or prose.
       ...(json ? { responseMimeType: 'application/json' } : {}),
@@ -95,10 +95,10 @@ const server = http.createServer(async (req, res) => {
 
   try {
     const raw = await readBody(req);
-    const { system = '', prompt = '', maxOutputTokens, json } = JSON.parse(raw || '{}');
+    const { system = '', prompt = '', maxOutputTokens, json, thinking } = JSON.parse(raw || '{}');
     if (!prompt) return send(res, 400, { error: 'Missing "prompt"' });
 
-    const text = await generate({ system, prompt, maxOutputTokens, json });
+    const text = await generate({ system, prompt, maxOutputTokens, json, thinking });
     if (!text) return send(res, 502, { error: 'Empty response from Vertex AI' });
     return send(res, 200, { text });
   } catch (err) {

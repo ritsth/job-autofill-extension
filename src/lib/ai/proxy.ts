@@ -13,7 +13,7 @@ export class ProxyProvider implements AIProvider {
     private token: string,
   ) {}
 
-  async generate({ system, prompt, maxOutputTokens, json }: GenerateInput): Promise<string> {
+  async generate({ system, prompt, maxOutputTokens, json, thinking }: GenerateInput): Promise<string> {
     if (!this.url) {
       throw new AIError('No proxy URL set. Add your Cloud Run URL in the extension options.');
     }
@@ -26,7 +26,7 @@ export class ProxyProvider implements AIProvider {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.token}`,
         },
-        body: JSON.stringify({ system, prompt, maxOutputTokens, json }),
+        body: JSON.stringify({ system, prompt, maxOutputTokens, json, thinking }),
       });
     } catch (e) {
       throw new AIError(`Could not reach the proxy: ${(e as Error).message}`);

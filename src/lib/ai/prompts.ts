@@ -20,6 +20,10 @@ const COVER_LETTER_SYSTEM =
 export function buildAnswerPrompt(question: string, context: string): GenerateInput {
   return {
     system: ANSWER_SYSTEM,
+    // Let the model think for higher-quality open-ended answers; give it room
+    // so thinking + the answer both fit within the output budget.
+    thinking: true,
+    maxOutputTokens: 4096,
     prompt:
       `APPLICANT PROFILE:\n${context}\n\n` +
       `APPLICATION QUESTION:\n${question}\n\n` +
@@ -37,10 +41,13 @@ const RESUME_PARSE_SYSTEM =
   '  "education": [{ "school": "", "degree": "", "field": "", "graduationYear": "" }],\n' +
   '  "skills": ["", ""]\n' +
   '}\n' +
-  'Use the résumé\'s own wording. For "personal", use full URLs for linkedin/github/portfolio ' +
-  'and split the name into first/last. Use "present" for current roles. Keep each description to ' +
-  'one or two sentences. Use "" for any field not found and [] for absent sections. Do not invent ' +
-  'anything.';
+  'Use the résumé\'s own wording. For "personal", use the FULL URL for ' +
+  'linkedin/github/portfolio (a "Links found in document:" section may list them — match each ' +
+  'URL to the right field by its domain, e.g. linkedin.com → linkedin, github.com → github; any ' +
+  'other personal site → portfolio). Never put the word "LinkedIn"/"GitHub" as the value — only a ' +
+  'URL or "". Split the name into first/last. Use "present" for current roles. Keep each ' +
+  'description to one or two sentences. Use "" for any field not found and [] for absent sections. ' +
+  'Do not invent anything.';
 
 export function buildResumeParsePrompt(resumeText: string): GenerateInput {
   return {
