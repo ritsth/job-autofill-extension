@@ -45,7 +45,10 @@ const RESUME_PARSE_SYSTEM =
 export function buildResumeParsePrompt(resumeText: string): GenerateInput {
   return {
     system: RESUME_PARSE_SYSTEM,
-    maxOutputTokens: 2048,
+    // Generous budget: 2.5 Flash spends "thinking" tokens before the JSON, so a
+    // small cap truncates the output. JSON mode keeps the result parseable.
+    maxOutputTokens: 8192,
+    json: true,
     prompt: `RÉSUMÉ:\n${resumeText}\n\nReturn the JSON:`,
   };
 }

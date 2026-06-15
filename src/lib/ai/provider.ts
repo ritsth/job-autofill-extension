@@ -9,6 +9,8 @@ export interface GenerateInput {
   prompt: string;
   /** Optional output budget (e.g. résumé parsing needs more than a short answer). */
   maxOutputTokens?: number;
+  /** Request strict JSON output (sets the model's JSON response mode). */
+  json?: boolean;
 }
 
 export interface AIProvider {

@@ -15,7 +15,7 @@ export class GeminiProvider implements AIProvider {
     private model = 'gemini-2.0-flash',
   ) {}
 
-  async generate({ system, prompt, maxOutputTokens }: GenerateInput): Promise<string> {
+  async generate({ system, prompt, maxOutputTokens, json }: GenerateInput): Promise<string> {
     if (!this.apiKey) {
       throw new AIError('No Gemini API key set. Add one in the extension options.');
     }
@@ -27,7 +27,11 @@ export class GeminiProvider implements AIProvider {
     const body = {
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: maxOutputTokens ?? 1024 },
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: maxOutputTokens ?? 1024,
+        ...(json ? { responseMimeType: 'application/json' } : {}),
+      },
     };
 
     let res: Response;
