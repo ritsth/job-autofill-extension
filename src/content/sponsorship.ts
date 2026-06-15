@@ -1,0 +1,182 @@
+// Scans the job page for work-eligibility signals (visa sponsorship, U.S.
+// citizenship, security clearance, export control) and shows a bold YES / NO
+// badge so you can triage a posting at a glance.
+
+export type Verdict = 'yes' | 'no' | 'unknown';
+
+export interface SponsorAnalysis {
+  verdict: Verdict;
+  restrictions: string[];
+  positives: string[];
+}
+
+// Restrictive signals → red NO. Order doesn't matter; labels are de-duped.
+const RESTRICTIONS: { re: RegExp; label: string }[] = [
+  { re: /\bmust be (a |an )?(u\.?s\.?|united states) citizen/i, label: 'U.S. citizenship required' },
+  { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b(require|required|must|only|need)/i, label: 'U.S. citizenship required' },
+  { re: /\bcitizenship (is )?required\b/i, label: 'Citizenship required' },
+  { re: /\b(security clearance|active clearance|ts\/sci|top secret|secret clearance|public trust|able to obtain[^.]{0,25}clearance)\b/i, label: 'Security clearance' },
+  { re: /\b(itar|export[- ]control)/i, label: 'ITAR / export-controlled' },
+  // Strong inability cue anywhere in the same sentence as "sponsor(ship)" —
+  // catches "unable to consider candidates who require visa sponsorship".
+  { re: /\b(unable to|not able to|cannot|can.?t|won.?t|will not|not in a position to|ineligible|not eligible|are unable to|is unable to)\b[^.!?]{0,70}\bsponsor(ship|ed|ing)?\b/i, label: 'No visa sponsorship' },
+  // "do/does not ... sponsor" kept narrow so it doesn't catch "do not hesitate".
+  { re: /\b(do not|does not|don.?t|are not|aren.?t)\s+(currently |presently )?(provide |offer |support )?sponsor/i, label: 'No visa sponsorship' },
+  // "sponsorship is not available / not provided / not offered" word order.
+  { re: /\bsponsor(ship|ed|ing)?\b[^.!?]{0,40}\b(is not|are not|not (available|provided|offered)|will not|cannot|can.?t)\b/i, label: 'No visa sponsorship' },
+  { re: /\bno (visa |employer )?sponsorship\b/i, label: 'No visa sponsorship' },
+  { re: /\bwithout (the need for |requiring |needing )?(visa |employer )?sponsorship\b/i, label: 'Must not need sponsorship' },
+  { re: /\b(u\.?s\.?|united states)\s+persons?\b/i, label: 'U.S. person (export control)' },
+];
+
+// Friendly signals → green YES.
+const POSITIVES: { re: RegExp; label: string }[] = [
+  { re: /\b(visa )?sponsorship (is )?(available|provided|offered|considered|supported)\b/i, label: 'Sponsorship available' },
+  { re: /\bwe (will |can |do |are happy to |are able to |are willing to )?sponsor\b/i, label: 'Employer sponsors' },
+  { re: /\b(willing|open|happy) to sponsor/i, label: 'Open to sponsorship' },
+  { re: /\bh-?1b\b[^.]{0,30}(sponsor|welcome|transfer)/i, label: 'H-1B sponsorship' },
+];
+
+export function analyze(text: string): SponsorAnalysis {
+  const restrictions = dedupe(RESTRICTIONS.filter((r) => r.re.test(text)).map((r) => r.label));
+  const positives = dedupe(POSITIVES.filter((p) => p.re.test(text)).map((p) => p.label));
+  // A hard restriction (citizenship/clearance/no-sponsorship) dominates even if
+  // the page also mentions sponsorship elsewhere.
+  const verdict: Verdict = restrictions.length ? 'no' : positives.length ? 'yes' : 'unknown';
+  return { verdict, restrictions, positives };
+}
+
+function dedupe(arr: string[]): string[] {
+  return [...new Set(arr)];
+}
+
+// --- Badge rendering ---
+
+const BANNER_ID = 'jaf-sponsor-banner';
+let dismissed = false;
+let enabled = true;
+
+/** Turns the scanner on/off globally (driven by the user's setting). */
+export function setScannerEnabled(value: boolean): void {
+  enabled = value;
+  if (!enabled) {
+    removeBadge();
+  } else {
+    scanSponsorship();
+  }
+}
+
+
+const STYLES: Record<Verdict, { color: string; word: string; title: string }> = {
+  yes: { color: '#16a34a', word: 'YES', title: 'Sponsorship looks available' },
+  no: { color: '#dc2626', word: 'NO', title: 'Eligibility restrictions found' },
+  unknown: { color: '#6b7280', word: '—', title: 'No eligibility info detected' },
+};
+
+/** Removes any existing badge, re-reads the page, and renders a fresh badge. */
+export function scanSponsorship(): void {
+  if (!enabled || dismissed) return;
+  removeBadge();
+  if (!document.body) return;
+  const text = document.body.innerText.slice(0, 200_000);
+  // When enabled, always show a badge (every page) — no job-page filtering.
+  document.body.appendChild(renderBadge(analyze(text)));
+}
+
+let watchUrl = '';
+
+/**
+ * Scans now and keeps the badge current on single-page-app job boards
+ * (LinkedIn, Indeed, etc.) that swap postings without a full reload.
+ */
+export function startSponsorshipWatch(): void {
+  watchUrl = location.href;
+  scanSponsorship();
+  setTimeout(scanSponsorship, 1500);
+
+  setInterval(() => {
+    if (location.href !== watchUrl) {
+      watchUrl = location.href;
+      dismissed = false; // a new posting gets a fresh badge
+      setTimeout(scanSponsorship, 600);
+    }
+  }, 1000);
+}
+
+/** Removes every instance of the badge host (guards against duplicates). */
+function removeBadge(): void {
+  document.querySelectorAll(`#${BANNER_ID}`).forEach((n) => n.remove());
+}
+
+function el(tag: string, cls: string, text: string): HTMLElement {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  node.textContent = text;
+  return node;
+}
+
+/**
+ * Renders the badge inside a Shadow DOM so the host page's CSS can't bleed in
+ * (which otherwise garbles/duplicates the text). Returns the host element.
+ */
+function renderBadge(a: SponsorAnalysis): HTMLElement {
+  const s = STYLES[a.verdict];
+
+  const host = document.createElement('div');
+  host.id = BANNER_ID;
+  const root = host.attachShadow({ mode: 'open' });
+
+  const style = document.createElement('style');
+  style.textContent = `
+    :host { all: initial; }
+    .card {
+      position: fixed; top: 14px; right: 14px; z-index: 2147483646;
+      width: 230px; box-sizing: border-box; padding: 12px 14px;
+      background: #fff; color: #0f172a; border: 1px solid #e2e8f0;
+      border-left: 6px solid ${s.color}; border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0,0,0,.16);
+      font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
+    .head { display: flex; align-items: center; gap: 8px; }
+    .word { font-size: 20px; font-weight: 800; color: ${s.color}; letter-spacing: .5px; }
+    .title { font-weight: 700; flex: 1; }
+    .x { border: none; background: transparent; cursor: pointer; font-size: 18px;
+         line-height: 1; color: #94a3b8; padding: 0 2px; }
+    ul { margin: 8px 0 0; padding: 0 0 0 16px; color: #475569; }
+    li { margin: 0; }
+    .note { margin-top: 6px; color: #64748b; }
+    .tag { margin-top: 8px; font-size: 11px; color: #94a3b8; }
+  `;
+  root.appendChild(style);
+
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const head = document.createElement('div');
+  head.className = 'head';
+  const close = document.createElement('button');
+  close.className = 'x';
+  close.textContent = '×';
+  close.title = 'Dismiss';
+  close.addEventListener('click', () => {
+    dismissed = true;
+    removeBadge();
+  });
+  head.append(el('span', 'word', s.word), el('span', 'title', s.title), close);
+  card.appendChild(head);
+
+  const signals = a.restrictions.length ? a.restrictions : a.positives;
+  if (signals.length) {
+    const list = document.createElement('ul');
+    for (const sig of signals) list.appendChild(el('li', '', sig));
+    card.appendChild(list);
+  } else {
+    card.appendChild(
+      el('div', 'note', 'No sponsorship or citizenship requirements mentioned. Verify manually.'),
+    );
+  }
+  card.appendChild(el('div', 'tag', 'Job Autofill · auto-detected, double-check the posting'));
+
+  root.appendChild(card);
+  return host;
+}

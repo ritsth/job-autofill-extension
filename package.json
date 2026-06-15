@@ -1,0 +1,29 @@
+{
+  "name": "job-autofill-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "AI-powered Chrome extension that autofills job applications (Greenhouse, Lever) and generates tailored answers + cover letters.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.28",
+    "@types/chrome": "^0.0.270",
+    "@types/node": "^22.19.21",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "mammoth": "^1.8.0",
+    "pdfjs-dist": "^4.7.76",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}
