@@ -1,21 +1,29 @@
 // Scans the job page for work-eligibility signals (visa sponsorship, U.S.
-// citizenship, security clearance, export control) and shows a bold YES / NO
-// badge so you can triage a posting at a glance.
+// citizenship, security clearance, export control) and shows a bold YES / NO /
+// amber-! badge so you can triage a posting at a glance. Works on single-page
+// boards (LinkedIn, Handshake) by re-checking the selected posting as you switch.
 
-export type Verdict = 'yes' | 'no' | 'unknown';
+export type Verdict = 'yes' | 'no' | 'caution' | 'unknown';
 
 export interface SponsorAnalysis {
   verdict: Verdict;
   restrictions: string[];
+  cautions: string[];
   positives: string[];
 }
 
-// Restrictive signals → red NO. Order doesn't matter; labels are de-duped.
+// Hard restrictive signals → red NO. Order doesn't matter; labels are de-duped.
 const RESTRICTIONS: { re: RegExp; label: string }[] = [
   { re: /\bmust be (a |an )?(u\.?s\.?|united states) citizen/i, label: 'U.S. citizenship required' },
-  { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b(require|required|must|only|need)/i, label: 'U.S. citizenship required' },
+  // Lookbehind avoids "preferred but not required" → false NO.
+  { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b(?<!not )(require|required|must|only|need)/i, label: 'U.S. citizenship required' },
   { re: /\bcitizenship (is )?required\b/i, label: 'Citizenship required' },
-  { re: /\b(security clearance|active clearance|ts\/sci|top secret|secret clearance|public trust|able to obtain[^.]{0,25}clearance)\b/i, label: 'Security clearance' },
+  // Clearance counts as a hard restriction only with a level or requirement cue
+  // (so "clearance preferred" falls through to the caution tier).
+  { re: /\b(ts\/sci|top secret|secret clearance|public trust)\b/i, label: 'Security clearance' },
+  { re: /\b(active|current)\s+(security |government )?clearance\b/i, label: 'Security clearance' },
+  { re: /\b(security )?clearance\b[^.!?]{0,25}\b(require|required|mandatory|must)\b/i, label: 'Security clearance' },
+  { re: /\b(require[sd]?|must have|must hold|must (be able to )?obtain)\b[^.!?]{0,25}\b(security )?clearance\b/i, label: 'Security clearance' },
   { re: /\b(itar|export[- ]control)/i, label: 'ITAR / export-controlled' },
   // Strong inability cue anywhere in the same sentence as "sponsor(ship)" —
   // catches "unable to consider candidates who require visa sponsorship".
@@ -29,6 +37,14 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
   { re: /\b(u\.?s\.?|united states)\s+persons?\b/i, label: 'U.S. person (export control)' },
 ];
 
+// Soft / preference signals → amber caution (not a hard disqualifier).
+const CAUTIONS: { re: RegExp; label: string }[] = [
+  { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.!?]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'U.S. citizenship preferred' },
+  { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?]{0,30}\b(u\.?s\.?|united states)\s+citizen/i, label: 'U.S. citizenship preferred' },
+  { re: /\b(security )?clearance\b[^.!?]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'Clearance preferred' },
+  { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?]{0,30}\b(security )?clearance\b/i, label: 'Clearance preferred' },
+];
+
 // Friendly signals → green YES.
 const POSITIVES: { re: RegExp; label: string }[] = [
   { re: /\b(visa )?sponsorship (is )?(available|provided|offered|considered|supported)\b/i, label: 'Sponsorship available' },
@@ -39,69 +55,135 @@ const POSITIVES: { re: RegExp; label: string }[] = [
 
 export function analyze(text: string): SponsorAnalysis {
   const restrictions = dedupe(RESTRICTIONS.filter((r) => r.re.test(text)).map((r) => r.label));
+  const cautions = dedupe(CAUTIONS.filter((c) => c.re.test(text)).map((c) => c.label));
   const positives = dedupe(POSITIVES.filter((p) => p.re.test(text)).map((p) => p.label));
-  // A hard restriction (citizenship/clearance/no-sponsorship) dominates even if
-  // the page also mentions sponsorship elsewhere.
-  const verdict: Verdict = restrictions.length ? 'no' : positives.length ? 'yes' : 'unknown';
-  return { verdict, restrictions, positives };
+  // Hard restriction dominates; then soft preference; then a positive signal.
+  const verdict: Verdict = restrictions.length
+    ? 'no'
+    : cautions.length
+      ? 'caution'
+      : positives.length
+        ? 'yes'
+        : 'unknown';
+  return { verdict, restrictions, cautions, positives };
 }
 
 function dedupe(arr: string[]): string[] {
   return [...new Set(arr)];
 }
 
-// --- Badge rendering ---
+// --- Reading the right text ---
+
+// Per-host containers for the *selected* job's detail pane, so split list+detail
+// boards check the posting you're viewing rather than the whole page.
+const DETAIL_SELECTORS: Record<string, string[]> = {
+  'linkedin.com': [
+    '#job-details',
+    '.jobs-description__content',
+    '.jobs-search__job-details',
+    '.job-view-layout',
+  ],
+  'joinhandshake.com': ['[data-hook="details-container"]', 'main', '[role="main"]'],
+};
+
+const MAX_CHARS = 200_000;
+
+function getScanText(): string {
+  const host = location.hostname;
+  const key = Object.keys(DETAIL_SELECTORS).find((d) => host.endsWith(d));
+  if (key) {
+    for (const sel of DETAIL_SELECTORS[key]) {
+      const el = document.querySelector<HTMLElement>(sel);
+      const t = el?.innerText?.trim();
+      if (t && t.length > 80) return t.slice(0, MAX_CHARS);
+    }
+  }
+  // Badge text lives in a Shadow DOM, so innerText excludes it (no feedback loop).
+  return (document.body?.innerText || '').slice(0, MAX_CHARS);
+}
+
+function hash(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return h;
+}
+
+// --- Badge state + watcher ---
 
 const BANNER_ID = 'jaf-sponsor-banner';
 let dismissed = false;
 let enabled = true;
+let watchUrl = '';
+let lastHash = 0;
+let observer: MutationObserver | null = null;
+let debounceTimer = 0;
 
 /** Turns the scanner on/off globally (driven by the user's setting). */
 export function setScannerEnabled(value: boolean): void {
   enabled = value;
-  if (!enabled) {
-    removeBadge();
-  } else {
-    scanSponsorship();
-  }
+  if (!enabled) removeBadge();
+  else scanSponsorship();
 }
 
+/** Forced scan (used on load / enable): renders regardless of the hash gate. */
+export function scanSponsorship(): void {
+  watchUrl = location.href;
+  const text = getScanText();
+  lastHash = hash(text);
+  renderFrom(text);
+}
+
+/** Re-scans only when the viewed content (or URL) changed — used by the watcher. */
+function tick(): void {
+  if (!enabled) return;
+  const text = getScanText();
+  const h = hash(text);
+  const urlChanged = location.href !== watchUrl;
+  if (h === lastHash && !urlChanged) return;
+  if (urlChanged) {
+    watchUrl = location.href;
+    dismissed = false; // a newly opened posting gets a fresh badge
+  }
+  lastHash = h;
+  renderFrom(text);
+}
+
+function renderFrom(text: string): void {
+  if (!enabled || dismissed) return;
+  removeBadge();
+  if (!document.body) return;
+  document.body.appendChild(renderBadge(analyze(text)));
+}
+
+/**
+ * Scans now and keeps the badge current on SPA boards (LinkedIn, Handshake)
+ * that swap the detail pane without a full reload — driven by content changes,
+ * not just the URL.
+ */
+export function startSponsorshipWatch(): void {
+  scanSponsorship();
+  setTimeout(scanSponsorship, 800);
+  setTimeout(scanSponsorship, 1800);
+
+  if (document.body) {
+    observer = new MutationObserver(() => {
+      window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(tick, 600);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+  // Fallback for history changes that mutate little.
+  setInterval(tick, 1200);
+}
+
+// --- Badge rendering ---
 
 const STYLES: Record<Verdict, { color: string; word: string; title: string }> = {
   yes: { color: '#16a34a', word: 'YES', title: 'Sponsorship looks available' },
   no: { color: '#dc2626', word: 'NO', title: 'Eligibility restrictions found' },
+  caution: { color: '#d97706', word: '!', title: 'Eligibility preference noted' },
   unknown: { color: '#6b7280', word: '—', title: 'No eligibility info detected' },
 };
-
-/** Removes any existing badge, re-reads the page, and renders a fresh badge. */
-export function scanSponsorship(): void {
-  if (!enabled || dismissed) return;
-  removeBadge();
-  if (!document.body) return;
-  const text = document.body.innerText.slice(0, 200_000);
-  // When enabled, always show a badge (every page) — no job-page filtering.
-  document.body.appendChild(renderBadge(analyze(text)));
-}
-
-let watchUrl = '';
-
-/**
- * Scans now and keeps the badge current on single-page-app job boards
- * (LinkedIn, Indeed, etc.) that swap postings without a full reload.
- */
-export function startSponsorshipWatch(): void {
-  watchUrl = location.href;
-  scanSponsorship();
-  setTimeout(scanSponsorship, 1500);
-
-  setInterval(() => {
-    if (location.href !== watchUrl) {
-      watchUrl = location.href;
-      dismissed = false; // a new posting gets a fresh badge
-      setTimeout(scanSponsorship, 600);
-    }
-  }, 1000);
-}
 
 /** Removes every instance of the badge host (guards against duplicates). */
 function removeBadge(): void {
@@ -165,7 +247,11 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   head.append(el('span', 'word', s.word), el('span', 'title', s.title), close);
   card.appendChild(head);
 
-  const signals = a.restrictions.length ? a.restrictions : a.positives;
+  const signals = a.restrictions.length
+    ? a.restrictions
+    : a.cautions.length
+      ? a.cautions
+      : a.positives;
   if (signals.length) {
     const list = document.createElement('ul');
     for (const sig of signals) list.appendChild(el('li', '', sig));
