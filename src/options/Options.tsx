@@ -69,7 +69,7 @@ function OptionsView({
       const text = await provider.generate({
         system: 'You are a connectivity test. Reply with exactly: OK',
         prompt: 'Reply with OK.',
-        maxOutputTokens: 10,
+        maxOutputTokens: 64,
       });
       setProxyTest({ busy: false, err: '', msg: `Connected ✓ (model replied: "${text.slice(0, 30)}")` });
     } catch (e) {

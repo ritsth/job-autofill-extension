@@ -56,6 +56,10 @@ async function generate({ system, prompt, maxOutputTokens, json }) {
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: maxOutputTokens ?? 1024,
+      // Disable "thinking" — 2.5 Flash otherwise spends the output budget on
+      // hidden reasoning and returns empty/truncated text for short requests.
+      // Autofill doesn't need it.
+      thinkingConfig: { thinkingBudget: 0 },
       // JSON mode for structured extraction (e.g. résumé parsing) so the model
       // returns parseable JSON with no markdown fences or prose.
       ...(json ? { responseMimeType: 'application/json' } : {}),
