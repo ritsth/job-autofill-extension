@@ -15,7 +15,7 @@ export class GeminiProvider implements AIProvider {
     private model = 'gemini-2.0-flash',
   ) {}
 
-  async generate({ system, prompt, maxOutputTokens, json }: GenerateInput): Promise<string> {
+  async generate({ system, prompt, maxOutputTokens, json, thinking }: GenerateInput): Promise<string> {
     if (!this.apiKey) {
       throw new AIError('No Gemini API key set. Add one in the extension options.');
     }
@@ -30,6 +30,12 @@ export class GeminiProvider implements AIProvider {
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: maxOutputTokens ?? 1024,
+        // Gemini 2.5 models default thinking ON over REST, which can eat the
+        // whole output budget and truncate the answer. Pin the budget (dynamic
+        // when asked, off otherwise). thinkingConfig only applies to 2.5 models.
+        ...(this.model.includes('2.5')
+          ? { thinkingConfig: { thinkingBudget: thinking ? -1 : 0 } }
+          : {}),
         ...(json ? { responseMimeType: 'application/json' } : {}),
       },
     };

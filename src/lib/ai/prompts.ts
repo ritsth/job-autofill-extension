@@ -36,11 +36,12 @@ export function buildAnswerPrompt(
     : '';
   return {
     system: ANSWER_SYSTEM,
-    // Let the model think for higher-quality open-ended answers; give it a
-    // generous budget so the thinking tokens AND the full answer both fit
-    // (too small a cap truncates the answer to a word or two).
-    thinking: true,
-    maxOutputTokens: 8192,
+    // Thinking OFF. With a real résumé + documents + job text in context, Gemini
+    // 2.5's dynamic "thinking" can consume the entire output budget and truncate
+    // the visible answer to a word or two ("Fellow"). Disabling it gives the full
+    // budget to the answer — quality is unaffected for short open-ended replies.
+    thinking: false,
+    maxOutputTokens: 2048,
     prompt:
       `APPLICANT PROFILE:\n${context}\n\n` +
       job +
