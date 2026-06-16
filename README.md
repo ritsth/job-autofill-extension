@@ -6,10 +6,11 @@ Auto-fills repetitive job applications on **Greenhouse**, **Lever**, and
 - **Answer open-ended questions** an "✨ AI answer" button appears beside free-text
   questions; it drafts an answer from your résumé + uploaded documents.
 - **Generate a tailored cover letter** from your base template (company / role / date
-  substituted, then AI-tailored), downloadable as a `.txt`.
+  substituted, then AI-tailored), downloadable as a `.pdf`.
 - **Flag eligibility at a glance** every covered page is scanned for visa-sponsorship /
   U.S.-citizenship / security-clearance language and shows a bold **YES / NO** badge
-  in the corner.
+  in the corner. On **Handshake** the badge also hosts a one-click cover-letter
+  generator (employer/role auto-detected from the posting).
 
 The UI is a **side panel** (stays open while you browse, closes only when you close it).
 
@@ -66,7 +67,9 @@ The options page opens automatically on install. Fill in:
 2. Click the extension icon → the **side panel** opens (and stays open).
 3. **Fill this page** → standard fields populate.
 4. On a free-text question, click **✨ AI answer** → an editable draft appears.
-5. In the panel → **Generate cover letter** → review/edit → **Download .txt**.
+5. In the panel → **Generate cover letter** → review/edit → **Download .pdf**.
+6. On a **Handshake** posting, the eligibility badge exposes its own cover-letter
+   generator (employer/role auto-detected).
 
 Edge cases handled: no key set (popup prompts you), unsupported page (popup says so),
 on-device fallback when no key is set and Chrome's built-in model is available.
@@ -87,9 +90,27 @@ The `AIProvider` interface is the seam for **v2**: a Cloud Run "managed mode" pr
 becomes a new `ProxyProvider` with no other code changes. Workday support is a new
 adapter under `src/content/adapters/`.
 
-## Roadmap (v2+)
+## Roadmap
 
-- Cloud Run proxy ("no key needed" managed mode) + sign-in + per-user quotas.
-- Workday adapter (dynamic React/iframe forms).
+Shipped since v1: Cloud Run → Vertex AI managed proxy, Workday adapter, Handshake
+eligibility badge + cover-letter generator, PDF cover-letter export.
+
+Still ahead (v2+):
+
+- Proxy **sign-in + per-user quotas** (today the proxy is shared-token only — see below).
 - Multi-provider picker (Groq / OpenRouter / Claude) — interface already supports it.
 - Chrome Web Store packaging + privacy policy.
+
+### Publishing & the proxy token
+
+The managed proxy is gated by a single shared `PROXY_TOKEN`, and the extension ships
+with **a pre-filled proxy URL but no token** (`src/lib/profile.ts`). That means:
+
+- If you publish and tell users to paste **your** token, every user's AI calls hit
+  **your** Cloud Run service and bill **your** GCP account. A token shipped inside the
+  extension is trivially extractable (extensions are just zipped JS), so it would be
+  effectively public and could drain your Vertex credit — there are no per-user quotas yet.
+- The safe model for a public release is **bring-your-own**: each user pastes their own
+  free **Gemini** key, or deploys their own proxy, or uses the **on-device** model.
+
+Treat the managed proxy as a "you + people you trust" feature until sign-in + quotas land.
