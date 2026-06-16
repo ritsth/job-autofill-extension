@@ -23,8 +23,10 @@ export function substitutePlaceholders(template: string, vars: LetterVars): stri
     role: vars.role || '',
     date,
   };
-  return template.replace(/\{\{\s*(company|role|date)\s*\}\}/gi, (_m, key: string) => {
-    return map[key.toLowerCase()] ?? '';
+  return template.replace(/\{\{\s*(company|role|date)\s*\}\}/gi, (m, key: string) => {
+    // Leave the placeholder visible if we don't have a value, so a missing
+    // company/role is obvious instead of silently becoming a blank gap.
+    return map[key.toLowerCase()] || m;
   });
 }
 

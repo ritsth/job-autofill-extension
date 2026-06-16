@@ -13,6 +13,9 @@ export function Popup() {
   const [busy, setBusy] = useState<'' | 'fill' | 'letter'>('');
   const [error, setError] = useState('');
   const [scanEnabled, setScanEnabled] = useState(true);
+  // Editable company/role for the cover letter (pre-filled from page detection).
+  const [company, setCompany] = useState('');
+  const [role, setRole] = useState('');
 
   async function toggleScan(value: boolean) {
     setScanEnabled(value);
@@ -29,6 +32,9 @@ export function Popup() {
       try {
         const info = await sendToTab<PageInfo>(tab.id, { type: 'PAGE_INFO' });
         setPage(info);
+        // Prefill from detection, but never clobber what the user has typed.
+        if (info.company) setCompany((c) => c || info.company);
+        if (info.role) setRole((r) => r || info.role);
       } catch {
         setPage({ supported: false, site: null, company: '', role: '', jobText: '' });
       }
@@ -81,8 +87,8 @@ export function Popup() {
     try {
       const res = await sendToBackground<AIResult>({
         type: 'AI_GENERATE_COVER_LETTER',
-        company: page?.company ?? '',
-        role: page?.role ?? '',
+        company: company.trim(),
+        role: role.trim(),
         jobText: page?.jobText ?? '',
       });
       if (res.error) setError(res.error);
@@ -128,6 +134,20 @@ export function Popup() {
       </div>
 
       <div className="block">
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          <input
+            style={{ flex: 1, minWidth: 0 }}
+            placeholder="Company"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+          />
+          <input
+            style={{ flex: 1, minWidth: 0 }}
+            placeholder="Role"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+          />
+        </div>
         <button className="primary" disabled={busy !== ''} onClick={onCoverLetter}>
           {busy === 'letter' ? 'Generating…' : 'Generate cover letter'}
         </button>
@@ -141,7 +161,7 @@ export function Popup() {
             <button
               className="full"
               style={{ marginTop: 8 }}
-              onClick={() => downloadLetter(letter, page?.company ?? '', page?.role ?? '')}
+              onClick={() => downloadLetter(letter, company, role)}
             >
               ⬇ Download .pdf
             </button>
