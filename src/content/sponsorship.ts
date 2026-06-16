@@ -10,6 +10,7 @@ export interface SponsorAnalysis {
   restrictions: string[];
   cautions: string[];
   positives: string[];
+  experience: { required: string | null; preferred: string | null };
 }
 
 // Hard restrictive signals → red NO. Order doesn't matter; labels are de-duped.
@@ -33,6 +34,8 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
   // "sponsorship is not available / not provided / not offered" word order.
   { re: /\bsponsor(ship|ed|ing)?\b[^.!?]{0,40}\b(is not|are not|not (available|provided|offered)|will not|cannot|can.?t)\b/i, label: 'No visa sponsorship' },
   { re: /\bno (visa |employer )?sponsorship\b/i, label: 'No visa sponsorship' },
+  // "no current/future sponsorship available" — negation sits before "sponsorship".
+  { re: /\bno\b[^.!?]{0,30}\bsponsorship\b[^.!?]{0,20}\b(available|provided|offered)\b/i, label: 'No visa sponsorship' },
   { re: /\bwithout (the need for |requiring |needing )?(visa |employer )?sponsorship\b/i, label: 'Must not need sponsorship' },
   { re: /\b(u\.?s\.?|united states)\s+persons?\b/i, label: 'U.S. person (export control)' },
 ];
@@ -54,9 +57,13 @@ const POSITIVES: { re: RegExp; label: string }[] = [
 ];
 
 export function analyze(text: string): SponsorAnalysis {
-  const restrictions = dedupe(RESTRICTIONS.filter((r) => r.re.test(text)).map((r) => r.label));
-  const cautions = dedupe(CAUTIONS.filter((c) => c.re.test(text)).map((c) => c.label));
-  const positives = dedupe(POSITIVES.filter((p) => p.re.test(text)).map((p) => p.label));
+  // Match eligibility on prose only — screening QUESTIONS like "Are you
+  // authorized to work without sponsorship?" describe the form, not the employer's
+  // stance, and would otherwise produce a false NO.
+  const prose = stripQuestions(text);
+  const restrictions = dedupe(RESTRICTIONS.filter((r) => r.re.test(prose)).map((r) => r.label));
+  const cautions = dedupe(CAUTIONS.filter((c) => c.re.test(prose)).map((c) => c.label));
+  const positives = dedupe(POSITIVES.filter((p) => p.re.test(prose)).map((p) => p.label));
   // Hard restriction dominates; then soft preference; then a positive signal.
   const verdict: Verdict = restrictions.length
     ? 'no'
@@ -65,11 +72,51 @@ export function analyze(text: string): SponsorAnalysis {
       : positives.length
         ? 'yes'
         : 'unknown';
-  return { verdict, restrictions, cautions, positives };
+  return { verdict, restrictions, cautions, positives, experience: extractExperience(text) };
 }
 
 function dedupe(arr: string[]): string[] {
   return [...new Set(arr)];
+}
+
+/** Drops question sentences/lines (screening questions) before eligibility matching. */
+function stripQuestions(text: string): string {
+  return text
+    .split(/(?<=[.?!])\s+|\n+/)
+    .filter((seg) => {
+      const t = seg.trim();
+      if (/\?\s*\*?$/.test(t)) return false; // ends with ? (optionally a required-* marker)
+      if (/^(are|do|does|did|will|can|have|has|had|would|is)\s+you\b/i.test(t)) return false;
+      return true;
+    })
+    .join(' ');
+}
+
+/** Pulls required / preferred years-of-experience figures from the posting. */
+function extractExperience(text: string): { required: string | null; preferred: string | null } {
+  const lower = text.toLowerCase();
+  const YR = '(\\d{1,2})\\s*\\+?\\s*(?:to|–|—|-)?\\s*(\\d{1,2})?\\+?\\s*years?';
+  const fmt = (m: RegExpMatchArray): string =>
+    m[2] && m[2] !== m[1] ? `${m[1]}–${m[2]} yrs` : `${m[1]}+ yrs`;
+
+  const findNear = (cues: string): string | null => {
+    // Prefer "N years <cue>" (the common phrasing) over "<cue> … N years".
+    // Keep the windows tight so a cue binds to the adjacent number, not one a
+    // clause away ("8 years preferred, 5 years required").
+    const after = lower.match(new RegExp(`${YR}[^.!?]{0,12}?(?:${cues})`));
+    if (after) return fmt(after);
+    const before = lower.match(new RegExp(`(?:${cues})[^.!?]{0,20}?${YR}`));
+    return before ? fmt(before) : null;
+  };
+
+  const preferred = findNear('preferred|a plus|nice to have|ideally|desirable');
+  let required = findNear('minimum|min\\.?|at least|required|must have|or more');
+  // Fall back to any "<n> years of experience" mention as the baseline requirement.
+  if (!required) {
+    const generic = lower.match(new RegExp(`${YR}\\s+(?:of\\s+)?(?:experience|exp\\b|relevant|professional|industry)`));
+    if (generic) required = fmt(generic);
+  }
+  return { required, preferred };
 }
 
 // --- Reading the right text ---
@@ -181,7 +228,7 @@ export function startSponsorshipWatch(): void {
 const STYLES: Record<Verdict, { color: string; word: string; title: string }> = {
   yes: { color: '#16a34a', word: 'YES', title: 'Sponsorship looks available' },
   no: { color: '#dc2626', word: 'NO', title: 'Eligibility restrictions found' },
-  caution: { color: '#d97706', word: '!', title: 'Eligibility preference noted' },
+  caution: { color: '#d97706', word: 'MAYBE', title: 'Eligibility preference noted' },
   unknown: { color: '#6b7280', word: '—', title: 'No eligibility info detected' },
 };
 
@@ -227,6 +274,7 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
     ul { margin: 8px 0 0; padding: 0 0 0 16px; color: #475569; }
     li { margin: 0; }
     .note { margin-top: 6px; color: #64748b; }
+    .exp { margin-top: 8px; font-weight: 600; color: #334155; }
     .tag { margin-top: 8px; font-size: 11px; color: #94a3b8; }
   `;
   root.appendChild(style);
@@ -261,6 +309,15 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
       el('div', 'note', 'No sponsorship or citizenship requirements mentioned. Verify manually.'),
     );
   }
+
+  const exp = a.experience;
+  if (exp.required || exp.preferred) {
+    const parts: string[] = [];
+    if (exp.required) parts.push(`${exp.required} req`);
+    if (exp.preferred) parts.push(`${exp.preferred} pref`);
+    card.appendChild(el('div', 'exp', `Experience: ${parts.join(' · ')}`));
+  }
+
   card.appendChild(el('div', 'tag', 'Job Autofill · auto-detected, double-check the posting'));
 
   root.appendChild(card);
