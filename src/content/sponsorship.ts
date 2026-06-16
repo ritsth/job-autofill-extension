@@ -7,6 +7,7 @@
 import { sendToBackground } from '../lib/messages';
 import type { AIResult } from '../lib/messages';
 import { parseEligibilityJson } from '../lib/jobEligibility';
+import { downloadLetter } from '../lib/coverLetter';
 
 export type Verdict = 'yes' | 'no' | 'caution' | 'unknown';
 
@@ -324,6 +325,92 @@ function el(tag: string, cls: string, text: string): HTMLElement {
   return node;
 }
 
+const isHandshake = (): boolean => location.hostname.endsWith('joinhandshake.com');
+
+/** Best-effort company + role for the open Handshake posting (inputs are editable). */
+function getHandshakeJobMeta(): { company: string; role: string } {
+  const pick = (sels: string[]): string => {
+    for (const sel of sels) {
+      const t = document.querySelector<HTMLElement>(sel)?.textContent?.trim();
+      if (t) return t.replace(/\s+/g, ' ').slice(0, 120);
+    }
+    return '';
+  };
+  const role = pick([
+    '[data-hook="details-container"] h1',
+    '[data-hook="job-name"]',
+    '[data-hook="job-title"]',
+    'main h1',
+  ]);
+  const company = pick([
+    '[data-hook="employer-name"]',
+    '[data-hook="employer-name-link"]',
+    '[data-hook="details-container"] a[href*="/e/"]',
+    'main a[href*="/employer"]',
+  ]);
+  return { company, role };
+}
+
+/**
+ * Handshake-only: a "Cover letter" expander that fills the user's template
+ * (company/role/date swapped, first paragraph tailored to the posting) and
+ * downloads it as a PDF — Handshake requires one on nearly every application.
+ */
+function buildCoverLetterSection(): HTMLElement {
+  const meta = getHandshakeJobMeta();
+  const wrap = document.createElement('div');
+  wrap.className = 'cl';
+
+  const toggle = document.createElement('button');
+  toggle.className = 'clbtn';
+  toggle.textContent = '📄 Cover letter';
+
+  const form = document.createElement('div');
+  form.className = 'clform hidden';
+
+  const company = document.createElement('input');
+  company.placeholder = 'Company';
+  company.value = meta.company;
+  const role = document.createElement('input');
+  role.placeholder = 'Role';
+  role.value = meta.role;
+
+  const gen = document.createElement('button');
+  gen.className = 'clbtn';
+  gen.textContent = 'Generate & download PDF';
+
+  const status = el('div', 'clstatus', '');
+
+  toggle.addEventListener('click', () => form.classList.toggle('hidden'));
+
+  gen.addEventListener('click', async () => {
+    gen.disabled = true;
+    const orig = gen.textContent;
+    gen.textContent = 'Generating…';
+    status.textContent = '';
+    try {
+      const res = await sendToBackground<AIResult>({
+        type: 'AI_GENERATE_COVER_LETTER',
+        company: company.value.trim(),
+        role: role.value.trim(),
+        jobText: getScanText(),
+      });
+      if (res.error) throw new Error(res.error);
+      downloadLetter(res.text, company.value.trim(), role.value.trim());
+      status.textContent = '✓ Downloaded PDF';
+    } catch (e) {
+      status.textContent = '⚠ ' + String((e as Error).message).slice(0, 60);
+    } finally {
+      gen.disabled = false;
+      gen.textContent = orig;
+    }
+  });
+
+  form.append(company, role, gen, status);
+  wrap.append(toggle, form);
+  return wrap;
+}
+
 /**
  * Renders the badge inside a Shadow DOM so the host page's CSS can't bleed in
  * (which otherwise garbles/duplicates the text). Returns the host element.
@@ -362,6 +449,15 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
     .ai:disabled { opacity: .7; cursor: default; }
     .aitag { font-size: 11px; color: #4f46e5; font-weight: 700; }
     .tag { margin-top: 8px; font-size: 11px; color: #94a3b8; }
+    .cl { margin-top: 10px; border-top: 1px solid #eef2f7; padding-top: 8px; }
+    .clbtn { border: none; background: #0f172a; color: #fff; border-radius: 6px;
+             padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .clbtn:disabled { opacity: .7; cursor: default; }
+    .clform { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .clform input { width: 100%; box-sizing: border-box; padding: 5px 7px; font-size: 12px;
+                    border: 1px solid #cbd5e1; border-radius: 5px; font-family: inherit; color: #0f172a; }
+    .clstatus { font-size: 11px; color: #64748b; }
+    .hidden { display: none; }
   `;
   root.appendChild(style);
 
@@ -434,6 +530,10 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
     row.appendChild(el('span', 'aitag', '✓ AI reading'));
   }
   card.appendChild(row);
+
+  // Handshake requires a cover letter on nearly every application — offer a
+  // one-click tailor-and-download right here, below the AI check.
+  if (isHandshake()) card.appendChild(buildCoverLetterSection());
 
   card.appendChild(el('div', 'tag', 'Job Autofill · auto-detected, double-check the posting'));
 
