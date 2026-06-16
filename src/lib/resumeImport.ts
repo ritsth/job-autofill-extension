@@ -75,7 +75,7 @@ export function parseResumeJson(raw: string): ParsedResume {
 }
 
 /** Pulls the first balanced {...} block out of a possibly-fenced string. */
-function extractJsonObject(raw: string): string | null {
+export function extractJsonObject(raw: string): string | null {
   const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '');
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');

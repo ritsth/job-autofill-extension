@@ -1,7 +1,12 @@
 // Scans the job page for work-eligibility signals (visa sponsorship, U.S.
 // citizenship, security clearance, export control) and shows a bold YES / NO /
-// amber-! badge so you can triage a posting at a glance. Works on single-page
+// amber-MAYBE badge so you can triage a posting at a glance. Works on single-page
 // boards (LinkedIn, Handshake) by re-checking the selected posting as you switch.
+// The instant result is rules-based; an on-demand "AI check" reads odd wording.
+
+import { sendToBackground } from '../lib/messages';
+import type { AIResult } from '../lib/messages';
+import { parseEligibilityJson } from '../lib/jobEligibility';
 
 export type Verdict = 'yes' | 'no' | 'caution' | 'unknown';
 
@@ -11,6 +16,10 @@ export interface SponsorAnalysis {
   cautions: string[];
   positives: string[];
   experience: { required: string | null; preferred: string | null };
+  /** One-line explanation (AI source only). */
+  reason?: string;
+  /** Whether the verdict came from the rules pass or an AI reading. */
+  source: 'rules' | 'ai';
 }
 
 // Hard restrictive signals → red NO. Order doesn't matter; labels are de-duped.
@@ -37,6 +46,10 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
   // "no current/future sponsorship available" — negation sits before "sponsorship".
   { re: /\bno\b[^.!?]{0,30}\bsponsorship\b[^.!?]{0,20}\b(available|provided|offered)\b/i, label: 'No visa sponsorship' },
   { re: /\bwithout (the need for |requiring |needing )?(visa |employer )?sponsorship\b/i, label: 'Must not need sponsorship' },
+  { re: /\bwork authoriz(?:ed|ation)\b[^.!?]{0,30}\b(does not|do not|that does not)\b[^.!?]{0,15}\bsponsor/i, label: 'No visa sponsorship' },
+  { re: /\bauthoriz(?:ed|ation) to work\b[^.!?]{0,45}\b(on a permanent basis|on an ongoing basis|indefinitely|without restriction)\b/i, label: 'Must not need sponsorship' },
+  { re: /\b(lawful permanent resident|green card holder|permanent resident)\b[^.!?]{0,25}\b(require|required|must|only)\b/i, label: 'Permanent resident required' },
+  { re: /\bmust (be|have|hold)\b[^.!?]{0,25}\b(green card|lawful permanent resident|permanent resident)\b/i, label: 'Permanent resident required' },
   { re: /\b(u\.?s\.?|united states)\s+persons?\b/i, label: 'U.S. person (export control)' },
 ];
 
@@ -53,14 +66,36 @@ const POSITIVES: { re: RegExp; label: string }[] = [
   { re: /\b(visa )?sponsorship (is )?(available|provided|offered|considered|supported)\b/i, label: 'Sponsorship available' },
   { re: /\bwe (will |can |do |are happy to |are able to |are willing to )?sponsor\b/i, label: 'Employer sponsors' },
   { re: /\b(willing|open|happy) to sponsor/i, label: 'Open to sponsorship' },
+  { re: /\bwe (provide|offer)\b[^.!?]{0,15}\b(visa )?sponsorship\b/i, label: 'Employer sponsors' },
+  { re: /\bsponsorship\b[^.!?]{0,25}\bfor the right candidate\b/i, label: 'Sponsorship available' },
+  { re: /\bopen to international (candidates|applicants|hires)\b/i, label: 'Open to international candidates' },
   { re: /\bh-?1b\b[^.]{0,30}(sponsor|welcome|transfer)/i, label: 'H-1B sponsorship' },
 ];
 
+// Spelled-out numbers → digits so "a minimum of three years" is caught.
+const NUMBER_WORDS: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8,
+  nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15,
+  sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30,
+  forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+};
+const NUMBER_WORD_RE = new RegExp(`\\b(${Object.keys(NUMBER_WORDS).join('|')})\\b`, 'g');
+
+/** Lowercases and normalizes punctuation/numbers to make matching more robust. */
+function normalizeText(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[‐-―]/g, '-') // unicode dashes → hyphen
+    .replace(/[ \t]+/g, ' ') // nbsp/tabs → space
+    .replace(NUMBER_WORD_RE, (m) => String(NUMBER_WORDS[m]));
+}
+
 export function analyze(text: string): SponsorAnalysis {
+  const norm = normalizeText(text);
   // Match eligibility on prose only — screening QUESTIONS like "Are you
   // authorized to work without sponsorship?" describe the form, not the employer's
   // stance, and would otherwise produce a false NO.
-  const prose = stripQuestions(text);
+  const prose = stripQuestions(norm);
   const restrictions = dedupe(RESTRICTIONS.filter((r) => r.re.test(prose)).map((r) => r.label));
   const cautions = dedupe(CAUTIONS.filter((c) => c.re.test(prose)).map((c) => c.label));
   const positives = dedupe(POSITIVES.filter((p) => p.re.test(prose)).map((p) => p.label));
@@ -72,7 +107,7 @@ export function analyze(text: string): SponsorAnalysis {
       : positives.length
         ? 'yes'
         : 'unknown';
-  return { verdict, restrictions, cautions, positives, experience: extractExperience(text) };
+  return { verdict, restrictions, cautions, positives, experience: extractExperience(norm), source: 'rules' };
 }
 
 function dedupe(arr: string[]): string[] {
@@ -164,6 +199,9 @@ let watchUrl = '';
 let lastHash = 0;
 let observer: MutationObserver | null = null;
 let debounceTimer = 0;
+// AI results cached per posting (by scanned-text hash) so revisiting a job — or
+// a re-render from the watcher — reuses the AI verdict without another call.
+const aiCache = new Map<number, SponsorAnalysis>();
 
 /** Turns the scanner on/off globally (driven by the user's setting). */
 export function setScannerEnabled(value: boolean): void {
@@ -199,7 +237,18 @@ function renderFrom(text: string): void {
   if (!enabled || dismissed) return;
   removeBadge();
   if (!document.body) return;
-  document.body.appendChild(renderBadge(analyze(text)));
+  const cached = aiCache.get(hash(text));
+  document.body.appendChild(renderBadge(cached ?? analyze(text)));
+}
+
+/** Sends the current posting to the AI and caches the structured verdict. */
+async function runAiCheck(): Promise<SponsorAnalysis> {
+  const text = getScanText();
+  const res = await sendToBackground<AIResult>({ type: 'AI_ANALYZE_JOB', text });
+  if (res.error) throw new Error(res.error);
+  const analysis = parseEligibilityJson(res.text);
+  aiCache.set(hash(text), analysis);
+  return analysis;
 }
 
 /**
@@ -274,7 +323,13 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
     ul { margin: 8px 0 0; padding: 0 0 0 16px; color: #475569; }
     li { margin: 0; }
     .note { margin-top: 6px; color: #64748b; }
+    .reason { margin-top: 8px; color: #475569; font-style: italic; }
     .exp { margin-top: 8px; font-weight: 600; color: #334155; }
+    .row { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+    .ai { border: none; background: #4f46e5; color: #fff; border-radius: 6px;
+          padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .ai:disabled { opacity: .7; cursor: default; }
+    .aitag { font-size: 11px; color: #4f46e5; font-weight: 700; }
     .tag { margin-top: 8px; font-size: 11px; color: #94a3b8; }
   `;
   root.appendChild(style);
@@ -310,6 +365,8 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
     );
   }
 
+  if (a.reason) card.appendChild(el('div', 'reason', a.reason));
+
   const exp = a.experience;
   if (exp.required || exp.preferred) {
     const parts: string[] = [];
@@ -317,6 +374,35 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
     if (exp.preferred) parts.push(`${exp.preferred} pref`);
     card.appendChild(el('div', 'exp', `Experience: ${parts.join(' · ')}`));
   }
+
+  // Rules result → offer an AI re-read; AI result → just tag it.
+  const row = document.createElement('div');
+  row.className = 'row';
+  if (a.source === 'rules') {
+    const ai = document.createElement('button');
+    ai.className = 'ai';
+    ai.textContent = 'AI check';
+    ai.title = 'Re-read this posting with AI (more accurate on odd wording)';
+    ai.addEventListener('click', async () => {
+      ai.textContent = 'Analyzing…';
+      ai.disabled = true;
+      try {
+        const analysis = await runAiCheck();
+        removeBadge();
+        if (document.body && enabled && !dismissed) document.body.appendChild(renderBadge(analysis));
+      } catch (e) {
+        ai.textContent = `⚠ ${String((e as Error).message).slice(0, 32)}`;
+        ai.disabled = false;
+        setTimeout(() => {
+          ai.textContent = 'AI check';
+        }, 4000);
+      }
+    });
+    row.appendChild(ai);
+  } else {
+    row.appendChild(el('span', 'aitag', '✓ AI reading'));
+  }
+  card.appendChild(row);
 
   card.appendChild(el('div', 'tag', 'Job Autofill · auto-detected, double-check the posting'));
 

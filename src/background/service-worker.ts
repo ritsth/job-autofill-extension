@@ -4,7 +4,12 @@
 
 import { getProfile, profileToContext } from '../lib/profile';
 import { getProvider, AIError } from '../lib/ai';
-import { buildAnswerPrompt, buildCoverLetterPrompt, buildResumeParsePrompt } from '../lib/ai/prompts';
+import {
+  buildAnswerPrompt,
+  buildCoverLetterPrompt,
+  buildResumeParsePrompt,
+  buildJobEligibilityPrompt,
+} from '../lib/ai/prompts';
 import { substitutePlaceholders } from '../lib/coverLetter';
 import type { AIResult, BackgroundMessage } from '../lib/messages';
 
@@ -13,7 +18,8 @@ chrome.runtime.onMessage.addListener((msg: BackgroundMessage, _sender, sendRespo
   if (
     msg?.type !== 'AI_GENERATE_ANSWER' &&
     msg?.type !== 'AI_GENERATE_COVER_LETTER' &&
-    msg?.type !== 'AI_PARSE_RESUME'
+    msg?.type !== 'AI_PARSE_RESUME' &&
+    msg?.type !== 'AI_ANALYZE_JOB'
   ) {
     return false;
   }
@@ -40,6 +46,11 @@ async function handle(msg: BackgroundMessage): Promise<string> {
   if (msg.type === 'AI_PARSE_RESUME') {
     // Returns raw JSON text; the options page validates it via parseResumeJson.
     return provider.generate(buildResumeParsePrompt(msg.text));
+  }
+
+  if (msg.type === 'AI_ANALYZE_JOB') {
+    // Returns raw JSON; the content script parses it via parseEligibilityJson.
+    return provider.generate(buildJobEligibilityPrompt(msg.text));
   }
 
   // AI_GENERATE_COVER_LETTER

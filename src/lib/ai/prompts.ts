@@ -60,6 +60,29 @@ export function buildResumeParsePrompt(resumeText: string): GenerateInput {
   };
 }
 
+const JOB_ELIGIBILITY_SYSTEM =
+  'You read a job posting and report work-eligibility facts for a candidate who may ' +
+  'need visa sponsorship. Return ONLY JSON (no markdown, no commentary) matching exactly:\n' +
+  '{ "sponsorship": "available|none|unclear", "citizenship": "required|preferred|none", ' +
+  '"clearance": "required|preferred|none", "experienceRequired": string|null, ' +
+  '"experiencePreferred": string|null, "summary": string }\n' +
+  'Base every field strictly on the posting. sponsorship="none" if the employer will not ' +
+  'sponsor or candidates must be authorized to work without sponsorship; "available" if they ' +
+  'will sponsor; else "unclear". citizenship/clearance: "required" vs "preferred" vs "none" per ' +
+  'the wording. IGNORE the application form\'s screening questions (e.g. "Are you authorized to ' +
+  'work…") — judge only the employer\'s stated requirements. experienceRequired/Preferred: years ' +
+  'as a short string like "3+ years" or "2-4 years", else null. summary: one short sentence. ' +
+  'Do not invent anything.';
+
+export function buildJobEligibilityPrompt(jobText: string): GenerateInput {
+  return {
+    system: JOB_ELIGIBILITY_SYSTEM,
+    json: true,
+    maxOutputTokens: 512,
+    prompt: `JOB POSTING:\n${jobText.slice(0, 12000)}\n\nReturn the JSON:`,
+  };
+}
+
 export function buildCoverLetterPrompt(
   baseLetter: string,
   company: string,

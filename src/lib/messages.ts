@@ -28,6 +28,10 @@ export interface ParseResumeMsg {
   type: 'AI_PARSE_RESUME';
   text: string;
 }
+export interface AnalyzeJobMsg {
+  type: 'AI_ANALYZE_JOB';
+  text: string;
+}
 
 // --- Content-handled (DOM, sent to a specific tab) ---
 export interface FillPageMsg {
@@ -37,7 +41,11 @@ export interface GetPageInfoMsg {
   type: 'PAGE_INFO';
 }
 
-export type BackgroundMessage = GenerateAnswerMsg | GenerateCoverLetterMsg | ParseResumeMsg;
+export type BackgroundMessage =
+  | GenerateAnswerMsg
+  | GenerateCoverLetterMsg
+  | ParseResumeMsg
+  | AnalyzeJobMsg;
 export type ContentMessage = FillPageMsg | GetPageInfoMsg;
 export type AnyMessage = BackgroundMessage | ContentMessage;
 
