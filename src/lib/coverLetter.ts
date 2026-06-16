@@ -2,6 +2,8 @@
 // step itself is done in the background service worker (it owns the provider);
 // this module prepares the base text and handles the file download.
 
+import { textToPdf } from './pdf';
+
 export interface LetterVars {
   company: string;
   role: string;
@@ -26,7 +28,7 @@ export function substitutePlaceholders(template: string, vars: LetterVars): stri
   });
 }
 
-/** Builds a filesystem-safe filename for the downloaded letter. */
+/** Builds a filesystem-safe filename (without extension) for the letter. */
 export function letterFilename(company: string, role: string): string {
   const slug = [company, role]
     .filter(Boolean)
@@ -35,16 +37,17 @@ export function letterFilename(company: string, role: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
-  return `cover-letter${slug ? '-' + slug : ''}.txt`;
+  return `cover-letter${slug ? '-' + slug : ''}`;
 }
 
-/** Triggers a .txt download of the letter from an extension page (popup/options). */
+/** Triggers a .pdf download of the letter from an extension page (popup/options). */
 export function downloadLetter(text: string, company: string, role: string): void {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const bytes = textToPdf(text);
+  const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = letterFilename(company, role);
+  a.download = `${letterFilename(company, role)}.pdf`;
   document.body.appendChild(a);
   a.click();
   a.remove();

@@ -8,7 +8,7 @@ import { leverAdapter } from './adapters/lever';
 import type { SiteAdapter } from './adapters/types';
 import { sendToBackground } from '../lib/messages';
 import type { AIResult, ContentMessage, FillResult, PageInfo } from '../lib/messages';
-import { startSponsorshipWatch, setScannerEnabled } from './sponsorship';
+import { startSponsorshipWatch, setScannerEnabled, getScanText } from './sponsorship';
 
 const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter];
 const adapter = ADAPTERS.find((a) => a.matches(new URL(location.href))) ?? null;
@@ -20,8 +20,8 @@ const MARK_ATTR = 'data-jaf-bound';
 chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse) => {
   if (msg.type === 'PAGE_INFO') {
     const info: PageInfo = adapter
-      ? { supported: true, site: adapter.id, ...adapter.getPageInfo() }
-      : { supported: false, site: null, company: '', role: '' };
+      ? { supported: true, site: adapter.id, ...adapter.getPageInfo(), jobText: getScanText() }
+      : { supported: false, site: null, company: '', role: '', jobText: '' };
     sendResponse(info);
     return false;
   }
@@ -65,7 +65,8 @@ async function generateAnswer(q: OpenQuestion, btn: HTMLButtonElement): Promise<
   btn.textContent = '… thinking';
   try {
     const question = q.label || 'Please answer this application question.';
-    const res = await sendToBackground<AIResult>({ type: 'AI_GENERATE_ANSWER', question });
+    const jobText = getScanText();
+    const res = await sendToBackground<AIResult>({ type: 'AI_GENERATE_ANSWER', question, jobText });
     if (res.error) {
       btn.textContent = '⚠️ ' + res.error.slice(0, 40);
       setTimeout(() => (btn.textContent = original), 4000);

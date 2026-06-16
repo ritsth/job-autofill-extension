@@ -170,7 +170,7 @@ const DETAIL_SELECTORS: Record<string, string[]> = {
 
 const MAX_CHARS = 200_000;
 
-function getScanText(): string {
+export function getScanText(): string {
   const host = location.hostname;
   const key = Object.keys(DETAIL_SELECTORS).find((d) => host.endsWith(d));
   if (key) {

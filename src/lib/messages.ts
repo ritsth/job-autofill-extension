@@ -7,6 +7,8 @@ export interface PageInfo {
   site: 'greenhouse' | 'lever' | null;
   company: string;
   role: string;
+  /** Scoped job-posting text, used to tailor AI answers + the cover letter. */
+  jobText: string;
 }
 
 export interface FillResult {
@@ -18,11 +20,15 @@ export interface FillResult {
 export interface GenerateAnswerMsg {
   type: 'AI_GENERATE_ANSWER';
   question: string;
+  /** Optional job-posting text so the answer is tailored to this role. */
+  jobText?: string;
 }
 export interface GenerateCoverLetterMsg {
   type: 'AI_GENERATE_COVER_LETTER';
   company: string;
   role: string;
+  /** Optional job-posting text so the opening paragraph fits this role. */
+  jobText?: string;
 }
 export interface ParseResumeMsg {
   type: 'AI_PARSE_RESUME';

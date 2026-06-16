@@ -30,11 +30,11 @@ export function Popup() {
         const info = await sendToTab<PageInfo>(tab.id, { type: 'PAGE_INFO' });
         setPage(info);
       } catch {
-        setPage({ supported: false, site: null, company: '', role: '' });
+        setPage({ supported: false, site: null, company: '', role: '', jobText: '' });
       }
     } else {
       setTabId(null);
-      setPage({ supported: false, site: null, company: '', role: '' });
+      setPage({ supported: false, site: null, company: '', role: '', jobText: '' });
     }
     const profile = await getProfile();
     const needsConfig =
@@ -83,6 +83,7 @@ export function Popup() {
         type: 'AI_GENERATE_COVER_LETTER',
         company: page?.company ?? '',
         role: page?.role ?? '',
+        jobText: page?.jobText ?? '',
       });
       if (res.error) setError(res.error);
       else setLetter(res.text);
@@ -142,7 +143,7 @@ export function Popup() {
               style={{ marginTop: 8 }}
               onClick={() => downloadLetter(letter, page?.company ?? '', page?.role ?? '')}
             >
-              ⬇ Download .txt
+              ⬇ Download .pdf
             </button>
           </>
         )}

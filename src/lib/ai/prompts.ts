@@ -3,31 +3,49 @@ import type { GenerateInput } from './provider';
 // Prompt templates. Kept in one place so tone/behaviour is easy to tune.
 
 const ANSWER_SYSTEM =
-  'You help a job applicant answer application questions. Write in the first person ' +
-  'as the applicant, using ONLY facts supported by the provided profile and documents. ' +
-  'Never invent employers, dates, degrees, or achievements. Be specific, concise, and ' +
-  'professional. If the profile lacks the information needed, write a reasonable, honest ' +
-  'answer and avoid fabricating specifics. Return only the answer text — no preamble, ' +
-  'no quotes, no markdown.';
+  'You help a job applicant answer an open-ended application question. Write in the first ' +
+  'person as the applicant. Ground every claim in the APPLICANT PROFILE, résumé, and ' +
+  'documents provided, and tailor the answer to the specific JOB POSTING when one is given ' +
+  '(reference the role, the company\'s needs, and the named tools/tech where they genuinely ' +
+  'match the applicant\'s background). Be concrete: name real employers, projects, skills, ' +
+  'and the actual tech stack from the profile — never answer with a single word or a vague ' +
+  'platitude. Never invent employers, dates, degrees, numbers, or tools the profile does not ' +
+  'support. Answer every part of the question. If the question asks for a length (e.g. "3–5 ' +
+  'sentences"), honour it. If the profile genuinely lacks something, write an honest answer ' +
+  'around what is known rather than fabricating. Return only the answer text — no preamble, ' +
+  'no quotes, no markdown, no headings.';
 
 const COVER_LETTER_SYSTEM =
-  'You tailor a job applicant\'s base cover letter to a specific company and role. ' +
-  'Keep the applicant\'s voice and any concrete facts. Personalise it to the company and ' +
-  'role, fill in any bracketed placeholders using the profile, and keep it to 3–4 short ' +
-  'paragraphs. Do not invent facts not supported by the profile. Return only the finished ' +
-  'letter text — no preamble, no markdown.';
+  'You lightly tailor a job applicant\'s OWN cover-letter template. You MUST reproduce the ' +
+  'template verbatim, character for character, EXCEPT: (1) rewrite ONLY the first body ' +
+  'paragraph (the opening paragraph after the greeting) so it fits the target company, role, ' +
+  'and job posting; (2) leave any {{company}}, {{role}}, {{date}} values that are already ' +
+  'substituted in place. Do NOT change the greeting, the closing, the signature, the ' +
+  'applicant\'s name, or any other paragraph — keep their exact wording, line breaks, and ' +
+  'order. Keep the rewritten first paragraph in the applicant\'s voice and roughly the same ' +
+  'length as the original. Do not invent facts not supported by the profile. Return only the ' +
+  'finished letter text — no preamble, no markdown, no commentary.';
 
-export function buildAnswerPrompt(question: string, context: string): GenerateInput {
+export function buildAnswerPrompt(
+  question: string,
+  context: string,
+  jobText?: string,
+): GenerateInput {
+  const job = jobText?.trim()
+    ? `JOB POSTING (tailor the answer to this role):\n${jobText.trim().slice(0, 8000)}\n\n`
+    : '';
   return {
     system: ANSWER_SYSTEM,
-    // Let the model think for higher-quality open-ended answers; give it room
-    // so thinking + the answer both fit within the output budget.
+    // Let the model think for higher-quality open-ended answers; give it a
+    // generous budget so the thinking tokens AND the full answer both fit
+    // (too small a cap truncates the answer to a word or two).
     thinking: true,
-    maxOutputTokens: 4096,
+    maxOutputTokens: 8192,
     prompt:
       `APPLICANT PROFILE:\n${context}\n\n` +
+      job +
       `APPLICATION QUESTION:\n${question}\n\n` +
-      `Write the applicant's answer:`,
+      `Write the applicant's complete, concrete answer:`,
   };
 }
 
@@ -88,14 +106,20 @@ export function buildCoverLetterPrompt(
   company: string,
   role: string,
   context: string,
+  jobText?: string,
 ): GenerateInput {
+  const job = jobText?.trim()
+    ? `JOB POSTING (use only to shape the first paragraph):\n${jobText.trim().slice(0, 8000)}\n\n`
+    : '';
   return {
     system: COVER_LETTER_SYSTEM,
     prompt:
       `APPLICANT PROFILE:\n${context}\n\n` +
       `TARGET COMPANY: ${company || '(unknown)'}\n` +
       `TARGET ROLE: ${role || '(unknown)'}\n\n` +
-      `BASE COVER LETTER (already has company/role/date substituted):\n${baseLetter}\n\n` +
-      `Return the tailored cover letter:`,
+      job +
+      `COVER-LETTER TEMPLATE (already has company/role/date substituted — reproduce it ` +
+      `EXACTLY except rewrite only the first body paragraph):\n${baseLetter}\n\n` +
+      `Return the template with only the first paragraph tailored:`,
   };
 }

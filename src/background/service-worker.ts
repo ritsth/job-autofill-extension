@@ -40,7 +40,7 @@ async function handle(msg: BackgroundMessage): Promise<string> {
   const context = profileToContext(profile);
 
   if (msg.type === 'AI_GENERATE_ANSWER') {
-    return provider.generate(buildAnswerPrompt(msg.question, context));
+    return provider.generate(buildAnswerPrompt(msg.question, context, msg.jobText));
   }
 
   if (msg.type === 'AI_PARSE_RESUME') {
@@ -58,7 +58,7 @@ async function handle(msg: BackgroundMessage): Promise<string> {
     company: msg.company,
     role: msg.role,
   });
-  return provider.generate(buildCoverLetterPrompt(base, msg.company, msg.role, context));
+  return provider.generate(buildCoverLetterPrompt(base, msg.company, msg.role, context, msg.jobText));
 }
 
 // Clicking the toolbar icon opens the side panel (which stays open until the
