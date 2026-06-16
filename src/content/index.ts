@@ -5,12 +5,13 @@ import { getProfile, onProfileChanged } from '../lib/profile';
 import { applyStandardFills, findOpenQuestions, fillInput, type OpenQuestion } from './adapters/shared';
 import { greenhouseAdapter } from './adapters/greenhouse';
 import { leverAdapter } from './adapters/lever';
+import { workdayAdapter } from './adapters/workday';
 import type { SiteAdapter } from './adapters/types';
 import { sendToBackground } from '../lib/messages';
 import type { AIResult, ContentMessage, FillResult, PageInfo } from '../lib/messages';
 import { startSponsorshipWatch, setScannerEnabled, getScanText } from './sponsorship';
 
-const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter];
+const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, workdayAdapter];
 const adapter = ADAPTERS.find((a) => a.matches(new URL(location.href))) ?? null;
 
 const BUTTON_CLASS = 'jaf-ai-btn';

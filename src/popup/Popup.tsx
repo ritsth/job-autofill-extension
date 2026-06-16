@@ -116,7 +116,7 @@ export function Popup() {
           {page.role || 'job page'} {page.company && `· ${page.company}`}
         </p>
       ) : (
-        <p className="muted">Open a Greenhouse or Lever application page to use autofill.</p>
+        <p className="muted">Open a Greenhouse, Lever, or Workday application page to use autofill.</p>
       )}
 
       {needsKey && (

@@ -10,6 +10,19 @@ export function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Turns camelCase / snake_case / kebab identifiers into space-separated words,
+ * so id-style attributes (e.g. Workday's data-automation-id="legalNameSection_
+ * firstName") read like a label and match the standard rules.
+ */
+function humanizeId(s: string): string {
+  return s
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Best-effort human label for a form control. */
 export function getLabelText(el: FillableField): string {
   const parts: string[] = [];
@@ -34,6 +47,10 @@ export function getLabelText(el: FillableField): string {
     el.getAttribute('placeholder') ?? '',
     el.getAttribute('name') ?? '',
     el.id ?? '',
+    // Workday and similar component frameworks identify fields here, not via
+    // <label>. Humanize so "legalNameSection_firstName" → "first name" matches.
+    humanizeId(el.getAttribute('data-automation-id') ?? ''),
+    humanizeId(el.getAttribute('data-fkit-id') ?? ''),
   );
 
   return normalize(parts.join(' '));

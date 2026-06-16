@@ -1,5 +1,5 @@
 export interface SiteAdapter {
-  id: 'greenhouse' | 'lever';
+  id: 'greenhouse' | 'lever' | 'workday';
   /** True if this adapter handles the current page. */
   matches(url: URL): boolean;
   /** Best-effort company + role for cover-letter tailoring. */

@@ -9,6 +9,11 @@ const GREENHOUSE_MATCHES = [
   'https://*.greenhouse.io/*',
 ];
 const LEVER_MATCHES = ['https://jobs.lever.co/*'];
+const WORKDAY_MATCHES = [
+  'https://*.myworkdayjobs.com/*',
+  'https://*.myworkday.com/*',
+  'https://*.myworkdaysite.com/*',
+];
 
 // The content script runs on every page so the eligibility scanner has no gaps.
 // It self-gates at runtime: autofill only activates on Greenhouse/Lever, and the
@@ -45,6 +50,7 @@ export default defineManifest({
   host_permissions: [
     ...GREENHOUSE_MATCHES,
     ...LEVER_MATCHES,
+    ...WORKDAY_MATCHES,
     'https://generativelanguage.googleapis.com/*',
     // Managed-proxy mode (Cloud Run). Lets the service worker call the proxy.
     'https://*.run.app/*',

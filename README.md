@@ -1,7 +1,7 @@
 # AI Job Application Autofill (Chrome Extension)
 
-Auto-fills repetitive job applications on **Greenhouse** and **Lever** from a
-structured profile, and uses AI to:
+Auto-fills repetitive job applications on **Greenhouse**, **Lever**, and
+**Workday** from a structured profile, and uses AI to:
 
 - **Answer open-ended questions** an "✨ AI answer" button appears beside free-text
   questions; it drafts an answer from your résumé + uploaded documents.
@@ -18,7 +18,8 @@ proxy** — a small Cloud Run service that relays to **Vertex AI** so you can sp
 GCP $300 credit (AI Studio's Gemini API is excluded from the credit; Vertex isn't). See
 [`server/README.md`](server/README.md) to deploy it, then pick "Managed proxy" in options.
 
-**Where it runs:** full autofill on **Greenhouse** and **Lever**. The eligibility badge
+**Where it runs:** full autofill on **Greenhouse**, **Lever**, and **Workday**
+(`*.myworkdayjobs.com`). The eligibility badge
 runs on **every page** (so no job board is missed), but it self-gates — it only appears
 when the page actually looks like a job posting, and it stays current on single-page
 boards as you click between postings. Toggle it on/off any time from the side panel
@@ -59,7 +60,8 @@ The options page opens automatically on install. Fill in:
 
 ## Verify end-to-end
 
-1. Open a real **Greenhouse** (`*.greenhouse.io`) or **Lever** (`jobs.lever.co`) job
+1. Open a real **Greenhouse** (`*.greenhouse.io`), **Lever** (`jobs.lever.co`), or
+   **Workday** (`*.myworkdayjobs.com`) job
    application. A **YES/NO eligibility badge** appears top-right automatically.
 2. Click the extension icon → the **side panel** opens (and stays open).
 3. **Fill this page** → standard fields populate.
