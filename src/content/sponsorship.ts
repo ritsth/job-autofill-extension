@@ -344,12 +344,24 @@ function getHandshakeJobMeta(): { company: string; role: string } {
   // open posting's employer, not a logo from a list item elsewhere on the page.
   let company = '';
   for (let node: HTMLElement | null = titleEl; node && !company; node = node.parentElement) {
+    // Employer link: <a href="/e/<id>" aria-label="<Company>">. The OUTER link
+    // always carries the aria-label even when the inner duplicate is blank (the
+    // case that previously failed), so prefer that.
+    const aria = node
+      .querySelector<HTMLElement>('a[href*="/e/"][aria-label]')
+      ?.getAttribute('aria-label')
+      ?.trim();
+    if (aria) {
+      company = clean(aria.replace(/\s*logo\s*$/i, ''));
+      break;
+    }
+    // Fallbacks: the logo's alt ("<Company> logo"), then any employer link text.
     const logo = node.querySelector<HTMLImageElement>('img[alt$="logo" i]');
     if (logo?.alt) {
       company = clean(logo.alt.replace(/\s*logo\s*$/i, ''));
       break;
     }
-    const link = node.querySelector<HTMLElement>('a[href*="/emp"]');
+    const link = node.querySelector<HTMLElement>('a[href*="/e/"]');
     if (link?.textContent?.trim()) {
       company = clean(link.textContent);
       break;
