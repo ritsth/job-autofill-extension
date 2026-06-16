@@ -170,10 +170,41 @@ const DETAIL_SELECTORS: Record<string, string[]> = {
 
 const MAX_CHARS = 200_000;
 
+// Boards that collapse the job description behind a "More"/"Show more" toggle
+// which only injects the full text into the DOM once expanded — so eligibility
+// wording stays hidden until then. We auto-click it (scoped to the detail pane).
+const EXPAND_HOSTS = ['joinhandshake.com'];
+const EXPAND_LABELS = new Set([
+  'more',
+  'show more',
+  'see more',
+  'read more',
+  'view more',
+  'show full description',
+  'see more details',
+]);
+
+function isExpandLabel(raw: string): boolean {
+  const l = raw.trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.…]+$/, '').trim();
+  return EXPAND_LABELS.has(l);
+}
+
+/** Clicks any collapsed-description expander within `root` (once per element). */
+function autoExpandDescription(root: ParentNode): void {
+  if (!EXPAND_HOSTS.some((d) => location.hostname.endsWith(d))) return;
+  for (const el of root.querySelectorAll<HTMLElement>('button, a, [role="button"]')) {
+    if (el.getAttribute('data-jaf-expanded')) continue;
+    if (!isExpandLabel(el.textContent || '')) continue;
+    el.setAttribute('data-jaf-expanded', '1');
+    el.click(); // DOM updates async; the watcher re-scans the full text after.
+  }
+}
+
 export function getScanText(): string {
   const host = location.hostname;
   const key = Object.keys(DETAIL_SELECTORS).find((d) => host.endsWith(d));
   if (key) {
+    autoExpandDescription(document); // reveal collapsed descriptions before reading
     for (const sel of DETAIL_SELECTORS[key]) {
       const el = document.querySelector<HTMLElement>(sel);
       const t = el?.innerText?.trim();
