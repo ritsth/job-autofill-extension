@@ -368,12 +368,12 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   if (a.reason) card.appendChild(el('div', 'reason', a.reason));
 
   const exp = a.experience;
-  if (exp.required || exp.preferred) {
-    const parts: string[] = [];
-    if (exp.required) parts.push(`${exp.required} req`);
-    if (exp.preferred) parts.push(`${exp.preferred} pref`);
-    card.appendChild(el('div', 'exp', `Experience: ${parts.join(' · ')}`));
-  }
+  const expParts: string[] = [];
+  if (exp.required) expParts.push(`${exp.required} required`);
+  if (exp.preferred) expParts.push(`${exp.preferred} preferred`);
+  card.appendChild(
+    el('div', 'exp', `Experience: ${expParts.length ? expParts.join(' · ') : 'Not mentioned'}`),
+  );
 
   // Rules result → offer an AI re-read; AI result → just tag it.
   const row = document.createElement('div');
