@@ -19,8 +19,11 @@ const COVER_LETTER_SYSTEM =
   'You lightly tailor a job applicant\'s OWN cover-letter template. You MUST reproduce the ' +
   'template verbatim, character for character, EXCEPT: (1) rewrite ONLY the first body ' +
   'paragraph (the opening paragraph after the greeting) so it fits the target company, role, ' +
-  'and job posting; (2) leave any {{company}}, {{role}}, {{date}} values that are already ' +
-  'substituted in place. Do NOT change the greeting, the closing, the signature, the ' +
+  'and job posting — BUT if that paragraph begins with a sentence naming the role and company ' +
+  '(e.g. "I am writing to apply for the <role> position at <company>."), keep that opening ' +
+  'sentence EXACTLY as written and only tailor the sentences after it; (2) leave any ' +
+  '{{company}}, {{role}}, {{date}} values that are already substituted in place. Do NOT change ' +
+  'the greeting, the closing, the signature, the ' +
   'applicant\'s name, or any other paragraph — keep their exact wording, line breaks, and ' +
   'order. Keep the rewritten first paragraph in the applicant\'s voice and roughly the same ' +
   'length as the original. Do not invent facts not supported by the profile. Return only the ' +

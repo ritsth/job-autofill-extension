@@ -329,25 +329,33 @@ const isHandshake = (): boolean => location.hostname.endsWith('joinhandshake.com
 
 /** Best-effort company + role for the open Handshake posting (inputs are editable). */
 function getHandshakeJobMeta(): { company: string; role: string } {
-  const pick = (sels: string[]): string => {
-    for (const sel of sels) {
-      const t = document.querySelector<HTMLElement>(sel)?.textContent?.trim();
-      if (t) return t.replace(/\s+/g, ' ').slice(0, 120);
+  const clean = (s: string): string => s.replace(/\s+/g, ' ').trim().slice(0, 120);
+
+  // Role: the job-title heading in the detail pane.
+  const titleEl =
+    document.querySelector<HTMLElement>('main h1, [role="main"] h1') ||
+    document.querySelector<HTMLElement>('main h2, [role="main"] h2') ||
+    document.querySelector<HTMLElement>('h1');
+  const role = clean(titleEl?.textContent || '');
+
+  // Company: Handshake's class names are styled-component hashes that change every
+  // build, so key off stable semantics instead — the employer logo's alt text
+  // ("<Company> logo") or an employer link. Walk UP from the title so we read the
+  // open posting's employer, not a logo from a list item elsewhere on the page.
+  let company = '';
+  for (let node: HTMLElement | null = titleEl; node && !company; node = node.parentElement) {
+    const logo = node.querySelector<HTMLImageElement>('img[alt$="logo" i]');
+    if (logo?.alt) {
+      company = clean(logo.alt.replace(/\s*logo\s*$/i, ''));
+      break;
     }
-    return '';
-  };
-  const role = pick([
-    '[data-hook="details-container"] h1',
-    '[data-hook="job-name"]',
-    '[data-hook="job-title"]',
-    'main h1',
-  ]);
-  const company = pick([
-    '[data-hook="employer-name"]',
-    '[data-hook="employer-name-link"]',
-    '[data-hook="details-container"] a[href*="/e/"]',
-    'main a[href*="/employer"]',
-  ]);
+    const link = node.querySelector<HTMLElement>('a[href*="/emp"]');
+    if (link?.textContent?.trim()) {
+      company = clean(link.textContent);
+      break;
+    }
+    if (node === document.body) break;
+  }
   return { company, role };
 }
 
