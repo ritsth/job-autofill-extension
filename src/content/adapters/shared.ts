@@ -110,6 +110,11 @@ const RULES: Rule[] = [
 ];
 
 function matchRule(label: string, el: FillableField): Rule | undefined {
+  // Standard rules fill short, known values (name, title, company…). A textarea
+  // is always a free-text/essay question, so no standard rule applies — e.g.
+  // "describe your role" must NOT be filled with the job title. This also lets
+  // findOpenQuestions give every textarea an AI-answer button.
+  if (el instanceof HTMLTextAreaElement) return undefined;
   for (const rule of RULES) {
     if (!rule.test.test(label)) continue;
     if (el instanceof HTMLSelectElement && !rule.selectOk) continue;
