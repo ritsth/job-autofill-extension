@@ -103,11 +103,40 @@ curl -s https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/ | jq   # expect "dai
 3. Run an AI feature → Firestore `usage` doc appears, `count` increments per call.
 4. (owner) Paste `PROXY_TOKEN` into Options → Admin token → calls run unmetered.
 
-## Still ahead — Chrome Web Store (separate from the above)
+## Chrome Web Store listing (separate from the above)
 
-OAuth "Publish app" ≠ Web Store listing. To list publicly:
-1. Pay the one-time **$5** developer fee at the Chrome Web Store Developer Dashboard.
-2. `npm run build`, then zip the `dist/` folder.
-3. Upload zip + screenshots + description + privacy policy → Google review (~1–3 days).
-4. Use the **same `key.pem`** so the published ID matches the OAuth client (otherwise
-   create a second OAuth client for the store-assigned ID).
+OAuth "Publish app" ≠ Web Store listing. Listing copy and privacy policy live in
+[`STORE_LISTING.md`](STORE_LISTING.md) and [`PRIVACY.md`](PRIVACY.md).
+
+**Key gotcha:** the Web Store assigns the published item its **own** ID/public key — it
+does **not** honor the local `key.pem`. So the OAuth client (currently bound to the dev
+ID from `key.pem`) must be **rebound to the store-assigned Item ID** after the first
+upload, or `getAuthToken` / managed-proxy sign-in breaks for installed users.
+
+Ordered steps:
+
+1. Register a Web Store developer account (one-time **$5**) at
+   <https://chrome.google.com/webstore/devconsole>.
+2. `npm run package` → upload `web-store-package.zip` as a **new item** (don't submit).
+   This mints the permanent **Item ID** + a store key.
+3. **Rebind OAuth + adopt the store key:**
+   - Dashboard → item → **Package** tab → copy the **public key**, note the **Item ID**.
+   - Google Auth Platform → **Clients** → edit **"AI Job Assistant"** → set its **Item ID**
+     to the store Item ID. `client_id` is unchanged, so `OAUTH_CLIENT_ID` /
+     `oauth2.client_id` stay the same and **no Cloud Run redeploy** is needed.
+   - Replace `key:` in [`manifest.config.ts`](manifest.config.ts) with the store public key
+     (so local unpacked dev shares the store ID; `key.pem` is then superseded — keep it
+     backed up but it no longer drives the ID).
+   - `npm run package` again → upload the new version.
+4. Fill the listing from [`STORE_LISTING.md`](STORE_LISTING.md): description, single
+   purpose, category, icon (128px in the package), **screenshots** (guide below), privacy
+   policy URL, and the **Privacy practices** disclosures.
+5. Submit with **Public** visibility → Google review (~1–3 days; the `<all_urls>`
+   justification is in `STORE_LISTING.md`).
+
+### Screenshot capture (1–5 × 1280×800 PNG)
+
+After step 3 (so the dev ID matches and sign-in works): `npm run build`, load `dist/`
+unpacked, size the captured area to exactly **1280×800**, and capture: the **Options**
+page filled in, the **side panel** on a Greenhouse/Lever posting, the **eligibility
+badge** (YES/NO), an **✨ AI answer** draft, and a generated **cover letter**.
