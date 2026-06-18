@@ -4,7 +4,9 @@ Auto-fills repetitive job applications on **Greenhouse**, **Lever**, and
 **Workday** from a structured profile, and uses AI to:
 
 - **Answer open-ended questions** an "✨ AI answer" button appears beside free-text
-  questions; it drafts an answer from your résumé + uploaded documents.
+  questions; it drafts an answer from your résumé + uploaded documents. On Greenhouse,
+  Lever, and Workday it's automatic; on any other job site, **save the job** (💾 in the
+  side panel) and the same button lights up next to that application's questions.
 - **Generate a tailored cover letter** from your base template (company / role / date
   substituted, then AI-tailored), downloadable as a `.pdf`.
 - **Flag eligibility at a glance** every covered page is scanned for visa-sponsorship /

@@ -2,6 +2,7 @@
 // an "✨ AI answer" button beside each open-ended question.
 
 import { getProfile, onProfileChanged } from '../lib/profile';
+import { getSavedJobs, onSavedJobsChanged } from '../lib/savedJobs';
 import { applyStandardFills, findOpenQuestions, fillInput, type OpenQuestion } from './adapters/shared';
 import { greenhouseAdapter } from './adapters/greenhouse';
 import { leverAdapter } from './adapters/lever';
@@ -53,7 +54,6 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse
 
 // --- AI answer buttons ---
 function injectQuestionButtons(): void {
-  if (!adapter) return;
   for (const q of findOpenQuestions()) {
     if (q.el.getAttribute(MARK_ATTR)) continue;
     q.el.setAttribute(MARK_ATTR, '1');
@@ -119,11 +119,36 @@ function injectStyles(): void {
   document.documentElement.appendChild(style);
 }
 
-if (adapter) {
-  injectStyles();
-  injectQuestionButtons();
-  observer.observe(document.body, { childList: true, subtree: true });
+// The AI-answer buttons show on the autofill boards (adapter) and, on any other
+// site, once the user has an active saved job — so "save this job" lights up the
+// "✨ AI answer" button next to that application's free-text questions anywhere.
+let questionsOn = false;
+let stylesInjected = false;
+
+function setQuestionButtons(on: boolean): void {
+  if (on === questionsOn) return;
+  questionsOn = on;
+  if (on) {
+    if (!stylesInjected) {
+      injectStyles();
+      stylesInjected = true;
+    }
+    injectQuestionButtons();
+    observer.observe(document.body, { childList: true, subtree: true });
+  } else {
+    observer.disconnect();
+    window.clearTimeout(pending); // cancel any debounced re-inject still queued
+    // Remove the buttons and unmark their textareas so they can re-bind later.
+    document.querySelectorAll(`.${BUTTON_CLASS}`).forEach((n) => n.remove());
+    document.querySelectorAll(`[${MARK_ATTR}]`).forEach((el) => el.removeAttribute(MARK_ATTR));
+  }
 }
+
+const recomputeQuestions = (activeId: string | null) =>
+  setQuestionButtons(!!adapter || !!activeId);
+
+getSavedJobs().then((s) => recomputeQuestions(s.activeId));
+onSavedJobsChanged((s) => recomputeQuestions(s.activeId));
 
 // The content script loads on every page; the scanner is gated by the user's
 // setting. Run it once, in the top frame only, to avoid duplicate badges from
