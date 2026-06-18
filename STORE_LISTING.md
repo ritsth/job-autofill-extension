@@ -7,7 +7,7 @@ actual listing so submissions are reproducible.
 
 ## Product name
 
-AI Job Application Autofill
+Little AI Helper
 
 ## Summary (≤132 characters)
 
@@ -27,7 +27,7 @@ English
 
 ## Detailed description
 
-> **Stop retyping the same job-application fields.** AI Job Application Autofill fills
+> **Stop retyping the same job-application fields.** Little AI Helper fills
 > repetitive applications from a profile you enter once, drafts answers to open-ended
 > questions, generates tailored cover letters, and flags work-eligibility requirements
 > before you waste time on a posting you can't take.
@@ -36,7 +36,7 @@ English
 > - **Autofill** standard fields on Greenhouse, Lever, and Workday applications from your
 >   saved profile.
 > - **✨ AI answers** — a button appears beside free-text questions and drafts a response
->   from your résumé and uploaded documents.
+>   from your resume and uploaded documents.
 > - **Cover letters** — generate a tailored letter from your template (company, role, and
 >   date filled in) and download it as a PDF.
 > - **Eligibility badge** — every job posting is scanned for visa-sponsorship,
@@ -68,7 +68,7 @@ English
 
 | Permission | Justification |
 | --- | --- |
-| `storage` | Save the user's profile, résumé, documents, and settings locally in the browser. |
+| `storage` | Save the user's profile, resume, documents, and settings locally in the browser. |
 | `activeTab` | Read and fill fields on the job-application page the user is currently on, when they click the extension. |
 | `scripting` | Inject the autofill logic that populates form fields on supported application pages. |
 | `sidePanel` | The extension's main UI is a side panel that stays open while the user works through an application. |

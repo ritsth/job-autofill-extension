@@ -1,8 +1,8 @@
-# Privacy Policy — AI Job Application Autofill
+# Privacy Policy — Little AI Helper
 
 _Last updated: June 18, 2026_
 
-AI Job Application Autofill ("the extension") is a Chrome extension that fills out
+Little AI Helper ("the extension") is a Chrome extension that fills out
 job applications and drafts answers and cover letters from a profile **you** enter.
 This policy explains what data the extension handles and where it goes. In plain
 terms: **your data stays on your machine**, and the only time anything leaves your
@@ -16,7 +16,7 @@ All of the following is saved **locally on your computer** using Chrome's
 - **Profile / personal information** you enter: name, email, phone, city/state/country,
   LinkedIn, portfolio, GitHub.
 - **Work history, education, and skills.**
-- **Résumé text and uploaded documents** (PDF/DOCX are converted to plain text on your
+- **Resume text and uploaded documents** (PDF/DOCX are converted to plain text on your
   device for use as AI context).
 - **Preferences**, including optional, self-reported EEO/demographic answers
   (gender, ethnicity, veteran status, disability status). These are blank by default
@@ -33,7 +33,7 @@ The extension only contacts a network service when you actively use an AI featur
 (generating an answer, cover letter, or eligibility check). Which service it contacts
 depends on the AI provider you select in Options:
 
-1. **Bring-your-own Gemini key** — your selected profile context (résumé, work history,
+1. **Bring-your-own Gemini key** — your selected profile context (resume, work history,
    the relevant job text, etc.) and your own Google Gemini API key are sent directly to
    Google's Gemini API (`generativelanguage.googleapis.com`) to generate text.
 2. **Managed proxy** — the same context is sent to a Cloud Run service (operated by the

@@ -1,4 +1,4 @@
-// Extract plain text from an uploaded résumé/document so it can be used as AI
+// Extract plain text from an uploaded resume/document so it can be used as AI
 // context. Runs in the options page (a normal extension page with DOM access).
 // Supports PDF (pdfjs-dist), .docx (mammoth), and plain text/markdown.
 

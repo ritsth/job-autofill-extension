@@ -25,7 +25,12 @@ const BUTTON_CLASS = 'jaf-ai-btn';
 const MARK_ATTR = 'data-jaf-bound';
 
 // --- Messaging from popup ---
-chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse) => {
+// Only the top frame answers the popup. With all_frames enabled, registering this
+// in every sub-frame would make several frames race to sendResponse (the iframe
+// could win and shadow the real page), so the listener is top-frame-only.
+const isTopFrame = window.top === window.self;
+if (isTopFrame)
+  chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse) => {
   if (msg.type === 'PAGE_INFO') {
     const info: PageInfo = adapter
       ? { supported: true, site: adapter.id, ...adapter.getPageInfo(), jobText: getScanText() }

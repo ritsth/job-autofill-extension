@@ -4,7 +4,7 @@ import type { GenerateInput } from './provider';
 
 const ANSWER_SYSTEM =
   'You help a job applicant answer an open-ended application question. Write in the first ' +
-  'person as the applicant. Ground every claim in the APPLICANT PROFILE, résumé, and ' +
+  'person as the applicant. Ground every claim in the APPLICANT PROFILE, resume, and ' +
   'documents provided, and tailor the answer to the specific JOB POSTING when one is given ' +
   '(reference the role, the company\'s needs, and the named tools/tech where they genuinely ' +
   'match the applicant\'s background). Be concrete: name real employers, projects, skills, ' +
@@ -25,7 +25,7 @@ export function buildAnswerPrompt(
     : '';
   return {
     system: ANSWER_SYSTEM,
-    // Thinking OFF. With a real résumé + documents + job text in context, Gemini
+    // Thinking OFF. With a real resume + documents + job text in context, Gemini
     // 2.5's dynamic "thinking" can consume the entire output budget and truncate
     // the visible answer to a word or two ("Fellow"). Disabling it gives the full
     // budget to the answer — quality is unaffected for short open-ended replies.
@@ -40,7 +40,7 @@ export function buildAnswerPrompt(
 }
 
 const RESUME_PARSE_SYSTEM =
-  'You extract structured data from a résumé. Return ONLY valid JSON (no markdown, no ' +
+  'You extract structured data from a resume. Return ONLY valid JSON (no markdown, no ' +
   'code fences, no commentary) matching exactly this shape:\n' +
   '{\n' +
   '  "personal": { "firstName": "", "lastName": "", "email": "", "phone": "", "city": "", ' +
@@ -49,7 +49,7 @@ const RESUME_PARSE_SYSTEM =
   '  "education": [{ "school": "", "degree": "", "field": "", "graduationYear": "" }],\n' +
   '  "skills": ["", ""]\n' +
   '}\n' +
-  'Use the résumé\'s own wording. For "personal", use the FULL URL for ' +
+  'Use the resume\'s own wording. For "personal", use the FULL URL for ' +
   'linkedin/github/portfolio (a "Links found in document:" section may list them — match each ' +
   'URL to the right field by its domain, e.g. linkedin.com → linkedin, github.com → github; any ' +
   'other personal site → portfolio). Never put the word "LinkedIn"/"GitHub" as the value — only a ' +
@@ -64,7 +64,7 @@ export function buildResumeParsePrompt(resumeText: string): GenerateInput {
     // small cap truncates the output. JSON mode keeps the result parseable.
     maxOutputTokens: 8192,
     json: true,
-    prompt: `RÉSUMÉ:\n${resumeText}\n\nReturn the JSON:`,
+    prompt: `RESUME:\n${resumeText}\n\nReturn the JSON:`,
   };
 }
 
@@ -97,9 +97,9 @@ export function buildJobEligibilityPrompt(jobText: string): GenerateInput {
 }
 
 const RESUME_SYSTEM =
-  'You tailor a job applicant\'s résumé to one specific job posting. Work ONLY from the facts ' +
-  'in the APPLICANT PROFILE (their résumé, work history, education, skills, and any documents). ' +
-  'Produce a complete, ATS-friendly résumé in clean plain text that foregrounds the experience, ' +
+  'You tailor a job applicant\'s resume to one specific job posting. Work ONLY from the facts ' +
+  'in the APPLICANT PROFILE (their resume, work history, education, skills, and any documents). ' +
+  'Produce a complete, ATS-friendly resume in clean plain text that foregrounds the experience, ' +
   'skills, and keywords most relevant to the TARGET ROLE and JOB POSTING. You may reorder ' +
   'sections and bullet points, rewrite bullets to mirror the posting\'s language, and choose ' +
   'what to emphasize — but NEVER invent or alter employers, job titles, dates, degrees, schools, ' +
@@ -108,7 +108,7 @@ const RESUME_SYSTEM =
   '2–3 line professional summary tailored to the role; a SKILLS section (most relevant first); ' +
   'an EXPERIENCE section (most relevant roles first, each with company, title, dates, and 2–4 ' +
   'concise achievement bullets starting with "- "); and an EDUCATION section. Use UPPERCASE ' +
-  'section headers. Return ONLY the résumé text — no preamble, no markdown fences, no commentary.';
+  'section headers. Return ONLY the resume text — no preamble, no markdown fences, no commentary.';
 
 export function buildTailoredResumePrompt(
   context: string,
@@ -117,11 +117,11 @@ export function buildTailoredResumePrompt(
   role?: string,
 ): GenerateInput {
   const job = jobText?.trim()
-    ? `JOB POSTING (tailor the résumé to this role):\n${jobText.trim().slice(0, 8000)}\n\n`
+    ? `JOB POSTING (tailor the resume to this role):\n${jobText.trim().slice(0, 8000)}\n\n`
     : '';
   return {
     system: RESUME_SYSTEM,
-    // Thinking OFF so the full output budget goes to the résumé, not hidden
+    // Thinking OFF so the full output budget goes to the resume, not hidden
     // reasoning — 2.5 Flash otherwise truncates long structured output.
     thinking: false,
     maxOutputTokens: 4096,
@@ -130,7 +130,7 @@ export function buildTailoredResumePrompt(
       `TARGET COMPANY: ${company?.trim() || '(unknown)'}\n` +
       `TARGET ROLE: ${role?.trim() || '(unknown)'}\n\n` +
       job +
-      `Return the tailored résumé:`,
+      `Return the tailored resume:`,
   };
 }
 

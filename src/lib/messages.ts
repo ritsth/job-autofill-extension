@@ -34,7 +34,7 @@ export interface GenerateResumeMsg {
   type: 'AI_GENERATE_RESUME';
   company: string;
   role: string;
-  /** Optional job-posting text so the résumé is tailored to this role. */
+  /** Optional job-posting text so the resume is tailored to this role. */
   jobText?: string;
 }
 export interface ParseResumeMsg {

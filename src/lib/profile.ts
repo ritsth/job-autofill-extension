@@ -1,6 +1,6 @@
 // Profile schema + chrome.storage.local persistence.
 // Everything here stays on the user's machine (storage.local, not sync) because
-// it contains PII (résumé text, contact info, optional demographics).
+// it contains PII (resume text, contact info, optional demographics).
 
 export interface PersonalInfo {
   firstName: string;
@@ -70,7 +70,7 @@ export interface Profile {
   workHistory: WorkEntry[];
   education: EducationEntry[];
   skills: string[];
-  /** Free-text résumé, used as primary AI context. */
+  /** Free-text resume, used as primary AI context. */
   resumeText: string;
   documents: UploadedDoc[];
   preferences: Preferences;
@@ -78,7 +78,7 @@ export interface Profile {
   ai: AISettings;
   /** Master on/off for the eligibility scanner (runs on every page when on). */
   scanEnabled: boolean;
-  /** Show the tailored-résumé generator in the side panel. */
+  /** Show the tailored-resume generator in the side panel. */
   tailoredResumeEnabled: boolean;
   /** Show the tailored cover-letter generator in the side panel. */
   coverLetterEnabled: boolean;
@@ -214,7 +214,7 @@ export function profileToContext(p: Profile): string {
   }
 
   if (p.resumeText.trim()) {
-    lines.push('\nRésumé:\n' + p.resumeText.trim());
+    lines.push('\nResume:\n' + p.resumeText.trim());
   }
 
   for (const doc of p.documents) {

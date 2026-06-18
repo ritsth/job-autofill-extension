@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-The extension's AI features (résumé parsing, AI answers, cover letters, the
+The extension's AI features (resume parsing, AI answers, cover letters, the
 eligibility **AI check**) call **Gemini 2.5 Flash on Vertex AI** — but *indirectly*,
 through a small Cloud Run proxy. Because we call a **managed publisher model**
 (Gemini) over the API rather than deploying our own model, the **Vertex AI →
@@ -103,7 +103,7 @@ A `200` with a `{ "text": ... }` body means Vertex AI served the request.
 
 Then the extension isn't sending requests — usually one of:
 - You haven't triggered an AI feature since switching (the eligibility badge's
-  *instant* result is rules-only; only **AI check**, résumé import, AI answers, and
+  *instant* result is rules-only; only **AI check**, resume import, AI answers, and
   cover letters call the proxy).
 - The extension isn't on the **Managed proxy** provider, or the **proxy token** is
   blank/incorrect (you'd see `401`s in the Cloud Run logs).

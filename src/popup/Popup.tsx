@@ -33,7 +33,7 @@ export function Popup() {
   const [resumeEnabled, setResumeEnabled] = useState(true);
   const [jobs, setJobs] = useState<SavedJob[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  // Editable company/role, shared by the cover letter + résumé (pre-filled from
+  // Editable company/role, shared by the cover letter + resume (pre-filled from
   // page detection).
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
@@ -223,7 +223,7 @@ export function Popup() {
           </svg>
         </span>
         <div className="brand-text">
-          <h1>AI Job Autofill</h1>
+          <h1>Little AI Helper</h1>
           <p className="tagline">Autofill · cover letters · eligibility</p>
         </div>
         <button className="ghost icon-btn" title="Refresh for the current tab" onClick={() => refresh()}>
@@ -362,7 +362,7 @@ export function Popup() {
           disabled={busy !== ''}
           onClick={onResume}
         >
-          {busy === 'resume' ? 'Tailoring…' : 'Generate tailored résumé'}
+          {busy === 'resume' ? 'Tailoring…' : 'Generate tailored resume'}
         </button>
         {resume && (
           <>
@@ -376,7 +376,7 @@ export function Popup() {
               style={{ marginTop: 8 }}
               onClick={() => downloadResume(resume, company, role)}
             >
-              ⬇ Download résumé (.pdf)
+              ⬇ Download resume (.pdf)
             </button>
           </>
         )}
@@ -392,7 +392,7 @@ export function Popup() {
             checked={resumeEnabled}
             onChange={(e) => toggleSetting('tailoredResumeEnabled', setResumeEnabled, e.target.checked)}
           />
-          Tailored résumé generator
+          Tailored resume generator
         </label>
         <label className="toggle">
           <input

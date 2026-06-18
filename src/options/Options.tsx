@@ -118,10 +118,10 @@ function OptionsView({
     }
   }
 
-  /** Sends résumé text to the AI and fills work / education / skills. */
+  /** Sends resume text to the AI and fills work / education / skills. */
   async function importFromResume(text: string): Promise<void> {
     if (!text.trim()) {
-      setImportState({ busy: false, msg: '', err: 'Add some résumé text first.' });
+      setImportState({ busy: false, msg: '', err: 'Add some resume text first.' });
       return;
     }
     setImportState({ busy: true, msg: '', err: '' });
@@ -164,7 +164,7 @@ function OptionsView({
   return (
     <div className="options">
       <div className="toolbar">
-        <h1 style={{ flex: 1 }}>Job Autofill — Settings</h1>
+        <h1 style={{ flex: 1 }}>Little AI Helper — Settings</h1>
         {saveState === 'saving' && <span className="help">Saving…</span>}
         {saveState === 'saved' && <span className="saved">✓ Saved</span>}
       </div>
@@ -261,9 +261,9 @@ function OptionsView({
         )}
       </section>
 
-      {/* Résumé import */}
+      {/* Resume import */}
       <section className="card">
-        <h2>Attach résumé (auto-fills the sections below)</h2>
+        <h2>Attach resume (auto-fills the sections below)</h2>
         <ResumeUpload
           busy={importState.busy}
           onText={async (text) => {
@@ -271,11 +271,11 @@ function OptionsView({
             await importFromResume(text);
           }}
         />
-        <Field label="Résumé text (primary AI context)">
+        <Field label="Resume text (primary AI context)">
           <textarea
             style={{ minHeight: 160 }}
             value={p.resumeText}
-            placeholder="Paste your résumé here, or upload a PDF/DOCX above."
+            placeholder="Paste your resume here, or upload a PDF/DOCX above."
             onChange={(e) => update((prev) => ({ ...prev, resumeText: e.target.value }))}
           />
         </Field>
@@ -296,7 +296,7 @@ function OptionsView({
           {importState.err && <span className="warn">{importState.err}</span>}
         </div>
         <div className="help">
-          Uses your AI provider to read the résumé and fill the Personal, Work, Education and Skills
+          Uses your AI provider to read the resume and fill the Personal, Work, Education and Skills
           sections below. Review the results — it can occasionally misread dates or titles.
         </div>
       </section>
@@ -614,7 +614,7 @@ function ResumeUpload({
 
   return (
     <div className="field">
-      <label>Upload résumé (PDF / DOCX / TXT) — extracts text, then auto-fills</label>
+      <label>Upload resume (PDF / DOCX / TXT) — extracts text, then auto-fills</label>
       <input type="file" accept=".pdf,.docx,.txt,.md" onChange={handle} disabled={reading || busy} />
       {reading && <div className="help">Extracting text…</div>}
       {warn && <div className="warn">{warn}</div>}

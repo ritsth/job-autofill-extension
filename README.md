@@ -1,10 +1,10 @@
-# AI Job Application Autofill (Chrome Extension)
+# Little AI Helper (Chrome Extension)
 
 Auto-fills repetitive job applications on **Greenhouse**, **Lever**, and
 **Workday** from a structured profile, and uses AI to:
 
 - **Answer open-ended questions** an "✨ AI answer" button appears beside free-text
-  questions; it drafts an answer from your résumé + uploaded documents. On Greenhouse,
+  questions; it drafts an answer from your resume + uploaded documents. On Greenhouse,
   Lever, and Workday it's automatic; on any other job site, **save the job** (💾 in the
   side panel) and the same button lights up next to that application's questions.
 - **Generate a tailored cover letter** from your base template (company / role / date
@@ -57,7 +57,7 @@ The options page opens automatically on install. Fill in:
 
 - **AI provider** → Gemini, and paste a free key from
   [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
-- Your **personal info, work history, skills, and résumé** (paste text or upload a
+- Your **personal info, work history, skills, and resume** (paste text or upload a
   PDF/DOCX — text is extracted for AI context).
 - A **base cover letter** using `{{company}}`, `{{role}}`, `{{date}}` placeholders.
 
@@ -96,7 +96,7 @@ adapter under `src/content/adapters/`.
 
 Shipped since v1: Cloud Run → Vertex AI managed proxy with **Google sign-in +
 per-user daily quotas**, Workday adapter, Handshake eligibility badge +
-cover-letter generator, tailored-résumé generator, save-job context, PDF export.
+cover-letter generator, tailored-resume generator, save-job context, PDF export.
 
 Still ahead (v2+):
 

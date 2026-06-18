@@ -104,7 +104,7 @@ button:disabled { opacity: .6; cursor: default; }
 .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
   background: #eef2ff; color: var(--primary); font-weight: 600; }
 
-/* Feature toggles (résumé / cover letter / eligibility scan) */
+/* Feature toggles (resume / cover letter / eligibility scan) */
 .toggles {
   display: flex; flex-direction: column; gap: 10px;
   padding: 12px 14px; background: #fff;
