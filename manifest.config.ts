@@ -23,7 +23,7 @@ const CONTENT_MATCHES = ['<all_urls>'];
 
 export default defineManifest({
   manifest_version: 3,
-  name: 'AI Job Application Autofill',
+  name: 'Little AI Helper',
   version: pkg.version,
   description: pkg.description,
   icons: {
@@ -34,7 +34,7 @@ export default defineManifest({
   // No default_popup: clicking the action opens the side panel (set up in the
   // service worker via setPanelBehavior) so the UI stays open until closed.
   action: {
-    default_title: 'AI Job Autofill',
+    default_title: 'Little AI Helper',
   },
   side_panel: {
     default_path: 'src/sidepanel/index.html',
@@ -72,6 +72,10 @@ export default defineManifest({
       matches: CONTENT_MATCHES,
       js: ['src/content/index.ts'],
       run_at: 'document_idle',
+      // Run in sub-frames too: company career sites (e.g. Suvoda) embed the ATS
+      // application form in an iframe, so the AI-answer buttons must reach it. The
+      // popup-messaging handlers and the eligibility badge stay top-frame-only.
+      all_frames: true,
     },
   ],
 });

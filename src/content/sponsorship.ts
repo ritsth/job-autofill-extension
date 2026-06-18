@@ -407,7 +407,7 @@ function getJobMeta(): { company: string; role: string } {
 }
 
 /**
- * Generator expander (cover letter or tailored résumé): an editable company/role
+ * Generator expander (cover letter or tailored resume): an editable company/role
  * pair pre-filled from the posting, plus a button that asks the AI for the
  * document and downloads it as a PDF.
  */
@@ -476,7 +476,7 @@ function buildCoverLetterSection(): HTMLElement {
 
 function buildResumeSection(): HTMLElement {
   return buildGeneratorSection({
-    toggleLabel: '🧾 Tailored résumé',
+    toggleLabel: '🧾 Tailored resume',
     request: (company, role, jobText) =>
       sendToBackground<AIResult>({ type: 'AI_GENERATE_RESUME', company, role, jobText }),
     download: downloadResume,
@@ -606,13 +606,13 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   }
   card.appendChild(row);
 
-  // Offer one-click tailor-and-download for a cover letter + résumé right here,
+  // Offer one-click tailor-and-download for a cover letter + resume right here,
   // below the AI check, on any posting. Each generator is shown unless the user
   // turned it off in settings.
   if (showCoverLetterInBadge) card.appendChild(buildCoverLetterSection());
   if (showResumeInBadge) card.appendChild(buildResumeSection());
 
-  card.appendChild(el('div', 'tag', 'Job Autofill · auto-detected, double-check the posting'));
+  card.appendChild(el('div', 'tag', 'Little AI Helper · auto-detected, double-check the posting'));
 
   root.appendChild(card);
   return host;

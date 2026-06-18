@@ -7,7 +7,7 @@ export interface GenerateInput {
   system: string;
   /** The concrete task + context (profile, question, etc.). */
   prompt: string;
-  /** Optional output budget (e.g. résumé parsing needs more than a short answer). */
+  /** Optional output budget (e.g. resume parsing needs more than a short answer). */
   maxOutputTokens?: number;
   /** Request strict JSON output (sets the model's JSON response mode). */
   json?: boolean;

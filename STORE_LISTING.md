@@ -7,7 +7,7 @@ actual listing so submissions are reproducible.
 
 ## Product name
 
-AI Job Application Autofill
+Little AI Helper
 
 ## Summary (≤132 characters)
 
@@ -27,7 +27,7 @@ English
 
 ## Detailed description
 
-> **Stop retyping the same job-application fields.** AI Job Application Autofill fills
+> **Stop retyping the same job-application fields.** Little AI Helper fills
 > repetitive applications from a profile you enter once, drafts answers to open-ended
 > questions, generates tailored cover letters, and flags work-eligibility requirements
 > before you waste time on a posting you can't take.
@@ -36,7 +36,7 @@ English
 > - **Autofill** standard fields on Greenhouse, Lever, and Workday applications from your
 >   saved profile.
 > - **✨ AI answers** — a button appears beside free-text questions and drafts a response
->   from your résumé and uploaded documents.
+>   from your resume and uploaded documents.
 > - **Cover letters** — generate a tailored letter from your template (company, role, and
 >   date filled in) and download it as a PDF.
 > - **Eligibility badge** — every job posting is scanned for visa-sponsorship,
@@ -68,7 +68,7 @@ English
 
 | Permission | Justification |
 | --- | --- |
-| `storage` | Save the user's profile, résumé, documents, and settings locally in the browser. |
+| `storage` | Save the user's profile, resume, documents, and settings locally in the browser. |
 | `activeTab` | Read and fill fields on the job-application page the user is currently on, when they click the extension. |
 | `scripting` | Inject the autofill logic that populates form fields on supported application pages. |
 | `sidePanel` | The extension's main UI is a side panel that stays open while the user works through an application. |
@@ -76,7 +76,7 @@ English
 | Host access to Greenhouse, Lever, Workday (`*.greenhouse.io`, `jobs.lever.co`, `*.myworkdayjobs.com`, etc.) | Run the autofill content script on supported job-application sites. |
 | `generativelanguage.googleapis.com` | Send the user's context to Google's Gemini API to generate answers/cover letters when the user supplies their own key. |
 | `*.run.app` | Send requests to the managed proxy (Cloud Run) that relays to Vertex AI, when the user selects that provider. |
-| Content script on `<all_urls>` | The work-eligibility badge must be able to scan any job posting regardless of which site hosts it. It self-gates at runtime: it only renders when the user has scanning enabled **and** the page actually looks like a job posting, and it activates autofill only on the supported job boards above. Users can turn scanning off entirely from the side panel. |
+| Content script on `<all_urls>` | The work-eligibility badge must be able to scan any job posting regardless of which site hosts it. It self-gates at runtime: it only renders when the user has scanning enabled **and** the page actually looks like a job posting, and it activates autofill only on the supported job boards above. Additionally, when the user explicitly **saves a job**, the inline "✨ AI answer" button appears beside that application's free-text questions so they can draft answers on any site — this is user-initiated and shows nothing until a job is saved. Users can turn scanning off entirely from the side panel. |
 
 ## Remote code
 

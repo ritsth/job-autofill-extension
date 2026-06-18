@@ -2,7 +2,7 @@
 // profile because this list grows and is transient: when an application moves you
 // off the posting (a later Workday step, a new tab, a different domain), the
 // "active" saved job becomes the tailoring context for AI answers + cover letter
-// + résumé so they don't quietly lose the role.
+// + resume so they don't quietly lose the role.
 
 const STORAGE_KEY = 'savedJobs';
 const MAX_JOBS = 20;

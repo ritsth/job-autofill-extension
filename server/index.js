@@ -144,7 +144,7 @@ async function generate({ system, prompt, maxOutputTokens, json, thinking }) {
       // answers. Off by default: 2.5 Flash otherwise spends the output budget
       // on hidden reasoning and truncates/empties short requests.
       thinkingConfig: { thinkingBudget: thinking ? -1 : 0 },
-      // JSON mode for structured extraction (e.g. résumé parsing) so the model
+      // JSON mode for structured extraction (e.g. resume parsing) so the model
       // returns parseable JSON with no markdown fences or prose.
       ...(json ? { responseMimeType: 'application/json' } : {}),
     },
