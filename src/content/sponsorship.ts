@@ -8,6 +8,7 @@ import { sendToBackground } from '../lib/messages';
 import type { AIResult } from '../lib/messages';
 import { parseEligibilityJson } from '../lib/jobEligibility';
 import { downloadLetter } from '../lib/coverLetter';
+import { downloadResume } from '../lib/resume';
 
 export type Verdict = 'yes' | 'no' | 'caution' | 'unknown';
 
@@ -234,12 +235,37 @@ let debounceTimer = 0;
 // AI results cached per posting (by scanned-text hash) so revisiting a job — or
 // a re-render from the watcher — reuses the AI verdict without another call.
 const aiCache = new Map<number, SponsorAnalysis>();
+// The AI verdict the user explicitly requested for the posting currently in view,
+// pinned to its URL. The watcher mutates often (live counts, timestamps) which
+// shifts the scanned-text hash; without this pin a re-render would miss the
+// hash-keyed cache and revert the badge to the rules verdict — the "glitch back
+// and forth". Cleared when the viewed posting (URL) actually changes.
+let pinnedAi: SponsorAnalysis | null = null;
+let pinnedAiUrl = '';
+// Which generators the badge offers (Handshake only), driven by the user's
+// settings. Both default on; unchecking removes that generator from the badge.
+let showCoverLetterInBadge = true;
+let showResumeInBadge = true;
 
 /** Turns the scanner on/off globally (driven by the user's setting). */
 export function setScannerEnabled(value: boolean): void {
   enabled = value;
   if (!enabled) removeBadge();
   else scanSponsorship();
+}
+
+/** Which generators the badge shows (driven by the user's settings). */
+export function setBadgeFeatures(opts: { coverLetter: boolean; resume: boolean }): void {
+  showCoverLetterInBadge = opts.coverLetter;
+  showResumeInBadge = opts.resume;
+  // Re-render so the change is reflected immediately on a visible badge.
+  if (enabled && !dismissed) renderFrom(getScanText());
+}
+
+/** Snapshot the current page's posting (company/role + text) for "save job". */
+export function captureJob(): { company: string; role: string; text: string } {
+  const { company, role } = getJobMeta();
+  return { company, role, text: getScanText() };
 }
 
 /** Forced scan (used on load / enable): renders regardless of the hash gate. */
@@ -260,6 +286,7 @@ function tick(): void {
   if (urlChanged) {
     watchUrl = location.href;
     dismissed = false; // a newly opened posting gets a fresh badge
+    pinnedAi = null; // a different posting starts back at the rules verdict
   }
   lastHash = h;
   renderFrom(text);
@@ -269,8 +296,13 @@ function renderFrom(text: string): void {
   if (!enabled || dismissed) return;
   removeBadge();
   if (!document.body) return;
-  const cached = aiCache.get(hash(text));
-  document.body.appendChild(renderBadge(cached ?? analyze(text)));
+  // Prefer the AI verdict the user pinned for this posting, then any hash-keyed
+  // AI cache hit, then the instant rules pass.
+  const analysis =
+    (pinnedAi && pinnedAiUrl === location.href ? pinnedAi : null) ??
+    aiCache.get(hash(text)) ??
+    analyze(text);
+  document.body.appendChild(renderBadge(analysis));
 }
 
 /** Sends the current posting to the AI and caches the structured verdict. */
@@ -325,10 +357,13 @@ function el(tag: string, cls: string, text: string): HTMLElement {
   return node;
 }
 
-const isHandshake = (): boolean => location.hostname.endsWith('joinhandshake.com');
-
-/** Best-effort company + role for the open Handshake posting (inputs are editable). */
-function getHandshakeJobMeta(): { company: string; role: string } {
+/**
+ * Best-effort company + role for the open posting (works on any site — the
+ * inputs are editable, so a miss just means the user types it). Role comes from
+ * the main heading; company is read from the employer logo's alt text or an
+ * employer link.
+ */
+function getJobMeta(): { company: string; role: string } {
   const clean = (s: string): string => s.replace(/\s+/g, ' ').trim().slice(0, 120);
 
   // Role: the job-title heading in the detail pane.
@@ -338,9 +373,9 @@ function getHandshakeJobMeta(): { company: string; role: string } {
     document.querySelector<HTMLElement>('h1');
   const role = clean(titleEl?.textContent || '');
 
-  // Company: Handshake's class names are styled-component hashes that change every
-  // build, so key off stable semantics instead — the employer logo's alt text
-  // ("<Company> logo") or an employer link. Walk UP from the title so we read the
+  // Company: class names are often build-hashed, so key off stable semantics
+  // instead — the employer logo's alt text ("<Company> logo") or an employer
+  // link (Handshake exposes /e/ links). Walk UP from the title so we read the
   // open posting's employer, not a logo from a list item elsewhere on the page.
   let company = '';
   for (let node: HTMLElement | null = titleEl; node && !company; node = node.parentElement) {
@@ -372,18 +407,22 @@ function getHandshakeJobMeta(): { company: string; role: string } {
 }
 
 /**
- * Handshake-only: a "Cover letter" expander that fills the user's template
- * (company/role/date swapped, first paragraph tailored to the posting) and
- * downloads it as a PDF — Handshake requires one on nearly every application.
+ * Generator expander (cover letter or tailored résumé): an editable company/role
+ * pair pre-filled from the posting, plus a button that asks the AI for the
+ * document and downloads it as a PDF.
  */
-function buildCoverLetterSection(): HTMLElement {
-  const meta = getHandshakeJobMeta();
+function buildGeneratorSection(cfg: {
+  toggleLabel: string;
+  request: (company: string, role: string, jobText: string) => Promise<AIResult>;
+  download: (text: string, company: string, role: string) => void;
+}): HTMLElement {
+  const meta = getJobMeta();
   const wrap = document.createElement('div');
   wrap.className = 'cl';
 
   const toggle = document.createElement('button');
   toggle.className = 'clbtn';
-  toggle.textContent = '📄 Cover letter';
+  toggle.textContent = cfg.toggleLabel;
 
   const form = document.createElement('div');
   form.className = 'clform hidden';
@@ -409,14 +448,9 @@ function buildCoverLetterSection(): HTMLElement {
     gen.textContent = 'Generating…';
     status.textContent = '';
     try {
-      const res = await sendToBackground<AIResult>({
-        type: 'AI_GENERATE_COVER_LETTER',
-        company: company.value.trim(),
-        role: role.value.trim(),
-        jobText: getScanText(),
-      });
+      const res = await cfg.request(company.value.trim(), role.value.trim(), getScanText());
       if (res.error) throw new Error(res.error);
-      downloadLetter(res.text, company.value.trim(), role.value.trim());
+      cfg.download(res.text, company.value.trim(), role.value.trim());
       status.textContent = '✓ Downloaded PDF';
     } catch (e) {
       status.textContent = '⚠ ' + String((e as Error).message).slice(0, 60);
@@ -429,6 +463,24 @@ function buildCoverLetterSection(): HTMLElement {
   form.append(company, role, gen, status);
   wrap.append(toggle, form);
   return wrap;
+}
+
+function buildCoverLetterSection(): HTMLElement {
+  return buildGeneratorSection({
+    toggleLabel: '📄 Cover letter',
+    request: (company, role, jobText) =>
+      sendToBackground<AIResult>({ type: 'AI_GENERATE_COVER_LETTER', company, role, jobText }),
+    download: downloadLetter,
+  });
+}
+
+function buildResumeSection(): HTMLElement {
+  return buildGeneratorSection({
+    toggleLabel: '🧾 Tailored résumé',
+    request: (company, role, jobText) =>
+      sendToBackground<AIResult>({ type: 'AI_GENERATE_RESUME', company, role, jobText }),
+    download: downloadResume,
+  });
 }
 
 /**
@@ -535,6 +587,9 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
       ai.disabled = true;
       try {
         const analysis = await runAiCheck();
+        // Pin it to this posting so the watcher's re-renders don't revert to rules.
+        pinnedAi = analysis;
+        pinnedAiUrl = location.href;
         removeBadge();
         if (document.body && enabled && !dismissed) document.body.appendChild(renderBadge(analysis));
       } catch (e) {
@@ -551,9 +606,11 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   }
   card.appendChild(row);
 
-  // Handshake requires a cover letter on nearly every application — offer a
-  // one-click tailor-and-download right here, below the AI check.
-  if (isHandshake()) card.appendChild(buildCoverLetterSection());
+  // Offer one-click tailor-and-download for a cover letter + résumé right here,
+  // below the AI check, on any posting. Each generator is shown unless the user
+  // turned it off in settings.
+  if (showCoverLetterInBadge) card.appendChild(buildCoverLetterSection());
+  if (showResumeInBadge) card.appendChild(buildResumeSection());
 
   card.appendChild(el('div', 'tag', 'Job Autofill · auto-detected, double-check the posting'));
 

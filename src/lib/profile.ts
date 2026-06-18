@@ -57,6 +57,11 @@ export interface AISettings {
   model: string;
   /** Managed-proxy mode (Cloud Run → Vertex AI). */
   proxyUrl: string;
+  /**
+   * Optional admin token. Normal users leave this blank and sign in with Google
+   * (the proxy meters them per user); the proxy owner can paste the shared
+   * PROXY_TOKEN here to bypass sign-in and the daily quota.
+   */
   proxyToken: string;
 }
 
@@ -73,6 +78,10 @@ export interface Profile {
   ai: AISettings;
   /** Master on/off for the eligibility scanner (runs on every page when on). */
   scanEnabled: boolean;
+  /** Show the tailored-résumé generator in the side panel. */
+  tailoredResumeEnabled: boolean;
+  /** Show the tailored cover-letter generator in the side panel. */
+  coverLetterEnabled: boolean;
 }
 
 export const DEFAULT_PROFILE: Profile = {
@@ -109,8 +118,9 @@ export const DEFAULT_PROFILE: Profile = {
     'Sincerely,\n[Your Name]',
   ai: {
     // Defaults to the managed proxy (Vertex AI via Cloud Run). The URL is
-    // pre-filled; only the proxy token needs to be pasted in options. The token
-    // is the secret, so it is intentionally NOT baked into the source.
+    // pre-filled; users sign in with Google (the proxy meters per user), so no
+    // secret is baked into the source. proxyToken stays blank — it's only for the
+    // proxy owner's admin override.
     provider: 'proxy',
     apiKey: '',
     model: 'gemini-2.0-flash',
@@ -118,6 +128,8 @@ export const DEFAULT_PROFILE: Profile = {
     proxyToken: '',
   },
   scanEnabled: true,
+  tailoredResumeEnabled: true,
+  coverLetterEnabled: true,
 };
 
 const STORAGE_KEY = 'profile';
@@ -136,6 +148,8 @@ function withDefaults(stored: Partial<Profile> | undefined): Profile {
     skills: stored.skills ?? DEFAULT_PROFILE.skills,
     documents: stored.documents ?? DEFAULT_PROFILE.documents,
     scanEnabled: stored.scanEnabled ?? DEFAULT_PROFILE.scanEnabled,
+    tailoredResumeEnabled: stored.tailoredResumeEnabled ?? DEFAULT_PROFILE.tailoredResumeEnabled,
+    coverLetterEnabled: stored.coverLetterEnabled ?? DEFAULT_PROFILE.coverLetterEnabled,
   };
 }
 

@@ -15,20 +15,6 @@ const ANSWER_SYSTEM =
   'around what is known rather than fabricating. Return only the answer text — no preamble, ' +
   'no quotes, no markdown, no headings.';
 
-const COVER_LETTER_SYSTEM =
-  'You lightly tailor a job applicant\'s OWN cover-letter template. You MUST reproduce the ' +
-  'template verbatim, character for character, EXCEPT: (1) rewrite ONLY the first body ' +
-  'paragraph (the opening paragraph after the greeting) so it fits the target company, role, ' +
-  'and job posting — BUT if that paragraph begins with a sentence naming the role and company ' +
-  '(e.g. "I am writing to apply for the <role> position at <company>."), keep that opening ' +
-  'sentence EXACTLY as written and only tailor the sentences after it; (2) leave any ' +
-  '{{company}}, {{role}}, {{date}} values that are already substituted in place. Do NOT change ' +
-  'the greeting, the closing, the signature, the ' +
-  'applicant\'s name, or any other paragraph — keep their exact wording, line breaks, and ' +
-  'order. Keep the rewritten first paragraph in the applicant\'s voice and roughly the same ' +
-  'length as the original. Do not invent facts not supported by the profile. Return only the ' +
-  'finished letter text — no preamble, no markdown, no commentary.';
-
 export function buildAnswerPrompt(
   question: string,
   context: string,
@@ -88,9 +74,14 @@ const JOB_ELIGIBILITY_SYSTEM =
   '{ "sponsorship": "available|none|unclear", "citizenship": "required|preferred|none", ' +
   '"clearance": "required|preferred|none", "experienceRequired": string|null, ' +
   '"experiencePreferred": string|null, "summary": string }\n' +
-  'Base every field strictly on the posting. sponsorship="none" if the employer will not ' +
-  'sponsor or candidates must be authorized to work without sponsorship; "available" if they ' +
-  'will sponsor; else "unclear". citizenship/clearance: "required" vs "preferred" vs "none" per ' +
+  'Base every field strictly on the posting. sponsorship="none" ONLY when the posting ' +
+  'explicitly rules out sponsorship — e.g. "we do not sponsor", "no visa sponsorship", "must ' +
+  'be authorized to work without (employer) sponsorship", or "must not now or in the future ' +
+  'require sponsorship". A plain requirement to be authorized/eligible to work (e.g. "must be ' +
+  'authorized to work in the US", "US work authorization required", "must have work ' +
+  'authorization") is NOT by itself "none" — sponsorship is a path to work authorization, so ' +
+  'treat that as "unclear" unless sponsorship is explicitly excluded. sponsorship="available" ' +
+  'if they will sponsor; otherwise "unclear". citizenship/clearance: "required" vs "preferred" vs "none" per ' +
   'the wording. IGNORE the application form\'s screening questions (e.g. "Are you authorized to ' +
   'work…") — judge only the employer\'s stated requirements. experienceRequired/Preferred: years ' +
   'as a short string like "3+ years" or "2-4 years", else null. summary: one short sentence. ' +
@@ -105,25 +96,41 @@ export function buildJobEligibilityPrompt(jobText: string): GenerateInput {
   };
 }
 
-export function buildCoverLetterPrompt(
-  baseLetter: string,
-  company: string,
-  role: string,
+const RESUME_SYSTEM =
+  'You tailor a job applicant\'s résumé to one specific job posting. Work ONLY from the facts ' +
+  'in the APPLICANT PROFILE (their résumé, work history, education, skills, and any documents). ' +
+  'Produce a complete, ATS-friendly résumé in clean plain text that foregrounds the experience, ' +
+  'skills, and keywords most relevant to the TARGET ROLE and JOB POSTING. You may reorder ' +
+  'sections and bullet points, rewrite bullets to mirror the posting\'s language, and choose ' +
+  'what to emphasize — but NEVER invent or alter employers, job titles, dates, degrees, schools, ' +
+  'metrics, or skills the profile does not contain. Keep every real employer, title, and date ' +
+  'accurate. Structure it as: the applicant\'s name and contact details on the first lines; a ' +
+  '2–3 line professional summary tailored to the role; a SKILLS section (most relevant first); ' +
+  'an EXPERIENCE section (most relevant roles first, each with company, title, dates, and 2–4 ' +
+  'concise achievement bullets starting with "- "); and an EDUCATION section. Use UPPERCASE ' +
+  'section headers. Return ONLY the résumé text — no preamble, no markdown fences, no commentary.';
+
+export function buildTailoredResumePrompt(
   context: string,
   jobText?: string,
+  company?: string,
+  role?: string,
 ): GenerateInput {
   const job = jobText?.trim()
-    ? `JOB POSTING (use only to shape the first paragraph):\n${jobText.trim().slice(0, 8000)}\n\n`
+    ? `JOB POSTING (tailor the résumé to this role):\n${jobText.trim().slice(0, 8000)}\n\n`
     : '';
   return {
-    system: COVER_LETTER_SYSTEM,
+    system: RESUME_SYSTEM,
+    // Thinking OFF so the full output budget goes to the résumé, not hidden
+    // reasoning — 2.5 Flash otherwise truncates long structured output.
+    thinking: false,
+    maxOutputTokens: 4096,
     prompt:
       `APPLICANT PROFILE:\n${context}\n\n` +
-      `TARGET COMPANY: ${company || '(unknown)'}\n` +
-      `TARGET ROLE: ${role || '(unknown)'}\n\n` +
+      `TARGET COMPANY: ${company?.trim() || '(unknown)'}\n` +
+      `TARGET ROLE: ${role?.trim() || '(unknown)'}\n\n` +
       job +
-      `COVER-LETTER TEMPLATE (already has company/role/date substituted — reproduce it ` +
-      `EXACTLY except rewrite only the first body paragraph):\n${baseLetter}\n\n` +
-      `Return the template with only the first paragraph tailored:`,
+      `Return the tailored résumé:`,
   };
 }
+
