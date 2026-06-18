@@ -1,26 +1,52 @@
 import { useEffect, useState } from 'react';
-import { getProfile, saveProfile } from '../lib/profile';
+import { getProfile, saveProfile, onProfileChanged, type Profile } from '../lib/profile';
+import {
+  getSavedJobs,
+  addJob,
+  setActiveJob,
+  deleteJob,
+  onSavedJobsChanged,
+  type SavedJob,
+} from '../lib/savedJobs';
 import { sendToBackground, sendToTab } from '../lib/messages';
-import type { AIResult, FillResult, PageInfo } from '../lib/messages';
+import type { AIResult, CapturedJob, FillResult, PageInfo } from '../lib/messages';
 import { downloadLetter } from '../lib/coverLetter';
+import { downloadResume } from '../lib/resume';
+import { signIn, getAuthUser, onAuthChanged, type AuthUser } from '../lib/auth';
 
 export function Popup() {
   const [tabId, setTabId] = useState<number | null>(null);
   const [page, setPage] = useState<PageInfo | null>(null);
-  const [needsKey, setNeedsKey] = useState(false);
+  // AI config, derived from the profile, for the "configure AI" hints.
+  const [aiProvider, setAiProvider] = useState<Profile['ai']['provider']>('proxy');
+  const [apiKeySet, setApiKeySet] = useState(false);
+  const [adminTokenSet, setAdminTokenSet] = useState(false);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [signInBusy, setSignInBusy] = useState(false);
   const [fillMsg, setFillMsg] = useState('');
   const [letter, setLetter] = useState('');
-  const [busy, setBusy] = useState<'' | 'fill' | 'letter'>('');
+  const [resume, setResume] = useState('');
+  const [busy, setBusy] = useState<'' | 'fill' | 'letter' | 'resume'>('');
   const [error, setError] = useState('');
   const [scanEnabled, setScanEnabled] = useState(true);
-  // Editable company/role for the cover letter (pre-filled from page detection).
+  const [coverLetterEnabled, setCoverLetterEnabled] = useState(true);
+  const [resumeEnabled, setResumeEnabled] = useState(true);
+  const [jobs, setJobs] = useState<SavedJob[]>([]);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  // Editable company/role, shared by the cover letter + résumé (pre-filled from
+  // page detection).
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
 
-  async function toggleScan(value: boolean) {
-    setScanEnabled(value);
+  // Persist a boolean feature toggle and reflect it locally.
+  async function toggleSetting(
+    key: 'scanEnabled' | 'coverLetterEnabled' | 'tailoredResumeEnabled',
+    setLocal: (v: boolean) => void,
+    value: boolean,
+  ) {
+    setLocal(value);
     const profile = await getProfile();
-    await saveProfile({ ...profile, scanEnabled: value });
+    await saveProfile({ ...profile, [key]: value });
   }
 
   // Re-read the active tab's job info. Runs on mount and whenever the user
@@ -42,13 +68,51 @@ export function Popup() {
       setTabId(null);
       setPage({ supported: false, site: null, company: '', role: '', jobText: '' });
     }
-    const profile = await getProfile();
-    const needsConfig =
-      (profile.ai.provider === 'gemini' && !profile.ai.apiKey.trim()) ||
-      (profile.ai.provider === 'proxy' && !profile.ai.proxyToken.trim());
-    setNeedsKey(needsConfig);
-    setScanEnabled(profile.scanEnabled);
   }
+
+  // Feature toggles live in the profile (not tab-derived). Load once and keep in
+  // sync via storage changes, so a tab refresh can never clobber a fresh toggle
+  // mid-save (which made the checkboxes look like they did nothing).
+  useEffect(() => {
+    const apply = (p: Profile) => {
+      setScanEnabled(p.scanEnabled);
+      setCoverLetterEnabled(p.coverLetterEnabled);
+      setResumeEnabled(p.tailoredResumeEnabled);
+      setAiProvider(p.ai.provider);
+      setApiKeySet(!!p.ai.apiKey.trim());
+      setAdminTokenSet(!!p.ai.proxyToken.trim());
+    };
+    getProfile().then(apply);
+    return onProfileChanged(apply);
+  }, []);
+
+  // Google sign-in status for the managed proxy.
+  useEffect(() => {
+    getAuthUser().then(setAuthUser);
+    return onAuthChanged(setAuthUser);
+  }, []);
+
+  async function onSignIn() {
+    setSignInBusy(true);
+    setError('');
+    try {
+      setAuthUser(await signIn());
+    } catch (e) {
+      setError(`Sign-in failed: ${(e as Error).message}`);
+    } finally {
+      setSignInBusy(false);
+    }
+  }
+
+  // Saved jobs live in their own store; load once and stay in sync.
+  useEffect(() => {
+    const apply = (s: { jobs: SavedJob[]; activeId: string | null }) => {
+      setJobs(s.jobs);
+      setActiveJobId(s.activeId);
+    };
+    getSavedJobs().then(apply);
+    return onSavedJobsChanged(apply);
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -100,16 +164,73 @@ export function Popup() {
     }
   }
 
+  async function onResume() {
+    setBusy('resume');
+    setError('');
+    setResume('');
+    try {
+      const res = await sendToBackground<AIResult>({
+        type: 'AI_GENERATE_RESUME',
+        company: company.trim(),
+        role: role.trim(),
+        jobText: page?.jobText ?? '',
+      });
+      if (res.error) setError(res.error);
+      else setResume(res.text);
+    } catch (e) {
+      setError(`Generation failed: ${(e as Error).message}`);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function onSaveJob() {
+    if (!tabId) return;
+    setError('');
+    try {
+      const cap = await sendToTab<CapturedJob>(tabId, { type: 'CAPTURE_JOB' });
+      if (!cap.text || cap.text.trim().length < 40) {
+        setError('No job posting detected on this page to save.');
+        return;
+      }
+      await addJob({
+        company: cap.company,
+        role: cap.role || cap.title,
+        url: cap.url,
+        text: cap.text,
+      });
+    } catch {
+      setError('Could not read this page. Reload it and try again.');
+    }
+  }
+
+  const activeJob = jobs.find((j) => j.id === activeJobId) ?? null;
   const openOptions = () => chrome.runtime.openOptionsPage();
+  const geminiNeedsKey = aiProvider === 'gemini' && !apiKeySet;
+  // Proxy mode needs a signed-in account (unless the owner set an admin token).
+  const proxyNeedsSignIn = aiProvider === 'proxy' && !adminTokenSet && !authUser;
 
   return (
     <div className="popup">
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <h1 style={{ flex: 1 }}>AI Job Autofill</h1>
-        <button className="ghost" title="Refresh for the current tab" onClick={() => refresh()}>
+      <header className="brand">
+        <span className="brand-logo" aria-hidden>
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M12 2.5l1.9 5.1a3 3 0 0 0 1.78 1.78L20.8 11.3a.75.75 0 0 1 0 1.4l-5.12 1.92a3 3 0 0 0-1.78 1.78L12 21.5l-1.9-5.1a3 3 0 0 0-1.78-1.78L3.2 12.7a.75.75 0 0 1 0-1.4l5.12-1.92a3 3 0 0 0 1.78-1.78L12 2.5z"
+              fill="#fff"
+            />
+            <path d="M18.5 3.5l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6z" fill="#c7d2fe" />
+          </svg>
+        </span>
+        <div className="brand-text">
+          <h1>AI Job Autofill</h1>
+          <p className="tagline">Autofill · cover letters · eligibility</p>
+        </div>
+        <button className="ghost icon-btn" title="Refresh for the current tab" onClick={() => refresh()}>
           ↻
         </button>
-      </div>
+      </header>
+
       {page?.supported ? (
         <p className="muted">
           <span className="pill">{page.site}</span>{' '}
@@ -119,11 +240,31 @@ export function Popup() {
         <p className="muted">Open a Greenhouse, Lever, or Workday application page to use autofill.</p>
       )}
 
-      {needsKey && (
+      {geminiNeedsKey && (
         <div className="block warn">
           AI isn't configured yet.{' '}
           <a onClick={openOptions} style={{ cursor: 'pointer' }}>Set it up →</a>
         </div>
+      )}
+
+      {proxyNeedsSignIn && (
+        <div className="block signin">
+          <p className="signin-text">
+            Sign in to use the managed AI — free up to a daily limit per account.
+          </p>
+          <button className="primary full" disabled={signInBusy} onClick={onSignIn}>
+            {signInBusy ? 'Signing in…' : 'Sign in with Google'}
+          </button>
+          <a className="signin-alt" onClick={openOptions} style={{ cursor: 'pointer' }}>
+            or use your own Gemini key / on-device →
+          </a>
+        </div>
+      )}
+
+      {aiProvider === 'proxy' && authUser && (
+        <p className="muted signedin">
+          ✓ Signed in{authUser.email ? ` as ${authUser.email}` : ''}
+        </p>
       )}
 
       <div className="block">
@@ -133,8 +274,54 @@ export function Popup() {
         {fillMsg && <div className="status">{fillMsg}</div>}
       </div>
 
+      <div className="block savedjob">
+        <button className="full" onClick={onSaveJob} disabled={busy !== '' || !tabId}>
+          💾 Save this job
+        </button>
+        {activeJob ? (
+          <div className="jobusing">
+            Using saved job:{' '}
+            <strong>
+              {activeJob.role || 'saved posting'}
+              {activeJob.company ? ` · ${activeJob.company}` : ''}
+            </strong>{' '}
+            <button className="ghost jobclear" onClick={() => setActiveJob(null)}>
+              use current page
+            </button>
+          </div>
+        ) : (
+          jobs.length > 0 && (
+            <div className="jobusing muted">
+              Using the current page. Pick a saved job to reuse its posting.
+            </div>
+          )
+        )}
+        {jobs.length > 0 && (
+          <div className="joblist">
+            {jobs.map((j) => (
+              <div key={j.id} className={`jobrow${j.id === activeJobId ? ' active' : ''}`}>
+                <button
+                  className="jobpick"
+                  title="Use this posting as the context for AI answers & documents"
+                  onClick={() => setActiveJob(j.id === activeJobId ? null : j.id)}
+                >
+                  <span className="dot" />
+                  <span className="jobname">
+                    {j.role || 'Saved job'}
+                    {j.company ? ` · ${j.company}` : ''}
+                  </span>
+                </button>
+                <button className="jobdel" title="Delete" onClick={() => deleteJob(j.id)}>
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="block">
-        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
           <input
             style={{ flex: 1, minWidth: 0 }}
             placeholder="Company"
@@ -148,6 +335,7 @@ export function Popup() {
             onChange={(e) => setRole(e.target.value)}
           />
         </div>
+
         <button className="primary" disabled={busy !== ''} onClick={onCoverLetter}>
           {busy === 'letter' ? 'Generating…' : 'Generate cover letter'}
         </button>
@@ -163,7 +351,32 @@ export function Popup() {
               style={{ marginTop: 8 }}
               onClick={() => downloadLetter(letter, company, role)}
             >
-              ⬇ Download .pdf
+              ⬇ Download cover letter (.pdf)
+            </button>
+          </>
+        )}
+
+        <button
+          className="primary"
+          style={{ marginTop: 8 }}
+          disabled={busy !== ''}
+          onClick={onResume}
+        >
+          {busy === 'resume' ? 'Tailoring…' : 'Generate tailored résumé'}
+        </button>
+        {resume && (
+          <>
+            <textarea
+              style={{ marginTop: 8 }}
+              value={resume}
+              onChange={(e) => setResume(e.target.value)}
+            />
+            <button
+              className="full"
+              style={{ marginTop: 8 }}
+              onClick={() => downloadResume(resume, company, role)}
+            >
+              ⬇ Download résumé (.pdf)
             </button>
           </>
         )}
@@ -171,17 +384,33 @@ export function Popup() {
 
       {error && <div className="status warn">{error}</div>}
 
-      <label
-        className="block"
-        style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}
-      >
-        <input
-          type="checkbox"
-          checked={scanEnabled}
-          onChange={(e) => toggleScan(e.target.checked)}
-        />
-        Scan every page for visa/eligibility (YES/NO badge)
-      </label>
+      <div className="block toggles">
+        <p className="toggles-title">Show in the page badge</p>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={resumeEnabled}
+            onChange={(e) => toggleSetting('tailoredResumeEnabled', setResumeEnabled, e.target.checked)}
+          />
+          Tailored résumé generator
+        </label>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={coverLetterEnabled}
+            onChange={(e) => toggleSetting('coverLetterEnabled', setCoverLetterEnabled, e.target.checked)}
+          />
+          Tailored cover-letter generator
+        </label>
+        <label className="toggle" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={scanEnabled}
+            onChange={(e) => toggleSetting('scanEnabled', setScanEnabled, e.target.checked)}
+          />
+          Scan every page for visa/eligibility (YES/NO badge)
+        </label>
+      </div>
 
       <div className="block" style={{ textAlign: 'center' }}>
         <button className="ghost" onClick={openOptions}>

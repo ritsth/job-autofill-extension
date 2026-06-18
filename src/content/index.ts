@@ -8,8 +8,14 @@ import { leverAdapter } from './adapters/lever';
 import { workdayAdapter } from './adapters/workday';
 import type { SiteAdapter } from './adapters/types';
 import { sendToBackground } from '../lib/messages';
-import type { AIResult, ContentMessage, FillResult, PageInfo } from '../lib/messages';
-import { startSponsorshipWatch, setScannerEnabled, getScanText } from './sponsorship';
+import type { AIResult, CapturedJob, ContentMessage, FillResult, PageInfo } from '../lib/messages';
+import {
+  startSponsorshipWatch,
+  setScannerEnabled,
+  setBadgeFeatures,
+  getScanText,
+  captureJob,
+} from './sponsorship';
 
 const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, workdayAdapter];
 const adapter = ADAPTERS.find((a) => a.matches(new URL(location.href))) ?? null;
@@ -24,6 +30,12 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse
       ? { supported: true, site: adapter.id, ...adapter.getPageInfo(), jobText: getScanText() }
       : { supported: false, site: null, company: '', role: '', jobText: '' };
     sendResponse(info);
+    return false;
+  }
+  if (msg.type === 'CAPTURE_JOB') {
+    const { company, role, text } = captureJob();
+    const captured: CapturedJob = { company, role, text, url: location.href, title: document.title };
+    sendResponse(captured);
     return false;
   }
   if (msg.type === 'PAGE_FILL') {
@@ -121,8 +133,12 @@ if (window.top === window.self && !scannerGlobal.__jafScannerStarted) {
   scannerGlobal.__jafScannerStarted = true;
   (async () => {
     const profile = await getProfile();
+    setBadgeFeatures({ coverLetter: profile.coverLetterEnabled, resume: profile.tailoredResumeEnabled });
     setScannerEnabled(profile.scanEnabled);
     startSponsorshipWatch();
   })();
-  onProfileChanged((profile) => setScannerEnabled(profile.scanEnabled));
+  onProfileChanged((profile) => {
+    setBadgeFeatures({ coverLetter: profile.coverLetterEnabled, resume: profile.tailoredResumeEnabled });
+    setScannerEnabled(profile.scanEnabled);
+  });
 }

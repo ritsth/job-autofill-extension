@@ -44,7 +44,19 @@ export default defineManifest({
     service_worker: 'src/background/service-worker.ts',
     type: 'module',
   },
-  permissions: ['storage', 'activeTab', 'scripting', 'sidePanel'],
+  // `identity` powers Google sign-in (chrome.identity.getAuthToken) for the
+  // managed proxy, which meters AI usage per signed-in user.
+  permissions: ['storage', 'activeTab', 'scripting', 'sidePanel', 'identity'],
+  // OAuth client for sign-in. Create an "OAuth client ID → Chrome Extension"
+  // bound to this extension's ID in Google Cloud Console, then paste it here.
+  // The extension ID must be stable, so set a fixed `key` below (and use the same
+  // key in the published build) — otherwise the ID changes on reload and the
+  // OAuth client no longer matches.
+  oauth2: {
+    client_id: '1074158639574-u0ukfm6q8tlk8473v1u9nlcg9jgd65ge.apps.googleusercontent.com',
+    scopes: ['openid', 'email', 'profile'],
+  },
+  key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAunuaggXKObgfFtm8X4j9kpSDCzUEqC2DfaWqbhurnE108+RYhHadleAeKTs++L/oH0yZ+XtIwUKAotkIaR7tUFcf+TXzwK0BFrFEAyVzaYS31CmujLgxDcjBC6zjJoZ3A08STA99DmFBNrn+PToqwewj43Lcw+queZqKoq0vq1VuBEZk8tQEO79AwkAb882wSBkyjVFM1ru7blePfMW4BMXoK3be/o96qnJlKvAlQiJ/giVf77nDCQjgTB7OGrvYgWiQtY2jxOSt4XHt/4svyijR0FJPxRH6vhDgppw9h5ccUpP/P9vvpYGO8YMKQEdMwpKpLCehYSFHVAbTAb2eaQIDAQAB', // pins a stable extension ID
   // Job-site hosts (content scripts) + Gemini endpoint (so the service worker
   // can fetch it). The user's key never leaves their machine.
   host_permissions: [

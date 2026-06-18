@@ -1,9 +1,10 @@
 import { AIError, type AIProvider, type GenerateInput } from './provider';
 
-// Managed-proxy provider: posts to the user's Cloud Run service, which holds the
-// Google Cloud credential and relays to Vertex AI. The extension only knows the
-// URL + a shared bearer token (both stored locally). Called from the background
-// service worker; host_permissions cover https://*.run.app/*.
+// Managed-proxy provider: posts to the Cloud Run service, which holds the Google
+// Cloud credential and relays to Vertex AI. `token` is the bearer to send — the
+// user's Google sign-in token (the proxy meters it per user), or an admin token
+// that bypasses metering. The caller resolves which one. Called from the
+// background service worker; host_permissions cover https://*.run.app/*.
 
 export class ProxyProvider implements AIProvider {
   readonly id = 'proxy';
@@ -35,8 +36,9 @@ export class ProxyProvider implements AIProvider {
     if (!res.ok) {
       const detail = await res.json().catch(() => ({}));
       const msg = (detail as { error?: string }).error || `${res.status}`;
-      if (res.status === 401) throw new AIError('Proxy rejected the token — check your proxy token in options.');
-      if (res.status === 429) throw new AIError('Vertex AI rate limit hit. Wait a moment and retry.');
+      // The proxy already returns clear messages for sign-in (401) and the daily
+      // quota / rate limit (429), so surface those verbatim.
+      if (res.status === 401 || res.status === 429) throw new AIError(msg);
       throw new AIError(`Proxy error: ${msg}`);
     }
 

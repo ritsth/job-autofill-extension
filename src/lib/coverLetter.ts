@@ -2,7 +2,7 @@
 // step itself is done in the background service worker (it owns the provider);
 // this module prepares the base text and handles the file download.
 
-import { textToPdf } from './pdf';
+import { downloadTextPdf } from './pdf';
 
 export interface LetterVars {
   company: string;
@@ -44,15 +44,5 @@ export function letterFilename(company: string, role: string): string {
 
 /** Triggers a .pdf download of the letter from an extension page (popup/options). */
 export function downloadLetter(text: string, company: string, role: string): void {
-  const bytes = textToPdf(text);
-  const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${letterFilename(company, role)}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  // Revoke on the next tick so the download has time to start.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadTextPdf(text, `${letterFilename(company, role)}.pdf`);
 }

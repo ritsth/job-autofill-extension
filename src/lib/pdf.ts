@@ -69,6 +69,24 @@ function encodeText(s: string): string {
   return out;
 }
 
+/**
+ * Renders text to a PDF and triggers a browser download. Safe to call from any
+ * page with a DOM (the side panel/options pages and content scripts).
+ */
+export function downloadTextPdf(text: string, filename: string): void {
+  const bytes = textToPdf(text);
+  const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoke on the next tick so the download has time to start.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 /** Renders plain text (with its own line breaks) to a US-Letter PDF. */
 export function textToPdf(text: string): Uint8Array {
   const pageW = 612;

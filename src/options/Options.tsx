@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { EducationEntry, Profile, WorkEntry } from '../lib/profile';
 import { useProfile } from '../ui/useProfile';
 import { extractText } from '../lib/documents';
@@ -7,6 +7,7 @@ import type { AIResult } from '../lib/messages';
 import { parseResumeJson } from '../lib/resumeImport';
 import { ProxyProvider } from '../lib/ai/proxy';
 import { AIError } from '../lib/ai';
+import { signIn, signOut, getAuthUser, onAuthChanged, getCachedToken, type AuthUser } from '../lib/auth';
 
 export function Options() {
   const { profile, loaded, saveState, update } = useProfile();
@@ -61,11 +62,51 @@ function OptionsView({
     err: '',
   });
 
+  // Google sign-in state for the managed proxy.
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authErr, setAuthErr] = useState('');
+  useEffect(() => {
+    getAuthUser().then(setAuthUser);
+    return onAuthChanged(setAuthUser);
+  }, []);
+
+  async function doSignIn(): Promise<void> {
+    setAuthBusy(true);
+    setAuthErr('');
+    try {
+      setAuthUser(await signIn());
+    } catch (e) {
+      setAuthErr((e as Error).message || 'Sign-in failed');
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function doSignOut(): Promise<void> {
+    setAuthBusy(true);
+    try {
+      await signOut();
+      setAuthUser(null);
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
   /** Pings the configured proxy with a tiny prompt to verify URL + token. */
   async function testProxy(): Promise<void> {
     setProxyTest({ busy: true, msg: '', err: '' });
     try {
-      const provider = new ProxyProvider(p.ai.proxyUrl, p.ai.proxyToken);
+      // Admin token if set; otherwise the signed-in user's Google token.
+      let token = p.ai.proxyToken;
+      if (!token) {
+        try {
+          token = await getCachedToken();
+        } catch {
+          throw new AIError('Sign in with Google first (or paste an admin token).');
+        }
+      }
+      const provider = new ProxyProvider(p.ai.proxyUrl, token);
       const text = await provider.generate({
         system: 'You are a connectivity test. Reply with exactly: OK',
         prompt: 'Reply with OK.',
@@ -166,6 +207,29 @@ function OptionsView({
         )}
         {p.ai.provider === 'proxy' && (
           <>
+            <Field label="Account">
+              {authUser ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span className="saved">
+                    Signed in{authUser.email ? ` as ${authUser.email}` : ''}
+                  </span>
+                  <button className="ghost" disabled={authBusy} onClick={doSignOut}>
+                    Sign out
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button className="primary" disabled={authBusy} onClick={doSignIn}>
+                    {authBusy ? 'Signing in…' : 'Sign in with Google'}
+                  </button>
+                  {authErr && <span className="warn">{authErr}</span>}
+                </div>
+              )}
+              <div className="help">
+                The managed AI is free up to a daily limit per account. Sign in so your usage is
+                counted to you — no card, no key.
+              </div>
+            </Field>
             <Field label="Proxy URL">
               <input
                 value={p.ai.proxyUrl}
@@ -173,16 +237,17 @@ function OptionsView({
                 onChange={(e) => setAI('proxyUrl', e.target.value)}
               />
             </Field>
-            <Field label="Proxy token">
+            <Field label="Admin token (optional)">
               <input
                 type="password"
                 value={p.ai.proxyToken}
-                placeholder="The PROXY_TOKEN you set on the Cloud Run service"
+                placeholder="Only the proxy owner needs this — bypasses sign-in & quota"
                 onChange={(e) => setAI('proxyToken', e.target.value)}
               />
               <div className="help">
-                Deploy the proxy from the <code>server/</code> folder (see its README) to use
-                your GCP $300 credit via Vertex AI. The token stays on this device.
+                Leave blank for normal use. If you deployed the proxy yourself (see the{' '}
+                <code>server/</code> folder), paste its <code>PROXY_TOKEN</code> to bypass sign-in
+                and the daily limit. Stays on this device.
               </div>
             </Field>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

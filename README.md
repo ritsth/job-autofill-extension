@@ -92,25 +92,29 @@ adapter under `src/content/adapters/`.
 
 ## Roadmap
 
-Shipped since v1: Cloud Run → Vertex AI managed proxy, Workday adapter, Handshake
-eligibility badge + cover-letter generator, PDF cover-letter export.
+Shipped since v1: Cloud Run → Vertex AI managed proxy with **Google sign-in +
+per-user daily quotas**, Workday adapter, Handshake eligibility badge +
+cover-letter generator, tailored-résumé generator, save-job context, PDF export.
 
 Still ahead (v2+):
 
-- Proxy **sign-in + per-user quotas** (today the proxy is shared-token only — see below).
 - Multi-provider picker (Groq / OpenRouter / Claude) — interface already supports it.
 - Chrome Web Store packaging + privacy policy.
 
-### Publishing & the proxy token
+### Publishing & the managed proxy
 
-The managed proxy is gated by a single shared `PROXY_TOKEN`, and the extension ships
-with **a pre-filled proxy URL but no token** (`src/lib/profile.ts`). That means:
+The managed proxy is safe to publish because it **identifies and meters each user**:
 
-- If you publish and tell users to paste **your** token, every user's AI calls hit
-  **your** Cloud Run service and bill **your** GCP account. A token shipped inside the
-  extension is trivially extractable (extensions are just zipped JS), so it would be
-  effectively public and could drain your Vertex credit — there are no per-user quotas yet.
-- The safe model for a public release is **bring-your-own**: each user pastes their own
-  free **Gemini** key, or deploys their own proxy, or uses the **on-device** model.
+- Users **sign in with Google** (`chrome.identity`); the extension sends their Google
+  token to the proxy, which verifies it and counts the call against a **per-user daily
+  limit** in Firestore (`DAILY_LIMIT`, default 50/day). One user can't drain your Vertex
+  credit, and no secret is shipped in the extension. See [`server/README.md`](server/README.md)
+  for the OAuth-client + Firestore setup.
+- The proxy owner can still set an **admin token** in Options (the shared `PROXY_TOKEN`)
+  to bypass sign-in and the quota for their own testing.
+- **Bring-your-own** remains available for anyone who'd rather not sign in: paste a free
+  **Gemini** key, deploy their own proxy, or use the **on-device** model.
 
-Treat the managed proxy as a "you + people you trust" feature until sign-in + quotas land.
+Publishing checklist for the proxy: set a stable extension `key` in `manifest.config.ts`,
+create a Chrome-Extension **OAuth client** bound to that ID and put it in `oauth2.client_id`,
+and deploy the server with `OAUTH_CLIENT_ID` + `DAILY_LIMIT`.

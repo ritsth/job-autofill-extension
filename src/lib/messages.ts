@@ -30,6 +30,13 @@ export interface GenerateCoverLetterMsg {
   /** Optional job-posting text so the opening paragraph fits this role. */
   jobText?: string;
 }
+export interface GenerateResumeMsg {
+  type: 'AI_GENERATE_RESUME';
+  company: string;
+  role: string;
+  /** Optional job-posting text so the résumé is tailored to this role. */
+  jobText?: string;
+}
 export interface ParseResumeMsg {
   type: 'AI_PARSE_RESUME';
   text: string;
@@ -46,13 +53,26 @@ export interface FillPageMsg {
 export interface GetPageInfoMsg {
   type: 'PAGE_INFO';
 }
+export interface CaptureJobMsg {
+  type: 'CAPTURE_JOB';
+}
+
+/** Snapshot of the current page's posting (works on any page, not just adapters). */
+export interface CapturedJob {
+  company: string;
+  role: string;
+  text: string;
+  url: string;
+  title: string;
+}
 
 export type BackgroundMessage =
   | GenerateAnswerMsg
   | GenerateCoverLetterMsg
+  | GenerateResumeMsg
   | ParseResumeMsg
   | AnalyzeJobMsg;
-export type ContentMessage = FillPageMsg | GetPageInfoMsg;
+export type ContentMessage = FillPageMsg | GetPageInfoMsg | CaptureJobMsg;
 export type AnyMessage = BackgroundMessage | ContentMessage;
 
 export interface AIResult {
