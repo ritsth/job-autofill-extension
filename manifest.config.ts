@@ -60,7 +60,7 @@ export default defineManifest({
   ...(process.env.CRX_NO_KEY
     ? {}
     : {
-        key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAunuaggXKObgfFtm8X4j9kpSDCzUEqC2DfaWqbhurnE108+RYhHadleAeKTs++L/oH0yZ+XtIwUKAotkIaR7tUFcf+TXzwK0BFrFEAyVzaYS31CmujLgxDcjBC6zjJoZ3A08STA99DmFBNrn+PToqwewj43Lcw+queZqKoq0vq1VuBEZk8tQEO79AwkAb882wSBkyjVFM1ru7blePfMW4BMXoK3be/o96qnJlKvAlQiJ/giVf77nDCQjgTB7OGrvYgWiQtY2jxOSt4XHt/4svyijR0FJPxRH6vhDgppw9h5ccUpP/P9vvpYGO8YMKQEdMwpKpLCehYSFHVAbTAb2eaQIDAQAB',
+        key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyx7iOCwUWaSBtBb53d3CAKRAay5uVjfWZfwkSt5DwNPHJUEm5e3Bs+YwNFEfJD6RTdckQxvuxI3nHEasBIZJuTLaaHAoCzrHqwuOoZvIzVWjpNdZChPoXCXAE4c/Di2NNaFmOHlupUiuFoSgEneZhB5xuuTScsEnkz9JBgYhsdJ4PJKyfDXvkqXQ3J2T9R5avp3LwdV2BlPJKefhfP5T6dPOKPWsOa/pqyXhSZ4CdYNahyDn59a4BFWdhWmWnY7eUzScNs7wrv2m1s3dbEH27jFK3NRdW59lEJKSo87PKQoVQ+QltD7rDJWY7DkeadJbM3wKMeukg69/dSK+SYRvWwIDAQAB',
       }),
   // Job-site hosts (content scripts) + Gemini endpoint (so the service worker
   // can fetch it). The user's key never leaves their machine.
