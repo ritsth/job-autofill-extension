@@ -37,8 +37,8 @@ English
 >   saved profile.
 > - **✨ AI answers** — a button appears beside free-text questions and drafts a response
 >   from your resume and uploaded documents.
-> - **Cover letters** — generate a tailored letter from your template (company, role, and
->   date filled in) and download it as a PDF.
+> - **Cover letters** — generate a cover letter from your template (company, role, and
+>   date placeholders filled in) and download it as a PDF.
 > - **Eligibility badge** — every job posting is scanned for visa-sponsorship,
 >   U.S.-citizenship, and security-clearance language and shows a bold YES / NO badge in
 >   the corner. On Handshake it also hosts a one-click cover-letter generator.

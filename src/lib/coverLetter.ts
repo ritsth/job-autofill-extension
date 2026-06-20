@@ -1,6 +1,7 @@
-// Cover-letter helpers: placeholder substitution and download. The AI-tailoring
-// step itself is done in the background service worker (it owns the provider);
-// this module prepares the base text and handles the file download.
+// Cover-letter helpers: placeholder substitution and download. The cover letter
+// is placeholder-only — the background service worker substitutes
+// {{company}}/{{role}}/{{date}} with no AI rewrite; this module prepares the
+// base text and handles the file download.
 
 import { downloadTextPdf } from './pdf';
 

@@ -496,7 +496,7 @@ function OptionsView({
           />
         </Field>
         <div className="help">
-          On a job page, the popup substitutes the company/role/date and the AI tailors the body.
+          On a job page, the popup substitutes the company/role/date placeholders.
         </div>
       </section>
     </div>
