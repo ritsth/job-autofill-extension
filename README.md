@@ -7,8 +7,8 @@ Auto-fills repetitive job applications on **Greenhouse**, **Lever**, and
   questions; it drafts an answer from your resume + uploaded documents. On Greenhouse,
   Lever, and Workday it's automatic; on any other job site, **save the job** (💾 in the
   side panel) and the same button lights up next to that application's questions.
-- **Generate a tailored cover letter** from your base template (company / role / date
-  substituted, then AI-tailored), downloadable as a `.pdf`.
+- **Generate a cover letter** from your base template (company / role / date
+  placeholders substituted), downloadable as a `.pdf`.
 - **Flag eligibility at a glance** every covered page is scanned for visa-sponsorship /
   U.S.-citizenship / security-clearance language and shows a bold **YES / NO** badge
   in the corner. On **Handshake** the badge also hosts a one-click cover-letter
