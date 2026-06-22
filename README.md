@@ -1,5 +1,7 @@
 # Little AI Helper (Chrome Extension)
 
+**[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/Little%20AI%20Helper/iibpijacaghdcckphindbaijjgcbaoll)**
+
 Auto-fills repetitive job applications on **Greenhouse**, **Lever**, and
 **Workday** from a structured profile, and uses AI to:
 
@@ -101,7 +103,6 @@ cover-letter generator, tailored-resume generator, save-job context, PDF export.
 Still ahead (v2+):
 
 - Multi-provider picker (Groq / OpenRouter / Claude) — interface already supports it.
-- Chrome Web Store packaging + privacy policy.
 
 ### Publishing & the managed proxy
 

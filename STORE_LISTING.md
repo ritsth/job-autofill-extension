@@ -1,5 +1,8 @@
 # Chrome Web Store listing — copy & answers
 
+**Live listing:** <https://chromewebstore.google.com/detail/Little%20AI%20Helper/iibpijacaghdcckphindbaijjgcbaoll>
+**Published:** 2026-06-22
+
 Paste-ready content for the Web Store Developer Dashboard. Keep this in sync with the
 actual listing so submissions are reproducible.
 
