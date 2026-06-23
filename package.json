@@ -1,7 +1,7 @@
 {
   "name": "job-autofill-extension",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "Autofill job applications on Greenhouse, Lever & Workday and draft AI answers and tailored cover letters from your profile.",
   "scripts": {

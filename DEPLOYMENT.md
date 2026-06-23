@@ -96,6 +96,18 @@ Sanity check:
 curl -s https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/ | jq   # expect "dailyLimit": 50
 ```
 
+### Redeploy after the model picker
+
+The proxy now honors a client-requested model (validated against `MODEL_ALLOWLIST` in
+[`server/index.js`](server/index.js); keep it in sync with
+[`src/lib/ai/models.ts`](src/lib/ai/models.ts)). Redeploy to pick up the change — **no
+secret needed**, the existing env vars are preserved when you omit `--update-env-vars`:
+
+```bash
+gcloud run deploy job-autofill-proxy --source server --region us-central1
+curl -s https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/ | jq   # still healthy
+```
+
 ## Verify
 
 1. `npm run build` → reload unpacked at `chrome://extensions` (ID should match Step 1).

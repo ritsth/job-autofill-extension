@@ -23,6 +23,12 @@ proxy** — a small Cloud Run service that relays to **Vertex AI** so you can sp
 GCP $300 credit (AI Studio's Gemini API is excluded from the credit; Vertex isn't). See
 [`server/README.md`](server/README.md) to deploy it, then pick "Managed proxy" in options.
 
+**Model picker:** for the Gemini and managed-proxy providers, options has a **Model**
+dropdown — choose between Gemini 2.5 Pro (best), 2.5 Flash (default), or 2.5 Flash-Lite.
+The choice applies **only to ✨ AI answers** for open-ended questions; resume parsing and
+the eligibility-badge check always run on the fast default model. The proxy validates the
+requested model against an allowlist server-side.
+
 **Where it runs:** full autofill on **Greenhouse**, **Lever**, and **Workday**
 (`*.myworkdayjobs.com`). The eligibility badge
 runs on **every page** (so no job board is missed), but it self-gates — it only appears

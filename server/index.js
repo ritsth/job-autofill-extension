@@ -25,6 +25,14 @@ const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
 // Vertex AI needs versioned/current model IDs (unlike AI Studio's bare aliases).
 // gemini-2.5-flash is broadly available; older 1.5/2.0 IDs 404 on newer projects.
 const MODEL = process.env.VERTEX_MODEL || 'gemini-2.5-flash';
+// Models a client is allowed to request via the request body. Keep in sync with
+// the curated list in src/lib/ai/models.ts. Anything outside this set falls back
+// to MODEL, so a client can't bill the project against an arbitrary/expensive id.
+const MODEL_ALLOWLIST = new Set([
+  'gemini-2.5-pro',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+]);
 const PROXY_TOKEN = process.env.PROXY_TOKEN || '';
 // The OAuth client id the extension's tokens are minted for. We reject any token
 // whose audience is a different app, so a token grabbed elsewhere can't be replayed.
@@ -133,17 +141,21 @@ function readBody(req) {
   });
 }
 
-async function generate({ system, prompt, maxOutputTokens, json, thinking }) {
+async function generate({ system, prompt, maxOutputTokens, json, thinking, model: requested }) {
+  // Honor the client's model only if it's allowlisted; otherwise use the default.
+  const modelId = requested && MODEL_ALLOWLIST.has(requested) ? requested : MODEL;
   const model = vertex.getGenerativeModel({
-    model: MODEL,
+    model: modelId,
     systemInstruction: system ? { role: 'system', parts: [{ text: system }] } : undefined,
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: maxOutputTokens ?? 1024,
       // Thinking on (dynamic budget) only when asked — better open-ended
       // answers. Off by default: 2.5 Flash otherwise spends the output budget
-      // on hidden reasoning and truncates/empties short requests.
-      thinkingConfig: { thinkingBudget: thinking ? -1 : 0 },
+      // on hidden reasoning and truncates/empties short requests. 2.5 Pro can't
+      // disable thinking (budget 0 → 400 INVALID_ARGUMENT), so always give it a
+      // dynamic budget.
+      thinkingConfig: { thinkingBudget: thinking || modelId.includes('2.5-pro') ? -1 : 0 },
       // JSON mode for structured extraction (e.g. resume parsing) so the model
       // returns parseable JSON with no markdown fences or prose.
       ...(json ? { responseMimeType: 'application/json' } : {}),
@@ -200,10 +212,10 @@ const server = http.createServer(async (req, res) => {
 
   try {
     const raw = await readBody(req);
-    const { system = '', prompt = '', maxOutputTokens, json, thinking } = JSON.parse(raw || '{}');
+    const { system = '', prompt = '', maxOutputTokens, json, thinking, model } = JSON.parse(raw || '{}');
     if (!prompt) return send(res, 400, { error: 'Missing "prompt"' });
 
-    const text = await generate({ system, prompt, maxOutputTokens, json, thinking });
+    const text = await generate({ system, prompt, maxOutputTokens, json, thinking, model });
     if (!text) return send(res, 502, { error: 'Empty response from Vertex AI' });
     return send(res, 200, { text });
   } catch (err) {

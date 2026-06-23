@@ -1,4 +1,5 @@
 import { AIError, type AIProvider, type GenerateInput } from './provider';
+import { DEFAULT_MODEL } from './models';
 
 // Managed-proxy provider: posts to the Cloud Run service, which holds the Google
 // Cloud credential and relays to Vertex AI. `token` is the bearer to send — the
@@ -12,9 +13,10 @@ export class ProxyProvider implements AIProvider {
   constructor(
     private url: string,
     private token: string,
+    private model = DEFAULT_MODEL,
   ) {}
 
-  async generate({ system, prompt, maxOutputTokens, json, thinking }: GenerateInput): Promise<string> {
+  async generate({ system, prompt, maxOutputTokens, json, thinking, model }: GenerateInput): Promise<string> {
     if (!this.url) {
       throw new AIError('No proxy URL set. Add your Cloud Run URL in the extension options.');
     }
@@ -27,7 +29,10 @@ export class ProxyProvider implements AIProvider {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.token}`,
         },
-        body: JSON.stringify({ system, prompt, maxOutputTokens, json, thinking }),
+        // `model` lets the user pick which Gemini model the proxy runs (only the
+        // free-text answer feature overrides; everything else uses the fast
+        // default). The server validates it against an allowlist and falls back.
+        body: JSON.stringify({ system, prompt, maxOutputTokens, json, thinking, model: model || this.model }),
       });
     } catch (e) {
       throw new AIError(`Could not reach the proxy: ${(e as Error).message}`);

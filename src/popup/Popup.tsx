@@ -12,7 +12,7 @@ import { sendToBackground, sendToTab } from '../lib/messages';
 import type { AIResult, CapturedJob, FillResult, PageInfo } from '../lib/messages';
 import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
-import { signIn, getAuthUser, onAuthChanged, type AuthUser } from '../lib/auth';
+import { signIn, reconcileAuthUser, onAuthChanged, type AuthUser } from '../lib/auth';
 
 export function Popup() {
   const [tabId, setTabId] = useState<number | null>(null);
@@ -88,7 +88,7 @@ export function Popup() {
 
   // Google sign-in status for the managed proxy.
   useEffect(() => {
-    getAuthUser().then(setAuthUser);
+    reconcileAuthUser().then(setAuthUser);
     return onAuthChanged(setAuthUser);
   }, []);
 

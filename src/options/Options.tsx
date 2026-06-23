@@ -6,8 +6,9 @@ import { sendToBackground } from '../lib/messages';
 import type { AIResult } from '../lib/messages';
 import { parseResumeJson } from '../lib/resumeImport';
 import { ProxyProvider } from '../lib/ai/proxy';
+import { GEMINI_MODELS } from '../lib/ai/models';
 import { AIError } from '../lib/ai';
-import { signIn, signOut, getAuthUser, onAuthChanged, getCachedToken, type AuthUser } from '../lib/auth';
+import { signIn, signOut, reconcileAuthUser, onAuthChanged, getCachedToken, type AuthUser } from '../lib/auth';
 
 export function Options() {
   const { profile, loaded, saveState, update } = useProfile();
@@ -67,7 +68,7 @@ function OptionsView({
   const [authBusy, setAuthBusy] = useState(false);
   const [authErr, setAuthErr] = useState('');
   useEffect(() => {
-    getAuthUser().then(setAuthUser);
+    reconcileAuthUser().then(setAuthUser);
     return onAuthChanged(setAuthUser);
   }, []);
 
@@ -106,6 +107,7 @@ function OptionsView({
           throw new AIError('Sign in with Google first (or paste an admin token).');
         }
       }
+      // Connectivity test only — runs on the fast default model.
       const provider = new ProxyProvider(p.ai.proxyUrl, token);
       const text = await provider.generate({
         system: 'You are a connectivity test. Reply with exactly: OK',
@@ -184,9 +186,22 @@ function OptionsView({
               <option value="onDevice">On-device (Chrome built-in, no key)</option>
             </select>
           </Field>
-          <Field label="Model">
-            <input value={p.ai.model} onChange={(e) => setAI('model', e.target.value)} />
-          </Field>
+          {/* On-device (Gemini Nano) has no model choice, so hide the picker. */}
+          {p.ai.provider !== 'onDevice' && (
+            <Field label="Model (for AI answers)">
+              <select value={p.ai.model} onChange={(e) => setAI('model', e.target.value)}>
+                {GEMINI_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <div className="help">
+                Used only for ✨ AI answers to open-ended questions. Resume parsing and the
+                eligibility badge always use the fast default model.
+              </div>
+            </Field>
+          )}
         </div>
         {p.ai.provider === 'gemini' && (
           <Field label="Gemini API key">

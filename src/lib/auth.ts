@@ -9,6 +9,11 @@
 // Requires `identity` permission + an `oauth2` block in the manifest.
 
 const AUTH_KEY = 'auth';
+// Sticky "the user explicitly signed out" flag. Chrome silently re-mints tokens
+// for basic scopes (email/profile) even after we revoke, so revocation alone
+// can't keep sign-out from snapping back. While this flag is set we refuse silent
+// tokens; an interactive signIn() clears it.
+const SIGNED_OUT_KEY = 'signedOut';
 
 export interface AuthUser {
   email: string;
@@ -56,18 +61,27 @@ export async function signIn(): Promise<AuthUser> {
   const token = await getToken(true);
   const user: AuthUser = { email: await fetchEmail(token) };
   await chrome.storage.local.set({ [AUTH_KEY]: user });
+  // Clear the sticky sign-out flag — the user is deliberately signing back in.
+  await chrome.storage.local.remove(SIGNED_OUT_KEY);
   return user;
 }
 
-/** Silent token for proxy calls. Rejects (→ "Sign in…") when not signed in. */
-export function getCachedToken(): Promise<string> {
+/**
+ * Silent token for proxy calls. Rejects (→ "Sign in…") when not signed in, or
+ * when the user explicitly signed out (even if Chrome would still mint a token).
+ */
+export async function getCachedToken(): Promise<string> {
+  const r = await chrome.storage.local.get(SIGNED_OUT_KEY);
+  if (r[SIGNED_OUT_KEY]) throw new Error('Signed out');
   return getToken(false);
 }
 
-/** Revokes the token, clears Chrome's cache, and forgets the stored email. */
+/** Revokes the grant, clears Chrome's cache, and forgets the stored email. */
 export async function signOut(): Promise<void> {
   try {
     const token = await getToken(false);
+    // Revoke at Google — revoking the access token also revokes its refresh
+    // token, killing the grant so a silent getAuthToken can't mint a new one.
     await fetch('https://oauth2.googleapis.com/revoke?token=' + encodeURIComponent(token)).catch(
       () => {},
     );
@@ -77,6 +91,14 @@ export async function signOut(): Promise<void> {
   } catch {
     // Not signed in — nothing to revoke.
   }
+  // Flush ALL cached tokens for this extension. removeCachedAuthToken only drops
+  // the one token we saw; Chrome may hold others it would otherwise hand back to
+  // a silent getAuthToken, making sign-out look ineffective (Test proxy still
+  // works). Clearing the whole cache + the revoke above makes sign-out stick.
+  await new Promise<void>((resolve) => chrome.identity.clearAllCachedAuthTokens(() => resolve()));
+  // Set the sticky flag BEFORE removing the email so getCachedToken refuses to
+  // silently re-mint, and reconcileAuthUser won't snap us back to "signed in".
+  await chrome.storage.local.set({ [SIGNED_OUT_KEY]: true });
   await chrome.storage.local.remove(AUTH_KEY);
 }
 
@@ -84,6 +106,27 @@ export async function signOut(): Promise<void> {
 export async function getAuthUser(): Promise<AuthUser | null> {
   const r = await chrome.storage.local.get(AUTH_KEY);
   return (r[AUTH_KEY] as AuthUser) ?? null;
+}
+
+/**
+ * Sign-in state for the UI, reconciled with Chrome's actual OAuth grant. If we
+ * have a stored user, use it. Otherwise a silent token may still exist — e.g. the
+ * account-level grant survived an extension reload that cleared our stored email —
+ * so detect it, persist the email (which fires onAuthChanged so every surface
+ * syncs), and report as signed in. Returns null only when truly signed out.
+ */
+export async function reconcileAuthUser(): Promise<AuthUser | null> {
+  const stored = await getAuthUser();
+  if (stored) return stored;
+  let token: string;
+  try {
+    token = await getCachedToken();
+  } catch {
+    return null;
+  }
+  const user: AuthUser = { email: await fetchEmail(token) };
+  await chrome.storage.local.set({ [AUTH_KEY]: user });
+  return user;
 }
 
 /** Subscribe to sign-in/out changes so the UI stays in sync across surfaces. */

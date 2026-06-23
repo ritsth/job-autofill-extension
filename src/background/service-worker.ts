@@ -81,7 +81,12 @@ async function handle(msg: BackgroundMessage): Promise<string> {
 
   if (msg.type === 'AI_GENERATE_ANSWER') {
     const provider = await resolveProvider(profile.ai);
-    return provider.generate(buildAnswerPrompt(msg.question, context, jobText));
+    // The free-text answer is the only feature that honors the user's model
+    // choice; everything else stays on the provider's fast default.
+    return provider.generate({
+      ...buildAnswerPrompt(msg.question, context, jobText),
+      model: profile.ai.model,
+    });
   }
 
   const company = msg.company.trim() || activeJob?.company || '';
