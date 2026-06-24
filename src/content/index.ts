@@ -115,10 +115,10 @@ function injectStyles(): void {
     .${BUTTON_CLASS} {
       display: inline-flex; align-items: center; gap: 4px;
       margin: 6px 0; padding: 5px 10px; font-size: 12px; font-weight: 600;
-      color: #fff; background: #4f46e5; border: none; border-radius: 6px;
+      color: #fff; background: #44506b; border: none; border-radius: 6px;
       cursor: pointer; line-height: 1.2;
     }
-    .${BUTTON_CLASS}:hover { background: #4338ca; }
+    .${BUTTON_CLASS}:hover { background: #333c52; }
     .${BUTTON_CLASS}:disabled { opacity: .7; cursor: default; }
   `;
   document.documentElement.appendChild(style);

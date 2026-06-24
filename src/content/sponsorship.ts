@@ -516,10 +516,10 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
     .reason { margin-top: 8px; color: #475569; font-style: italic; }
     .exp { margin-top: 8px; font-weight: 600; color: #334155; }
     .row { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
-    .ai { border: none; background: #4f46e5; color: #fff; border-radius: 6px;
+    .ai { border: none; background: #44506b; color: #fff; border-radius: 6px;
           padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .ai:disabled { opacity: .7; cursor: default; }
-    .aitag { font-size: 11px; color: #4f46e5; font-weight: 700; }
+    .aitag { font-size: 11px; color: #44506b; font-weight: 700; }
     .tag { margin-top: 8px; font-size: 11px; color: #94a3b8; }
     .cl { margin-top: 10px; border-top: 1px solid #eef2f7; padding-top: 8px; }
     .clbtn { border: none; background: #0f172a; color: #fff; border-radius: 6px;
