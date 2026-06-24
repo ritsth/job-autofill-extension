@@ -49,7 +49,7 @@ TypeScript · React (popup + options) · Vite + `@crxjs/vite-plugin` · Manifest
 
 ```bash
 npm install
-node scripts/make-icons.mjs   # generates placeholder icons (one-time)
+python3 scripts/make-icons.py # regenerates icons from assets/icon-source.png (needs Pillow)
 npm run dev                   # Vite dev server with HMR
 ```
 

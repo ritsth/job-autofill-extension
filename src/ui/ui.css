@@ -4,8 +4,8 @@
   --border: #e2e8f0;
   --text: #0f172a;
   --muted: #64748b;
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
+  --primary: #44506b;
+  --primary-hover: #333c52;
   --danger: #dc2626;
   --ok: #16a34a;
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -75,8 +75,8 @@ button:disabled { opacity: .6; cursor: default; }
 .brand-logo {
   flex: none; width: 36px; height: 36px; border-radius: 10px;
   display: grid; place-items: center;
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
-  box-shadow: 0 3px 8px rgba(79, 70, 229, .35);
+  background: linear-gradient(135deg, #6b7790, #44506b);
+  box-shadow: 0 3px 8px rgba(68, 80, 107, .35);
 }
 .brand-logo svg { width: 21px; height: 21px; display: block; }
 .brand-text { flex: 1; min-width: 0; }
@@ -85,7 +85,7 @@ button:disabled { opacity: .6; cursor: default; }
   flex: none; font-size: 16px; line-height: 1; border-radius: 8px;
   padding: 7px 9px; color: var(--muted);
 }
-.icon-btn:hover { background: #eef2ff; color: var(--primary); }
+.icon-btn:hover { background: #eef0f5; color: var(--primary); }
 
 /* Inputs (company / role / cover letter) — text fields only, not checkboxes */
 .popup input:not([type='checkbox']), .popup textarea {
@@ -97,12 +97,12 @@ button:disabled { opacity: .6; cursor: default; }
 .popup textarea { min-height: 120px; font-size: 12px; padding: 10px 12px; line-height: 1.5; }
 .popup input:not([type='checkbox']):focus, .popup textarea:focus {
   outline: none; border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, .15);
+  box-shadow: 0 0 0 3px rgba(68, 80, 107, .15);
 }
 .popup input::placeholder { color: #94a3b8; }
 
 .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
-  background: #eef2ff; color: var(--primary); font-weight: 600; }
+  background: #eef0f5; color: var(--primary); font-weight: 600; }
 
 /* Feature toggles (resume / cover letter / eligibility scan) */
 .toggles {
@@ -111,8 +111,8 @@ button:disabled { opacity: .6; cursor: default; }
   border: 1px solid var(--border); border-radius: 10px;
 }
 /* Saved jobs */
-.savedjob .full { width: 100%; background: #eef2ff; color: var(--primary); }
-.savedjob .full:hover:not(:disabled) { background: #e0e7ff; }
+.savedjob .full { width: 100%; background: #eef0f5; color: var(--primary); }
+.savedjob .full:hover:not(:disabled) { background: #dee3ee; }
 .jobusing { font-size: 12px; margin-top: 8px; color: var(--text); }
 .jobusing.muted { color: var(--muted); }
 .jobclear { font-size: 11px; padding: 2px 4px; }
