@@ -214,13 +214,7 @@ export function Popup() {
     <div className="popup">
       <header className="brand">
         <span className="brand-logo" aria-hidden>
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M12 2.5l1.9 5.1a3 3 0 0 0 1.78 1.78L20.8 11.3a.75.75 0 0 1 0 1.4l-5.12 1.92a3 3 0 0 0-1.78 1.78L12 21.5l-1.9-5.1a3 3 0 0 0-1.78-1.78L3.2 12.7a.75.75 0 0 1 0-1.4l5.12-1.92a3 3 0 0 0 1.78-1.78L12 2.5z"
-              fill="#fff"
-            />
-            <path d="M18.5 3.5l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6z" fill="#c7d2fe" />
-          </svg>
+          <img src={chrome.runtime.getURL('icons/icon128.png')} alt="" width={36} height={36} />
         </span>
         <div className="brand-text">
           <h1>Little AI Helper</h1>

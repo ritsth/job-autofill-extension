@@ -74,11 +74,9 @@ button:disabled { opacity: .6; cursor: default; }
 .brand { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; }
 .brand-logo {
   flex: none; width: 36px; height: 36px; border-radius: 10px;
-  display: grid; place-items: center;
-  background: linear-gradient(135deg, #6b7790, #44506b);
   box-shadow: 0 3px 8px rgba(68, 80, 107, .35);
 }
-.brand-logo svg { width: 21px; height: 21px; display: block; }
+.brand-logo img { width: 36px; height: 36px; display: block; border-radius: 10px; }
 .brand-text { flex: 1; min-width: 0; }
 .brand .tagline { font-size: 11px; color: var(--muted); margin: 2px 0 0; }
 .icon-btn {
