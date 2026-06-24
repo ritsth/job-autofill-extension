@@ -96,6 +96,18 @@ Sanity check:
 curl -s https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/ | jq   # expect "dailyLimit": 50
 ```
 
+### Redeploy after the model picker
+
+The proxy now honors a client-requested model (validated against `MODEL_ALLOWLIST` in
+[`server/index.js`](server/index.js); keep it in sync with
+[`src/lib/ai/models.ts`](src/lib/ai/models.ts)). Redeploy to pick up the change — **no
+secret needed**, the existing env vars are preserved when you omit `--update-env-vars`:
+
+```bash
+gcloud run deploy job-autofill-proxy --source server --region us-central1
+curl -s https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/ | jq   # still healthy
+```
+
 ## Verify
 
 1. `npm run build` → reload unpacked at `chrome://extensions` (ID should match Step 1).
@@ -108,12 +120,12 @@ curl -s https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/ | jq   # expect "dai
 OAuth "Publish app" ≠ Web Store listing. Listing copy and privacy policy live in
 [`STORE_LISTING.md`](STORE_LISTING.md) and [`PRIVACY.md`](PRIVACY.md).
 
-> **Status (2026-06-19): submitted for review.** Store **Item ID**
-> `iibpijacaghdcckphindbaijjgcbaoll`. The OAuth client "AI Job Assistant" was rebound to
-> that Item ID, and `manifest.config.ts` `key` now holds the store's public key (dev-only;
-> `npm run package` strips it via `CRX_NO_KEY`). Verified the local `npm run build` ID
-> matches the store Item ID. Publisher contact email verified. Awaiting Google review
-> (flagged for in-depth host-permission review).
+> **Status: ✅ LIVE** — published 2026-06-22.
+> Chrome Web Store URL: <https://chromewebstore.google.com/detail/Little%20AI%20Helper/iibpijacaghdcckphindbaijjgcbaoll>
+> Store **Item ID** `iibpijacaghdcckphindbaijjgcbaoll`. The OAuth client "AI Job Assistant"
+> was rebound to that Item ID, and `manifest.config.ts` `key` now holds the store's public
+> key (dev-only; `npm run package` strips it via `CRX_NO_KEY`). Verified the local
+> `npm run build` ID matches the store Item ID.
 
 **Key gotcha:** the Web Store assigns the published item its **own** ID/public key — it
 does **not** honor the local `key.pem`. So the OAuth client (currently bound to the dev

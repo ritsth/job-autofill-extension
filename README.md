@@ -1,5 +1,7 @@
 # Little AI Helper (Chrome Extension)
 
+**[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/Little%20AI%20Helper/iibpijacaghdcckphindbaijjgcbaoll)**
+
 Auto-fills repetitive job applications on **Greenhouse**, **Lever**, and
 **Workday** from a structured profile, and uses AI to:
 
@@ -20,6 +22,12 @@ The UI is a **side panel** (stays open while you browse, closes only when you cl
 proxy** — a small Cloud Run service that relays to **Vertex AI** so you can spend the
 GCP $300 credit (AI Studio's Gemini API is excluded from the credit; Vertex isn't). See
 [`server/README.md`](server/README.md) to deploy it, then pick "Managed proxy" in options.
+
+**Model picker:** for the Gemini and managed-proxy providers, options has a **Model**
+dropdown — choose between Gemini 2.5 Pro (best), 2.5 Flash (default), or 2.5 Flash-Lite.
+The choice applies **only to ✨ AI answers** for open-ended questions; resume parsing and
+the eligibility-badge check always run on the fast default model. The proxy validates the
+requested model against an allowlist server-side.
 
 **Where it runs:** full autofill on **Greenhouse**, **Lever**, and **Workday**
 (`*.myworkdayjobs.com`). The eligibility badge
@@ -101,7 +109,6 @@ cover-letter generator, tailored-resume generator, save-job context, PDF export.
 Still ahead (v2+):
 
 - Multi-provider picker (Groq / OpenRouter / Claude) — interface already supports it.
-- Chrome Web Store packaging + privacy policy.
 
 ### Publishing & the managed proxy
 

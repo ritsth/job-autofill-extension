@@ -1,4 +1,5 @@
 import { AIError, type AIProvider, type GenerateInput } from './provider';
+import { DEFAULT_MODEL } from './models';
 
 // Google Gemini via the Generative Language REST API. The user supplies their
 // own free AI Studio key (https://aistudio.google.com/apikey); it is read from
@@ -12,15 +13,17 @@ export class GeminiProvider implements AIProvider {
 
   constructor(
     private apiKey: string,
-    private model = 'gemini-2.0-flash',
+    private model = DEFAULT_MODEL,
   ) {}
 
-  async generate({ system, prompt, maxOutputTokens, json, thinking }: GenerateInput): Promise<string> {
+  async generate({ system, prompt, maxOutputTokens, json, thinking, model }: GenerateInput): Promise<string> {
     if (!this.apiKey) {
       throw new AIError('No Gemini API key set. Add one in the extension options.');
     }
 
-    const url = `${ENDPOINT}/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(
+    // Per-request override (free-text answers) wins; otherwise the fast default.
+    const modelId = model || this.model;
+    const url = `${ENDPOINT}/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(
       this.apiKey,
     )}`;
 
@@ -33,8 +36,14 @@ export class GeminiProvider implements AIProvider {
         // Gemini 2.5 models default thinking ON over REST, which can eat the
         // whole output budget and truncate the answer. Pin the budget (dynamic
         // when asked, off otherwise). thinkingConfig only applies to 2.5 models.
-        ...(this.model.includes('2.5')
-          ? { thinkingConfig: { thinkingBudget: thinking ? -1 : 0 } }
+        // 2.5 Pro can't disable thinking (budget 0 is rejected), so it always
+        // gets a dynamic budget.
+        ...(modelId.includes('2.5')
+          ? {
+              thinkingConfig: {
+                thinkingBudget: thinking || modelId.includes('2.5-pro') ? -1 : 0,
+              },
+            }
           : {}),
         ...(json ? { responseMimeType: 'application/json' } : {}),
       },

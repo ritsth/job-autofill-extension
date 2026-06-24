@@ -2,6 +2,8 @@
 // Everything here stays on the user's machine (storage.local, not sync) because
 // it contains PII (resume text, contact info, optional demographics).
 
+import { DEFAULT_MODEL, isKnownModel } from './ai/models';
+
 export interface PersonalInfo {
   firstName: string;
   lastName: string;
@@ -123,7 +125,7 @@ export const DEFAULT_PROFILE: Profile = {
     // proxy owner's admin override.
     provider: 'proxy',
     apiKey: '',
-    model: 'gemini-2.0-flash',
+    model: DEFAULT_MODEL,
     proxyUrl: 'https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/generate',
     proxyToken: '',
   },
@@ -137,12 +139,17 @@ const STORAGE_KEY = 'profile';
 /** Deep-merges stored data over defaults so new fields always have a value. */
 function withDefaults(stored: Partial<Profile> | undefined): Profile {
   if (!stored) return structuredClone(DEFAULT_PROFILE);
+  const ai = { ...DEFAULT_PROFILE.ai, ...stored.ai };
+  // Old/hand-typed model ids (e.g. the previous gemini-2.0-flash default) may not
+  // be in the curated dropdown — snap them to the default so the picker is never
+  // blank and the proxy never gets an unknown id.
+  if (!isKnownModel(ai.model)) ai.model = DEFAULT_MODEL;
   return {
     ...DEFAULT_PROFILE,
     ...stored,
     personal: { ...DEFAULT_PROFILE.personal, ...stored.personal },
     preferences: { ...DEFAULT_PROFILE.preferences, ...stored.preferences },
-    ai: { ...DEFAULT_PROFILE.ai, ...stored.ai },
+    ai,
     workHistory: stored.workHistory ?? DEFAULT_PROFILE.workHistory,
     education: stored.education ?? DEFAULT_PROFILE.education,
     skills: stored.skills ?? DEFAULT_PROFILE.skills,

@@ -13,6 +13,13 @@ export interface GenerateInput {
   json?: boolean;
   /** Allow the model to "think" before answering (better quality, slower). */
   thinking?: boolean;
+  /**
+   * Optional per-request model override. Omitted, the provider uses its default
+   * (the fixed fast model). Only the free-text answer feature sets this to the
+   * user's picked model; internal calls (resume parse, eligibility, tailored
+   * resume) leave it unset so they always run on the fast default.
+   */
+  model?: string;
 }
 
 export interface AIProvider {
