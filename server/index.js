@@ -215,7 +215,13 @@ const server = http.createServer(async (req, res) => {
     const { system = '', prompt = '', maxOutputTokens, json, thinking, model } = JSON.parse(raw || '{}');
     if (!prompt) return send(res, 400, { error: 'Missing "prompt"' });
 
-    const text = await generate({ system, prompt, maxOutputTokens, json, thinking, model });
+    const args = { system, prompt, maxOutputTokens, json, thinking, model };
+    // Gemini occasionally returns an empty candidate for no real reason (a
+    // transient hiccup). One retry almost always succeeds and saves the user a
+    // manual re-run. The quota was already counted above, so the retry is free
+    // to the user and doesn't double-count.
+    let text = await generate(args);
+    if (!text) text = await generate(args);
     if (!text) return send(res, 502, { error: 'Empty response from Vertex AI' });
     return send(res, 200, { text });
   } catch (err) {
