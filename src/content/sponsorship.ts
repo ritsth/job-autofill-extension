@@ -525,13 +525,16 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   const style = document.createElement('style');
   style.textContent = `
     :host { all: initial; }
-    .card {
+    .wrap {
       position: fixed; top: 14px; right: 14px; z-index: 2147483646;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+      font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
+    .card {
       width: 230px; box-sizing: border-box; padding: 12px 14px;
       background: #fff; color: #0f172a; border: 1px solid #e2e8f0;
       border-left: 6px solid ${s.color}; border-radius: 10px;
       box-shadow: 0 6px 24px rgba(0,0,0,.16);
-      font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     }
     .head { display: flex; align-items: center; gap: 8px; }
     .word { font-size: 20px; font-weight: 800; color: ${s.color}; letter-spacing: .5px; }
@@ -553,14 +556,18 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
            border-top: 1px solid #eef2f7; padding-top: 7px; }
     .off { color: #44506b; font-weight: 600; cursor: pointer; white-space: nowrap; }
     .off:hover { text-decoration: underline; }
-    .intro { margin-top: 10px; background: #44506b; color: #fff; border-radius: 9px; padding: 11px 12px; }
-    .intro-t { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
-    .intro-d { font-size: 12px; line-height: 1.45; color: #dbe1ec; }
-    .intro-row { display: flex; gap: 7px; margin-top: 10px; }
-    .intro-off { flex: 1; background: #fff; color: #44506b; border: none; border-radius: 7px;
-                 padding: 7px 9px; font-size: 12px; font-weight: 700; cursor: pointer; }
-    .intro-ok { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 7px;
-                padding: 7px 13px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .coach { position: relative; width: 252px; box-sizing: border-box;
+             background: #44506b; color: #fff; border-radius: 12px; padding: 14px 15px;
+             box-shadow: 0 10px 30px rgba(15,23,42,.3); }
+    .coach::before { content: ''; position: absolute; top: -6px; right: 34px;
+                     width: 14px; height: 14px; background: #44506b; transform: rotate(45deg); }
+    .coach-t { font-weight: 700; font-size: 14px; margin-bottom: 5px; }
+    .coach-d { font-size: 12px; line-height: 1.5; color: #dbe1ec; }
+    .coach-row { display: flex; gap: 8px; margin-top: 12px; }
+    .coach-off { flex: 1; background: #fff; color: #44506b; border: none; border-radius: 7px;
+                 padding: 8px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .coach-ok { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 7px;
+                padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
     .cl { margin-top: 10px; border-top: 1px solid #eef2f7; padding-top: 8px; }
     .clbtn { border: none; background: #0f172a; color: #fff; border-radius: 6px;
              padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
@@ -657,44 +664,51 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   // the side-panel toggle a new user may never open).
   const foot = document.createElement('div');
   foot.className = 'tag';
-  foot.appendChild(el('span', '', 'Little AI Helper · auto-detected'));
+  foot.appendChild(el('span', '', 'Little AI Helper'));
   const off = el('span', 'off', '⚙ Turn off on all sites');
   off.title = 'Stop showing this badge on every page';
   off.addEventListener('click', () => void disableScannerEverywhere());
   foot.appendChild(off);
   card.appendChild(foot);
 
-  // One-time coachmark: the first time the badge ever appears, explain what it is
-  // and offer a one-click global off. Removed (and never shown again) on dismissal.
+  // Stack the card and (optionally) the coachmark in a fixed, right-aligned
+  // column so the coachmark floats as a separate bubble below the badge.
+  const wrap = document.createElement('div');
+  wrap.className = 'wrap';
+  wrap.appendChild(card);
+
+  // One-time coachmark: a separate bubble below the badge the first time it ever
+  // appears, explaining what it is with a one-click global off. Removed (and never
+  // shown again) on dismissal.
   if (!introSeen) {
-    const intro = document.createElement('div');
-    intro.className = 'intro';
-    intro.appendChild(el('div', 'intro-t', 'First time seeing this?'));
-    intro.appendChild(
+    const coach = document.createElement('div');
+    coach.className = 'coach';
+    coach.appendChild(el('div', 'coach-t', 'First time seeing this?'));
+    coach.appendChild(
       el(
         'div',
-        'intro-d',
-        "I flag visa / citizenship / clearance requirements on pages that look like job " +
-          "postings, so you don't waste time on a role you can't take.",
+        'coach-d',
+        'I flag visa / citizenship / clearance requirements on pages that look like job ' +
+          "postings — so you don't waste time on a role you can't take.",
       ),
     );
-    const introRow = document.createElement('div');
-    introRow.className = 'intro-row';
-    const turnOff = el('button', 'intro-off', 'Turn off everywhere');
+    const row = document.createElement('div');
+    row.className = 'coach-row';
+    const turnOff = el('button', 'coach-off', 'Turn off everywhere');
     turnOff.addEventListener('click', () => {
       markIntroSeen();
       void disableScannerEverywhere();
     });
-    const gotIt = el('button', 'intro-ok', 'Got it');
+    const gotIt = el('button', 'coach-ok', 'Got it');
     gotIt.addEventListener('click', () => {
       markIntroSeen();
-      intro.remove();
+      coach.remove();
     });
-    introRow.append(turnOff, gotIt);
-    intro.appendChild(introRow);
-    card.appendChild(intro);
+    row.append(turnOff, gotIt);
+    coach.appendChild(row);
+    wrap.appendChild(coach);
   }
 
-  root.appendChild(card);
+  root.appendChild(wrap);
   return host;
 }
