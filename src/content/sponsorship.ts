@@ -9,6 +9,7 @@ import type { AIResult } from '../lib/messages';
 import { parseEligibilityJson } from '../lib/jobEligibility';
 import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
+import { getProfile, saveProfile } from '../lib/profile';
 
 export type Verdict = 'yes' | 'no' | 'caution' | 'unknown';
 
@@ -252,6 +253,33 @@ export function setScannerEnabled(value: boolean): void {
   enabled = value;
   if (!enabled) removeBadge();
   else scanSponsorship();
+}
+
+// One-time "what is this badge" coachmark, shown the first time the badge ever
+// appears. `introSeen` defaults true so it never flashes before the stored flag
+// is loaded (index.ts loads it at init and calls setBadgeIntroSeen).
+const INTRO_SEEN_KEY = 'badgeIntroSeen';
+let introSeen = true;
+
+/** Seeds the intro-seen flag from storage (called once from the content init). */
+export function setBadgeIntroSeen(value: boolean): void {
+  introSeen = value;
+}
+
+/** Marks the coachmark as seen so it never shows again. */
+function markIntroSeen(): void {
+  introSeen = true;
+  chrome.storage.local.set({ [INTRO_SEEN_KEY]: true });
+}
+
+/**
+ * Turns the eligibility scanner off everywhere by persisting scanEnabled=false.
+ * The profile-change listener in index.ts then removes the badge and the
+ * side-panel toggle updates in lockstep — no direct setScannerEnabled needed.
+ */
+async function disableScannerEverywhere(): Promise<void> {
+  const p = await getProfile();
+  await saveProfile({ ...p, scanEnabled: false });
 }
 
 /** Which generators the badge shows (driven by the user's settings). */
@@ -520,7 +548,19 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
           padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .ai:disabled { opacity: .7; cursor: default; }
     .aitag { font-size: 11px; color: #44506b; font-weight: 700; }
-    .tag { margin-top: 8px; font-size: 11px; color: #94a3b8; }
+    .tag { margin-top: 8px; font-size: 11px; color: #94a3b8;
+           display: flex; justify-content: space-between; align-items: center; gap: 8px;
+           border-top: 1px solid #eef2f7; padding-top: 7px; }
+    .off { color: #44506b; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .off:hover { text-decoration: underline; }
+    .intro { margin-top: 10px; background: #44506b; color: #fff; border-radius: 9px; padding: 11px 12px; }
+    .intro-t { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+    .intro-d { font-size: 12px; line-height: 1.45; color: #dbe1ec; }
+    .intro-row { display: flex; gap: 7px; margin-top: 10px; }
+    .intro-off { flex: 1; background: #fff; color: #44506b; border: none; border-radius: 7px;
+                 padding: 7px 9px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .intro-ok { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 7px;
+                padding: 7px 13px; font-size: 12px; font-weight: 700; cursor: pointer; }
     .cl { margin-top: 10px; border-top: 1px solid #eef2f7; padding-top: 8px; }
     .clbtn { border: none; background: #0f172a; color: #fff; border-radius: 6px;
              padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
@@ -612,7 +652,48 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   if (showCoverLetterInBadge) card.appendChild(buildCoverLetterSection());
   if (showResumeInBadge) card.appendChild(buildResumeSection());
 
-  card.appendChild(el('div', 'tag', 'Little AI Helper · auto-detected, double-check the posting'));
+  // Footer: brand tag + an always-available "turn the scanner off everywhere"
+  // link, so the global off-switch is reachable from the badge itself (not only
+  // the side-panel toggle a new user may never open).
+  const foot = document.createElement('div');
+  foot.className = 'tag';
+  foot.appendChild(el('span', '', 'Little AI Helper · auto-detected'));
+  const off = el('span', 'off', '⚙ Turn off on all sites');
+  off.title = 'Stop showing this badge on every page';
+  off.addEventListener('click', () => void disableScannerEverywhere());
+  foot.appendChild(off);
+  card.appendChild(foot);
+
+  // One-time coachmark: the first time the badge ever appears, explain what it is
+  // and offer a one-click global off. Removed (and never shown again) on dismissal.
+  if (!introSeen) {
+    const intro = document.createElement('div');
+    intro.className = 'intro';
+    intro.appendChild(el('div', 'intro-t', 'First time seeing this?'));
+    intro.appendChild(
+      el(
+        'div',
+        'intro-d',
+        "I flag visa / citizenship / clearance requirements on pages that look like job " +
+          "postings, so you don't waste time on a role you can't take.",
+      ),
+    );
+    const introRow = document.createElement('div');
+    introRow.className = 'intro-row';
+    const turnOff = el('button', 'intro-off', 'Turn off everywhere');
+    turnOff.addEventListener('click', () => {
+      markIntroSeen();
+      void disableScannerEverywhere();
+    });
+    const gotIt = el('button', 'intro-ok', 'Got it');
+    gotIt.addEventListener('click', () => {
+      markIntroSeen();
+      intro.remove();
+    });
+    introRow.append(turnOff, gotIt);
+    intro.appendChild(introRow);
+    card.appendChild(intro);
+  }
 
   root.appendChild(card);
   return host;
