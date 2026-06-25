@@ -9,6 +9,7 @@ import type { AIResult } from '../lib/messages';
 import { parseEligibilityJson } from '../lib/jobEligibility';
 import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
+import { getProfile, saveProfile } from '../lib/profile';
 
 export type Verdict = 'yes' | 'no' | 'caution' | 'unknown';
 
@@ -254,6 +255,33 @@ export function setScannerEnabled(value: boolean): void {
   else scanSponsorship();
 }
 
+// One-time "what is this badge" coachmark, shown the first time the badge ever
+// appears. `introSeen` defaults true so it never flashes before the stored flag
+// is loaded (index.ts loads it at init and calls setBadgeIntroSeen).
+const INTRO_SEEN_KEY = 'badgeIntroSeen';
+let introSeen = true;
+
+/** Seeds the intro-seen flag from storage (called once from the content init). */
+export function setBadgeIntroSeen(value: boolean): void {
+  introSeen = value;
+}
+
+/** Marks the coachmark as seen so it never shows again. */
+function markIntroSeen(): void {
+  introSeen = true;
+  chrome.storage.local.set({ [INTRO_SEEN_KEY]: true });
+}
+
+/**
+ * Turns the eligibility scanner off everywhere by persisting scanEnabled=false.
+ * The profile-change listener in index.ts then removes the badge and the
+ * side-panel toggle updates in lockstep — no direct setScannerEnabled needed.
+ */
+async function disableScannerEverywhere(): Promise<void> {
+  const p = await getProfile();
+  await saveProfile({ ...p, scanEnabled: false });
+}
+
 /** Which generators the badge shows (driven by the user's settings). */
 export function setBadgeFeatures(opts: { coverLetter: boolean; resume: boolean }): void {
   showCoverLetterInBadge = opts.coverLetter;
@@ -497,13 +525,16 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   const style = document.createElement('style');
   style.textContent = `
     :host { all: initial; }
-    .card {
+    .wrap {
       position: fixed; top: 14px; right: 14px; z-index: 2147483646;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+      font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
+    .card {
       width: 230px; box-sizing: border-box; padding: 12px 14px;
       background: #fff; color: #0f172a; border: 1px solid #e2e8f0;
       border-left: 6px solid ${s.color}; border-radius: 10px;
       box-shadow: 0 6px 24px rgba(0,0,0,.16);
-      font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     }
     .head { display: flex; align-items: center; gap: 8px; }
     .word { font-size: 20px; font-weight: 800; color: ${s.color}; letter-spacing: .5px; }
@@ -520,7 +551,23 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
           padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .ai:disabled { opacity: .7; cursor: default; }
     .aitag { font-size: 11px; color: #44506b; font-weight: 700; }
-    .tag { margin-top: 8px; font-size: 11px; color: #94a3b8; }
+    .tag { margin-top: 8px; font-size: 11px; color: #94a3b8;
+           display: flex; justify-content: space-between; align-items: center; gap: 8px;
+           border-top: 1px solid #eef2f7; padding-top: 7px; }
+    .off { color: #44506b; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .off:hover { text-decoration: underline; }
+    .coach { position: relative; width: 252px; box-sizing: border-box;
+             background: #44506b; color: #fff; border-radius: 12px; padding: 14px 15px;
+             box-shadow: 0 10px 30px rgba(15,23,42,.3); }
+    .coach::before { content: ''; position: absolute; top: -6px; right: 34px;
+                     width: 14px; height: 14px; background: #44506b; transform: rotate(45deg); }
+    .coach-t { font-weight: 700; font-size: 14px; margin-bottom: 5px; }
+    .coach-d { font-size: 12px; line-height: 1.5; color: #dbe1ec; }
+    .coach-row { display: flex; gap: 8px; margin-top: 12px; }
+    .coach-off { flex: 1; background: #fff; color: #44506b; border: none; border-radius: 7px;
+                 padding: 8px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .coach-ok { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 7px;
+                padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
     .cl { margin-top: 10px; border-top: 1px solid #eef2f7; padding-top: 8px; }
     .clbtn { border: none; background: #0f172a; color: #fff; border-radius: 6px;
              padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
@@ -612,8 +659,56 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   if (showCoverLetterInBadge) card.appendChild(buildCoverLetterSection());
   if (showResumeInBadge) card.appendChild(buildResumeSection());
 
-  card.appendChild(el('div', 'tag', 'Little AI Helper · auto-detected, double-check the posting'));
+  // Footer: brand tag + an always-available "turn the scanner off everywhere"
+  // link, so the global off-switch is reachable from the badge itself (not only
+  // the side-panel toggle a new user may never open).
+  const foot = document.createElement('div');
+  foot.className = 'tag';
+  foot.appendChild(el('span', '', 'Little AI Helper'));
+  const off = el('span', 'off', '⚙ Turn off on all sites');
+  off.title = 'Stop showing this badge on every page';
+  off.addEventListener('click', () => void disableScannerEverywhere());
+  foot.appendChild(off);
+  card.appendChild(foot);
 
-  root.appendChild(card);
+  // Stack the card and (optionally) the coachmark in a fixed, right-aligned
+  // column so the coachmark floats as a separate bubble below the badge.
+  const wrap = document.createElement('div');
+  wrap.className = 'wrap';
+  wrap.appendChild(card);
+
+  // One-time coachmark: a separate bubble below the badge the first time it ever
+  // appears, explaining what it is with a one-click global off. Removed (and never
+  // shown again) on dismissal.
+  if (!introSeen) {
+    const coach = document.createElement('div');
+    coach.className = 'coach';
+    coach.appendChild(el('div', 'coach-t', 'First time seeing this?'));
+    coach.appendChild(
+      el(
+        'div',
+        'coach-d',
+        'I flag visa / citizenship / clearance requirements on pages that look like job ' +
+          "postings — so you don't waste time on a role you can't take.",
+      ),
+    );
+    const row = document.createElement('div');
+    row.className = 'coach-row';
+    const turnOff = el('button', 'coach-off', 'Turn off everywhere');
+    turnOff.addEventListener('click', () => {
+      markIntroSeen();
+      void disableScannerEverywhere();
+    });
+    const gotIt = el('button', 'coach-ok', 'Got it');
+    gotIt.addEventListener('click', () => {
+      markIntroSeen();
+      coach.remove();
+    });
+    row.append(turnOff, gotIt);
+    coach.appendChild(row);
+    wrap.appendChild(coach);
+  }
+
+  root.appendChild(wrap);
   return host;
 }
