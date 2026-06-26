@@ -35,6 +35,51 @@ Google sign-in token (chrome.identity)         allowlist model            (no us
 | 5 | Token security (stolen token?) | ✅/🔶 | Google tokens ~1h + revocable (sign-out revokes the grant). Admin token now constant-time compared; move to Secret Manager (P1). |
 | 6 | Resilience (one request kills it?) | 🔶 (P1) | No SQL/injection surface. Add `--max-instances`/`--timeout` + the billing kill-switch. |
 
+## Limits & caps (the upper cap)
+
+The caps stack from a single request up to the ultimate dollar ceiling. The env-var ones are
+tunable with a redeploy (`--update-env-vars`) — no code change.
+
+| Cap | Value | Set where | Bounds |
+|---|---|---|---|
+| Per-user daily | `DAILY_LIMIT` = 50/user/day | env var | One account's usage |
+| Global daily ceiling | `GLOBAL_DAILY_LIMIT` = 2000/day total | env var | All users combined (Sybil backstop) |
+| Output tokens / request | `MAX_OUTPUT_TOKENS` = 4096 | env var | Cost of one generation |
+| Prompt size / request | `MAX_PROMPT_CHARS` = 200,000 (→ 413) | env var | Input size |
+| Request body | 1 MB | `readBody` in `server/index.js` | Raw payload |
+| Cloud Run | `--max-instances=3 --concurrency=40 --timeout=60` | deploy flag | Parallel scale / blast radius |
+| **Billing hard cap** | **your budget (e.g. $40)** | budget + kill-switch (P2) | **Total $ — the real ceiling** |
+
+**App-level upper cap = 2000 AI calls/day** across everyone; beyond that the proxy returns a
+global 429 until midnight UTC. Every other cap above limits *requests*, which bounds cost
+only indirectly — if the per-call cost assumptions are wrong, requests can still add up.
+
+### Billing hard cap — the only dollar-denominated ceiling
+
+A Cloud Billing **budget by itself only emails alerts; it does not stop spending.** We turn
+it into a true cap by wiring it to act:
+
+```
+Budget ($40)  ──▶  Pub/Sub topic  ──▶  kill-switch function  ──▶  detaches billing
+ (watches spend)    (publishes spend)   (cost > budget?)          (all billable spend stops)
+```
+
+When **actual spend exceeds the budget**, the kill-switch
+([`infra/billing-killswitch/`](../infra/billing-killswitch/)) detaches the billing account —
+the cloud equivalent of flipping the main breaker. Billable services (Vertex AI, Cloud Run)
+halt immediately; the project, data, and config are untouched. Re-attach billing in the
+console to resume. Setup is in **P2** below.
+
+Caveats:
+- **Not instant or to-the-penny** — budget spend data lags minutes-to-hours and usage can
+  overshoot slightly, so set the budget *below* your real pain threshold (e.g. $40 when you
+  can tolerate ~$60).
+- **Blunt** — it kills the whole project, not just abusive traffic. The per-user (50) and
+  global (2000) call limits are the finer guards meant to catch abuse first; the billing cap
+  is the last-resort backstop if those are bypassed.
+- **Why it's the real ceiling** — it's the only control that limits dollars directly; no
+  matter what goes wrong upstream, you cannot be charged past it.
+
 ## Roadmap (by priority)
 
 ### P0 — Code hardening — ✅ DONE (in `server/index.js`)
