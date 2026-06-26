@@ -16,6 +16,7 @@
 //     quota (for the publisher / trusted testing).
 
 import http from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import { VertexAI } from '@google-cloud/vertexai';
 import { Firestore, FieldValue } from '@google-cloud/firestore';
 
@@ -39,6 +40,15 @@ const PROXY_TOKEN = process.env.PROXY_TOKEN || '';
 const OAUTH_CLIENT_ID = process.env.OAUTH_CLIENT_ID || '';
 // Per-user requests allowed per UTC day. Tune without a code change.
 const DAILY_LIMIT = Number(process.env.DAILY_LIMIT || 50);
+// Global ceiling across ALL users per UTC day — the backstop against a Sybil
+// flood (many free Google accounts each under the per-user limit) draining the
+// Vertex budget. Sized well above honest aggregate usage.
+const GLOBAL_DAILY_LIMIT = Number(process.env.GLOBAL_DAILY_LIMIT || 2000);
+// Hard caps on a single request's cost. maxOutputTokens is the main spend lever;
+// clamp it regardless of what the client asks. Prompt is also bounded (below the
+// 1 MB body cap) so one call can't be made arbitrarily expensive.
+const MAX_OUTPUT_TOKENS = Number(process.env.MAX_OUTPUT_TOKENS || 4096);
+const MAX_PROMPT_CHARS = Number(process.env.MAX_PROMPT_CHARS || 200_000);
 
 if (!PROJECT) console.warn('[proxy] GOOGLE_CLOUD_PROJECT is not set');
 if (!OAUTH_CLIENT_ID) console.warn('[proxy] OAUTH_CLIENT_ID is not set — Google sign-in will be rejected!');
@@ -46,6 +56,17 @@ if (!PROXY_TOKEN) console.warn('[proxy] PROXY_TOKEN is not set — the admin ove
 
 const vertex = new VertexAI({ project: PROJECT, location: LOCATION });
 const db = new Firestore({ projectId: PROJECT });
+
+/**
+ * Constant-time string compare for the admin token, so a timing side-channel
+ * can't be used to recover it. Returns false when the admin token is unset or
+ * the lengths differ (length itself is not secret, but timingSafeEqual throws on
+ * mismatched buffers).
+ */
+function safeEqual(a, b) {
+  if (!b || !a || a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 // tokeninfo is ~1 network call; access tokens live ~1h. Cache the verified
 // identity by token so we resolve a user at most once per token lifetime per
@@ -95,26 +116,26 @@ function utcDayKey(d = new Date()) {
  */
 async function checkAndIncrementQuota(sub, email) {
   const day = utcDayKey();
-  const ref = db.collection('usage').doc(`${sub}_${day}`);
+  const userRef = db.collection('usage').doc(`${sub}_${day}`);
+  // Global counter lives in the same collection (so the existing `expireAt` TTL
+  // prunes it); the `_global_` prefix can't collide with numeric Google subs.
+  const globalRef = db.collection('usage').doc(`_global_${day}`);
+  const expireAt = new Date(Date.now() + 2 * 24 * 60 * 60_000);
   return db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const count = snap.exists ? snap.get('count') || 0 : 0;
-    if (count >= DAILY_LIMIT) {
-      return { allowed: false, count, limit: DAILY_LIMIT };
+    // All reads before any writes (Firestore requirement).
+    const [userSnap, globalSnap] = await Promise.all([tx.get(userRef), tx.get(globalRef)]);
+    const count = userSnap.exists ? userSnap.get('count') || 0 : 0;
+    const globalCount = globalSnap.exists ? globalSnap.get('count') || 0 : 0;
+    // Global ceiling is the Sybil backstop; checked first and reported distinctly.
+    if (globalCount >= GLOBAL_DAILY_LIMIT) {
+      return { allowed: false, reason: 'global', count, limit: DAILY_LIMIT };
     }
-    tx.set(
-      ref,
-      {
-        count: FieldValue.increment(1),
-        sub,
-        email,
-        day,
-        // TTL field — add a Firestore TTL policy on `expireAt` to auto-prune.
-        expireAt: new Date(Date.now() + 2 * 24 * 60 * 60_000),
-      },
-      { merge: true },
-    );
-    return { allowed: true, count: count + 1, limit: DAILY_LIMIT };
+    if (count >= DAILY_LIMIT) {
+      return { allowed: false, reason: 'user', count, limit: DAILY_LIMIT };
+    }
+    tx.set(userRef, { count: FieldValue.increment(1), sub, email, day, expireAt }, { merge: true });
+    tx.set(globalRef, { count: FieldValue.increment(1), day, expireAt }, { merge: true });
+    return { allowed: true, reason: null, count: count + 1, limit: DAILY_LIMIT };
   });
 }
 
@@ -149,7 +170,9 @@ async function generate({ system, prompt, maxOutputTokens, json, thinking, model
     systemInstruction: system ? { role: 'system', parts: [{ text: system }] } : undefined,
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: maxOutputTokens ?? 1024,
+      // Clamp to the server cap regardless of what the client requests, so a
+      // crafted body can't make one call arbitrarily expensive.
+      maxOutputTokens: Math.min(Number(maxOutputTokens) || 1024, MAX_OUTPUT_TOKENS),
       // Thinking on (dynamic budget) only when asked — better open-ended
       // answers. Off by default: 2.5 Flash otherwise spends the output budget
       // on hidden reasoning and truncates/empties short requests. 2.5 Pro can't
@@ -175,7 +198,13 @@ const server = http.createServer(async (req, res) => {
 
   // Health check
   if (req.method === 'GET' && req.url === '/') {
-    return send(res, 200, { ok: true, model: MODEL, location: LOCATION, dailyLimit: DAILY_LIMIT });
+    return send(res, 200, {
+      ok: true,
+      model: MODEL,
+      location: LOCATION,
+      dailyLimit: DAILY_LIMIT,
+      globalDailyLimit: GLOBAL_DAILY_LIMIT,
+    });
   }
 
   if (req.method !== 'POST' || req.url !== '/generate') {
@@ -190,7 +219,7 @@ const server = http.createServer(async (req, res) => {
   if (!token) {
     return send(res, 401, { error: 'Sign in to use the managed AI.' });
   }
-  const isAdmin = PROXY_TOKEN && token === PROXY_TOKEN;
+  const isAdmin = safeEqual(token, PROXY_TOKEN);
   if (!isAdmin) {
     const user = await verifyGoogleToken(token);
     if (!user) {
@@ -204,9 +233,11 @@ const server = http.createServer(async (req, res) => {
       return send(res, 500, { error: 'Quota check failed. Try again.' });
     }
     if (!quota.allowed) {
-      return send(res, 429, {
-        error: `Daily limit reached (${quota.limit}/day). Resets at midnight UTC.`,
-      });
+      const error =
+        quota.reason === 'global'
+          ? 'The managed AI is at its daily capacity. Try again after midnight UTC, or add your own free Gemini key in options.'
+          : `Daily limit reached (${quota.limit}/day). Resets at midnight UTC.`;
+      return send(res, 429, { error });
     }
   }
 
@@ -214,6 +245,9 @@ const server = http.createServer(async (req, res) => {
     const raw = await readBody(req);
     const { system = '', prompt = '', maxOutputTokens, json, thinking, model } = JSON.parse(raw || '{}');
     if (!prompt) return send(res, 400, { error: 'Missing "prompt"' });
+    if (prompt.length > MAX_PROMPT_CHARS || (system && system.length > MAX_PROMPT_CHARS)) {
+      return send(res, 413, { error: 'Request too large.' });
+    }
 
     const args = { system, prompt, maxOutputTokens, json, thinking, model };
     // Gemini occasionally returns an empty candidate for no real reason (a

@@ -99,6 +99,12 @@ gcloud run deploy job-autofill-proxy \
 > rejects any request without a valid Google sign-in token (or the admin
 > `PROXY_TOKEN`), and meters signed-in users against `DAILY_LIMIT`.
 
+> **Hardening (recommended for a public deploy):** add `--max-instances=3
+> --concurrency=40 --timeout=60`, set `GLOBAL_DAILY_LIMIT` / `MAX_OUTPUT_TOKENS`, and put
+> `PROXY_TOKEN` in Secret Manager via `--set-secrets` instead of `--set-env-vars`. Full
+> rationale, exact commands, and the billing kill-switch are in
+> [`../docs/SECURITY.md`](../docs/SECURITY.md).
+
 The command prints a **Service URL** like
 `https://job-autofill-proxy-xxxxxxxxxx-uc.a.run.app`. Save it.
 

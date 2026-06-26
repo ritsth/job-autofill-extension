@@ -108,6 +108,42 @@ gcloud run deploy job-autofill-proxy --source server --region us-central1
 curl -s https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/ | jq   # still healthy
 ```
 
+### Security hardening redeploy (caps + Secret Manager)
+
+See [`docs/SECURITY.md`](docs/SECURITY.md) for the full rationale. This deploy adds the
+abuse caps (global daily ceiling, output-token clamp), bounds the blast radius
+(`--max-instances`/`--concurrency`/`--timeout`), and moves `PROXY_TOKEN` out of plain env
+into **Secret Manager** (and rotates it).
+
+```bash
+# 1. Create the secret with a fresh random admin token (rotates the old one).
+printf '%s' "$(openssl rand -hex 24)" | \
+  gcloud secrets create proxy-token --data-file=- 2>/dev/null || \
+  printf '%s' "$(openssl rand -hex 24)" | gcloud secrets versions add proxy-token --data-file=-
+
+# 2. Let the Cloud Run runtime SA read it.
+gcloud secrets add-iam-policy-binding proxy-token \
+  --member="serviceAccount:1074158639574-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+# 3. Deploy: PROXY_TOKEN now comes from the secret; tune the caps + blast radius.
+gcloud run deploy job-autofill-proxy \
+  --source server --region us-central1 \
+  --max-instances=3 --concurrency=40 --timeout=60 \
+  --update-env-vars "DAILY_LIMIT=50,GLOBAL_DAILY_LIMIT=2000,MAX_OUTPUT_TOKENS=4096" \
+  --remove-env-vars PROXY_TOKEN \
+  --set-secrets "PROXY_TOKEN=proxy-token:latest"
+
+# 4. Read the new admin token when you need it (don't paste it back into chat):
+gcloud secrets versions access latest --secret=proxy-token; echo
+
+curl -s https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/ | jq   # shows globalDailyLimit
+```
+
+> After this, `PROXY_TOKEN` is no longer a plain env var — `gcloud run services describe`
+> won't print its value. Update the Admin token field in options with the new value if you
+> use the bypass.
+
 ## Verify
 
 1. `npm run build` → reload unpacked at `chrome://extensions` (ID should match Step 1).
