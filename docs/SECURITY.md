@@ -48,7 +48,7 @@ tunable with a redeploy (`--update-env-vars`) — no code change.
 | Prompt size / request | `MAX_PROMPT_CHARS` = 200,000 (→ 413) | env var | Input size |
 | Request body | 1 MB | `readBody` in `server/index.js` | Raw payload |
 | Cloud Run | `--max-instances=3 --concurrency=40 --timeout=60` | deploy flag | Parallel scale / blast radius |
-| **Billing hard cap** | **your budget (e.g. $40)** | budget + kill-switch (P2) | **Total $ — the real ceiling** |
+| **Billing hard cap** | **$50 budget** | budget + kill-switch (P2) | **Total $ — the real ceiling** |
 
 **App-level upper cap = 2000 AI calls/day** across everyone; beyond that the proxy returns a
 global 429 until midnight UTC. Every other cap above limits *requests*, which bounds cost
@@ -60,7 +60,7 @@ A Cloud Billing **budget by itself only emails alerts; it does not stop spending
 it into a true cap by wiring it to act:
 
 ```
-Budget ($40)  ──▶  Pub/Sub topic  ──▶  kill-switch function  ──▶  detaches billing
+Budget ($50)  ──▶  Pub/Sub topic  ──▶  kill-switch function  ──▶  detaches billing
  (watches spend)    (publishes spend)   (cost > budget?)          (all billable spend stops)
 ```
 
@@ -72,8 +72,12 @@ console to resume. Setup is in **P2** below.
 
 Caveats:
 - **Not instant or to-the-penny** — budget spend data lags minutes-to-hours and usage can
-  overshoot slightly, so set the budget *below* your real pain threshold (e.g. $40 when you
-  can tolerate ~$60).
+  overshoot slightly, so set the budget *below* your real pain threshold (currently **$50**).
+- **Free credit vs. real charges** — a budget tracks *gross cost by default, before credits*.
+  While the $300 free trial credit is active, $50 of gross usage would trip the kill-switch
+  even though credits are covering it (so billing detaches with $0 actually charged — safe,
+  just surprising). If you'd rather it fire only on real out-of-pocket charges, exclude
+  credits in the budget's scope. Either way you're protected; pick the behavior you want.
 - **Blunt** — it kills the whole project, not just abusive traffic. The per-user (50) and
   global (2000) call limits are the finer guards meant to catch abuse first; the billing cap
   is the last-resort backstop if those are bypassed.
