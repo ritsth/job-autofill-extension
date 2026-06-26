@@ -96,8 +96,9 @@ Caveats:
   `token === PROXY_TOKEN`.
 - **Ship it:** redeploy the proxy (see P1 command — it folds these in).
 
-### P1 — Deploy hardening — ⏳ TODO (you run; see `DEPLOYMENT.md`)
-- Bound the blast radius and move the admin token to Secret Manager + rotate it:
+### P1 — Deploy hardening — ✅ DONE (deployed; see `DEPLOYMENT.md`)
+- Blast radius bounded (`--max-instances`/`--concurrency`/`--timeout`) and the admin token
+  moved to Secret Manager + rotated. Command for reference:
 
 ```bash
 # fresh admin token in Secret Manager (rotates the exposed one)
@@ -114,9 +115,10 @@ gcloud run deploy job-autofill-proxy --source server --region us-central1 \
   --set-secrets "PROXY_TOKEN=proxy-token:latest"
 ```
 
-### P2 — Hard kill-switch (denial-of-wallet backstop) — ⏳ TODO (you run)
-A budget alert only *notifies*. This auto-**disables billing** at a hard cap, the only true
-backstop. Budget → Pub/Sub → a tiny function that detaches the billing account.
+### P2 — Hard kill-switch (denial-of-wallet backstop) — ✅ DONE (deployed)
+The kill-switch function is deployed and the **$50 budget** is connected to its Pub/Sub
+topic, so billing auto-**disables** at the hard cap (not just an alert). Setup for
+reference: Budget → Pub/Sub → a function that detaches the billing account.
 
 ```bash
 PROJECT_ID=chrome-extension-499519
