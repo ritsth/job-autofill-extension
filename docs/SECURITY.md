@@ -78,34 +78,27 @@ gcloud pubsub topics create billing-killswitch
 #   "Connect a Pub/Sub topic to this budget" → projects/$PROJECT_ID/topics/billing-killswitch
 ```
 
-Function (`infra/billing-killswitch/index.js` — deploy with the snippet below):
-
-```js
-const { CloudBillingClient } = require('@google-cloud/billing');
-const billing = new CloudBillingClient();
-exports.killSwitch = async (event) => {
-  const data = JSON.parse(Buffer.from(event.data, 'base64').toString());
-  if ((data.costAmount ?? 0) <= (data.budgetAmount ?? Infinity)) return; // under budget
-  const project = `projects/${process.env.GCLOUD_PROJECT}`;
-  const [info] = await billing.getProjectBillingInfo({ name: project });
-  if (!info.billingEnabled) return;
-  await billing.updateProjectBillingInfo({
-    name: project,
-    projectBillingInfo: { billingAccountName: '' }, // detach = stop all spend
-  });
-  console.log('Billing disabled for', project);
-};
-```
+The function lives in [`infra/billing-killswitch/`](../infra/billing-killswitch/) (deployable
+as-is). Deploy it (2nd-gen, Pub/Sub-triggered) and grant its SA permission to change billing:
 
 ```bash
-gcloud functions deploy billing-killswitch --runtime nodejs20 --trigger-topic billing-killswitch \
-  --entry-point killSwitch --region us-central1 --set-env-vars GCLOUD_PROJECT=$PROJECT_ID
-# Grant the function's SA permission to change billing (Billing Account Administrator on the
-# billing account). Detaching billing stops Vertex/Cloud Run spend immediately.
+gcloud functions deploy billing-killswitch --gen2 --region us-central1 \
+  --runtime nodejs20 --source infra/billing-killswitch --entry-point killSwitch \
+  --trigger-topic billing-killswitch --set-env-vars GCLOUD_PROJECT=$PROJECT_ID
+
+# The function's runtime SA must be Billing Account Administrator on the billing account
+# (detaching billing is a billing-account operation, not a project one):
+BILLING_ACCT="$(gcloud billing projects describe $PROJECT_ID --format='value(billingAccountName)')"
+RUNTIME_SA="$(gcloud functions describe billing-killswitch --gen2 --region us-central1 \
+  --format='value(serviceConfig.serviceAccountEmail)')"
+gcloud billing accounts add-iam-policy-binding "${BILLING_ACCT#billingAccounts/}" \
+  --member="serviceAccount:$RUNTIME_SA" --role="roles/billing.admin"
 ```
 
 > Trade-off: detaching billing takes the whole project offline (including the proxy). That
-> is the point — it caps the damage. Re-attach billing to bring it back.
+> is the point — it caps the damage. Re-attach billing in the console to bring it back.
+> **Test safely** by publishing an *under-budget* payload first (see runbook), which is a
+> no-op — never test with an over-budget payload unless you mean to disable billing.
 
 ### P3 — Defense in depth — ⏳ TODO (mostly optional)
 - **Alerting:** log-based metric + alert on 429 spikes and **new-`sub` velocity** (many new

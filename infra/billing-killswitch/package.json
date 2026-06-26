@@ -1,0 +1,10 @@
+{
+  "name": "billing-killswitch",
+  "version": "1.0.0",
+  "description": "Detaches billing when a Cloud Billing budget is exceeded (denial-of-wallet backstop).",
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/billing": "^4.2.0",
+    "@google-cloud/functions-framework": "^3.4.0"
+  }
+}
