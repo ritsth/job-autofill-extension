@@ -48,6 +48,17 @@ depends on the AI provider you select in Options:
 The extension does **not** transmit your data anywhere except the AI provider you
 choose, and only for the purpose of generating the text you requested.
 
+### How each provider uses your data
+
+- **Managed proxy (Vertex AI):** Google does **not** use data submitted to the Vertex AI
+  API to train or improve its foundation models.
+- **On-device model:** nothing is sent off your device, so there is nothing to be used.
+- **Bring-your-own Gemini key:** how Google may use this data depends on **your** key's
+  tier. Google may use **free-tier** Gemini API (AI Studio) prompts and responses to
+  improve its products; **paid-tier** usage is excluded. If this matters to you, use a
+  paid-tier key, the on-device model, or the managed proxy. See Google's
+  [Gemini API terms](https://ai.google.dev/gemini-api/terms) for the authoritative detail.
+
 ## Google sign-in
 
 Sign-in is optional and only used for the **Managed proxy** provider. It uses Chrome's
