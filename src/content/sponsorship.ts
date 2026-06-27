@@ -130,6 +130,32 @@ function stripQuestions(text: string): string {
     .join(' ');
 }
 
+/**
+ * Reads a *labelled* experience field (common on Workday / ATS career pages),
+ * where the answer is a label→value pair rather than inline prose — e.g.
+ * "Required Years of Experience: None required" or "Years of Experience\n3-5".
+ * Handles the non-numeric answers ("None required", "Entry level") that the
+ * numeric prose matcher in extractExperience can't see. Returns a value sized to
+ * read well after the badge's " required" / " preferred" suffix.
+ */
+function labeledExperience(lower: string, kind: 'required' | 'preferred'): string | null {
+  const label =
+    kind === 'required'
+      ? '(?:required\\s+)?years?\\s+of\\s+experience|experience\\s+required|minimum\\s+(?:years?\\s+of\\s+)?experience'
+      : 'preferred\\s+years?\\s+of\\s+experience|years?\\s+of\\s+experience\\s+preferred';
+  // The value can sit after a colon or on the next line, so \s* spans the newline.
+  const m = lower.match(new RegExp(`(?:${label})\\s*[:\\-]?\\s*([^\\n.]{1,40})`));
+  const v = m?.[1]?.trim();
+  if (!v) return null;
+  if (/^(none|no)\b/.test(v) || /\bno experience\b/.test(v) || /\bnot? (required|necessary)\b/.test(v)) {
+    return 'None';
+  }
+  if (/entry[- ]level|new grad/.test(v)) return 'New grad';
+  const num = v.match(/(\d{1,2})\s*\+?\s*(?:to|–|—|-)?\s*(\d{1,2})?/);
+  if (num) return num[2] && num[2] !== num[1] ? `${num[1]}–${num[2]} yrs` : `${num[1]}+ yrs`;
+  return null;
+}
+
 /** Pulls required / preferred years-of-experience figures from the posting. */
 function extractExperience(text: string): { required: string | null; preferred: string | null } {
   const lower = text.toLowerCase();
@@ -147,12 +173,20 @@ function extractExperience(text: string): { required: string | null; preferred: 
     return before ? fmt(before) : null;
   };
 
-  const preferred = findNear('preferred|a plus|nice to have|ideally|desirable');
-  let required = findNear('minimum|min\\.?|at least|required|must have|or more');
+  // Labelled fields win — they're the explicit answer and catch non-numeric values.
+  const preferred =
+    labeledExperience(lower, 'preferred') ?? findNear('preferred|a plus|nice to have|ideally|desirable');
+  let required =
+    labeledExperience(lower, 'required') ?? findNear('minimum|min\\.?|at least|required|must have|or more');
   // Fall back to any "<n> years of experience" mention as the baseline requirement.
   if (!required) {
     const generic = lower.match(new RegExp(`${YR}\\s+(?:of\\s+)?(?:experience|exp\\b|relevant|professional|industry)`));
     if (generic) required = fmt(generic);
+  }
+  // Last resort: explicit "no experience" / entry-level phrasing with no number.
+  if (!required) {
+    if (/\bno(?:\s+prior)?\s+experience\s+(?:is\s+)?(?:required|necessary|needed)\b/.test(lower)) required = 'None';
+    else if (/\b(entry[- ]level|new grad(?:uate)?)\b/.test(lower)) required = 'New grad';
   }
   return { required, preferred };
 }
@@ -203,7 +237,79 @@ function autoExpandDescription(root: ParentNode): void {
   }
 }
 
+// Wrappers that usually hold the job description on ATS / career pages whose host
+// isn't a known SPA board. Class names on these boards are often build-hashed, so
+// we lean on stable data-* hooks and semantic tags. Tried in priority order (most
+// specific first); the first substantial match wins, which keeps nav, footers,
+// cookie banners, and "related jobs" out of the eligibility read.
+const CONTENT_SELECTORS = [
+  '[data-automation-id="jobPostingDescription"]', // Workday
+  '[data-qa="job-description"]', // Lever (newer markup)
+  '.job__description', // Greenhouse
+  '#job_description', // Greenhouse (older)
+  '.posting', // Lever
+  'main',
+  'article',
+  '[role="main"]',
+];
+
+/** The most likely job-description block on a generic page, or null to fall back. */
+function pickMainContent(): string | null {
+  for (const sel of CONTENT_SELECTORS) {
+    const el = document.querySelector<HTMLElement>(sel);
+    const t = el?.innerText?.trim();
+    if (t && t.length > 200) return t;
+  }
+  return null;
+}
+
+interface YcJob {
+  title?: string;
+  visa?: string;
+  minExperience?: string;
+  description?: string;
+}
+
+/**
+ * ycombinator.com renders a job from an Inertia `data-page` JSON blob and shows a
+ * feed of *other* roles on the same page, so reading innerText would blend other
+ * jobs' requirements into this one (and the React root has no <main> to scope to).
+ * Read THIS job's structured fields — visa + experience — straight from the page
+ * props and synthesize clean text the rules/AI can parse. `visa` and
+ * `minExperience` are tidy enums ("Will sponsor", "US citizen/visa only",
+ * "1+ years", "Any (new grads ok)"), so this is more reliable than prose anyway.
+ */
+function getYcJobText(): string | null {
+  if (!location.hostname.endsWith('ycombinator.com')) return null;
+  if (!/\/jobs\/[A-Za-z0-9]/.test(location.pathname)) return null; // job detail only
+  const raw = document.querySelector('[data-page]')?.getAttribute('data-page');
+  if (!raw) return null;
+  let job: YcJob | undefined;
+  try {
+    job = (JSON.parse(raw) as { props?: { job?: YcJob } })?.props?.job;
+  } catch {
+    return null;
+  }
+  if (!job || typeof job !== 'object') return null;
+
+  const parts: string[] = [];
+  if (job.title) parts.push(String(job.title));
+  const visa = String(job.visa || '').toLowerCase();
+  if (/will sponsor/.test(visa)) {
+    parts.push('Visa sponsorship is available for this role.');
+  } else if (/citizen|visa only/.test(visa)) {
+    parts.push('Open to U.S. citizens or current visa holders only — no visa sponsorship.');
+  }
+  // A labelled experience line so extractExperience reads it (handles "1+ years",
+  // "Any (new grads ok)" → New grad, etc.).
+  if (job.minExperience) parts.push(`Required years of experience: ${job.minExperience}.`);
+  if (job.description) parts.push(String(job.description));
+  return parts.length > 1 ? parts.join('\n\n') : null;
+}
+
 export function getScanText(): string {
+  const yc = getYcJobText();
+  if (yc) return yc.slice(0, MAX_CHARS);
   const host = location.hostname;
   const key = Object.keys(DETAIL_SELECTORS).find((d) => host.endsWith(d));
   if (key) {
@@ -214,6 +320,10 @@ export function getScanText(): string {
       if (t && t.length > 80) return t.slice(0, MAX_CHARS);
     }
   }
+  // Other sites (Greenhouse, Lever, Ashby, Workday, company pages): read just the
+  // description block, not the whole body, so the eligibility read isn't diluted.
+  const main = pickMainContent();
+  if (main) return main.slice(0, MAX_CHARS);
   // Badge text lives in a Shadow DOM, so innerText excludes it (no feedback loop).
   return (document.body?.innerText || '').slice(0, MAX_CHARS);
 }
@@ -333,13 +443,63 @@ function renderFrom(text: string): void {
   document.body.appendChild(renderBadge(analysis));
 }
 
+// Words that signal a work-eligibility requirement. Used to pull the relevant
+// sentences to the front of the AI's input when a posting is too long to send
+// whole, so the key wording isn't lost in the first-N-chars cut.
+const ELIGIBILITY_CUE =
+  /\b(sponsor|visa|h-?1b|citizen|nationalit|clearance|ts\/sci|secret|public trust|itar|export[- ]control|work auth|authoriz|eligib|permanent resident|green card|lawful permanent|right to work)\b/i;
+
+const AI_SCAN_BUDGET = 12_000;
+
+/**
+ * Prepares page text for the AI eligibility read: strips screening questions
+ * (which describe the application form, not the employer's stance — the same
+ * filter the rules pass uses) and, when the posting is longer than the model's
+ * input budget, leads with the eligibility-relevant sentences (plus a sentence of
+ * context each side) so the key wording is never sliced off, then backfills the
+ * remaining budget with the rest in original order. Short postings go as-is.
+ */
+function focusEligibilityText(raw: string, budget = AI_SCAN_BUDGET): string {
+  const cleaned = stripQuestions(raw);
+  if (cleaned.length <= budget) return cleaned;
+
+  const sentences = cleaned.split(/(?<=[.?!])\s+/);
+  const keep = new Set<number>();
+  sentences.forEach((s, i) => {
+    if (ELIGIBILITY_CUE.test(s)) {
+      keep.add(i - 1);
+      keep.add(i);
+      keep.add(i + 1);
+    }
+  });
+
+  let out = sentences.filter((_, i) => keep.has(i)).join(' ').slice(0, budget);
+  if (out.length < budget) {
+    const rest = sentences.filter((_, i) => !keep.has(i)).join(' ');
+    out += `\n\n${rest}`.slice(0, budget - out.length);
+  }
+  return out.slice(0, budget);
+}
+
 /** Sends the current posting to the AI and caches the structured verdict. */
 async function runAiCheck(): Promise<SponsorAnalysis> {
-  const text = getScanText();
-  const res = await sendToBackground<AIResult>({ type: 'AI_ANALYZE_JOB', text });
+  const raw = getScanText();
+  // Send a cleaned, eligibility-focused slice so the model judges the real
+  // requirements, not page noise. Cache by the RAW text hash so the key matches
+  // what renderFrom looks up (it hashes getScanText()).
+  const res = await sendToBackground<AIResult>({
+    type: 'AI_ANALYZE_JOB',
+    text: focusEligibilityText(raw),
+  });
   if (res.error) throw new Error(res.error);
   const analysis = parseEligibilityJson(res.text);
-  aiCache.set(hash(text), analysis);
+  // The AI's experience read is unreliable on labelled / structured fields
+  // ("Required Years of Experience: None required"). Fill any field it left blank
+  // from the local extractor, which reads those fields deterministically.
+  const local = extractExperience(normalizeText(raw));
+  analysis.experience.required ??= local.required;
+  analysis.experience.preferred ??= local.preferred;
+  aiCache.set(hash(raw), analysis);
   return analysis;
 }
 
