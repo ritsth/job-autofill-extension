@@ -2,6 +2,23 @@
 
 **[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/Little%20AI%20Helper/iibpijacaghdcckphindbaijjgcbaoll)**
 
+## Why I built this
+
+Applying to new-grad SWE roles means filling the *same* Greenhouse / Lever / Workday
+forms dozens of times, re-writing the same "why this company?" answers, and manually
+checking each posting for visa-sponsorship language before wasting time on a dead end.
+Little AI Helper collapses that loop: structured autofill for the boilerplate, an on-page
+AI draft for the open-ended questions, and an instant eligibility badge so I never apply
+somewhere that won't sponsor.
+
+![Little AI Helper demo](docs/demo.gif)
+
+| Eligibility badge on a live posting | Side panel actions |
+| --- | --- |
+| ![Eligibility badge](docs/shot-eligibility.png) | ![Side panel](docs/shot-sidepanel.png) |
+| **Autofilled fields + ✨ AI answers** | **Configurable AI provider (data stays local)** |
+| ![Autofill](docs/shot-autofill.png) | ![Settings](docs/shot-settings.png) |
+
 Auto-fills repetitive job applications on **Greenhouse**, **Lever**, and
 **Workday** from a structured profile, and uses AI to:
 
@@ -100,6 +117,30 @@ The `AIProvider` interface is the seam for **v2**: a Cloud Run "managed mode" pr
 becomes a new `ProxyProvider` with no other code changes. Workday support is a new
 adapter under `src/content/adapters/`.
 
+## Design decisions & tradeoffs
+
+A few choices I'd defend in a code review:
+
+- **Pluggable `AIProvider` interface over hardcoding Gemini.** The AI layer sits behind
+  one interface (`src/lib/ai/provider.ts`), so Gemini, the on-device model, and the Cloud
+  Run proxy are interchangeable. This is what let "managed mode" ship later as a *new
+  provider* with no changes to the call sites — and why adding Groq/OpenRouter is a small,
+  isolated task.
+- **Per-site adapters instead of one generic form-filler.** Greenhouse, Lever, and Workday
+  have very different DOMs, so each gets its own adapter under `src/content/adapters/`. A
+  generic heuristic filler would be flakier and harder to debug; isolated adapters mean a
+  Workday breakage can't regress Greenhouse.
+- **Vertex AI behind a Cloud Run proxy, not the AI Studio API directly.** The GCP $300
+  credit excludes AI Studio's Gemini API but covers Vertex — so the managed proxy relays to
+  Vertex to keep it free to run, and keeps any key *off* the client.
+- **Authenticated, metered proxy over a shared secret.** A published extension can't ship a
+  secret, and an open proxy would let one user drain the credit. Users sign in with Google
+  (`chrome.identity`) and the proxy meters each one against a per-user daily Firestore
+  quota — so the service is safe to publish.
+- **Client-side data by default (`chrome.storage.local`).** Resume and history are
+  sensitive; keeping them on-device with a bring-your-own-key default means there's nothing
+  on a server I run to leak, and the extension works with no backend at all.
+
 ## Roadmap
 
 Shipped since v1: Cloud Run → Vertex AI managed proxy with **Google sign-in +
@@ -127,3 +168,19 @@ The managed proxy is safe to publish because it **identifies and meters each use
 Publishing checklist for the proxy: set a stable extension `key` in `manifest.config.ts`,
 create a Chrome-Extension **OAuth client** bound to that ID and put it in `oauth2.client_id`,
 and deploy the server with `OAUTH_CLIENT_ID` + `DAILY_LIMIT`.
+
+## What I learned
+
+- **Designing for an unknown future provider paid off.** Committing to the `AIProvider`
+  seam early felt like over-engineering for a v1 — but it's exactly what made the managed
+  proxy and on-device fallback drop in cleanly later. Good seams beat premature features.
+- **The hard part of a Chrome extension is the DOM, not the AI.** Job boards use dynamic,
+  single-page navigation and inconsistent markup; most of the real engineering went into
+  robust per-site adapters and self-gating content scripts that stay correct as the user
+  clicks between postings — not into the model calls.
+- **Cost and abuse are design constraints, not afterthoughts.** "How do I publish this
+  without one user burning my GCP credit?" forced the auth + Firestore-quota design.
+  Thinking about metering up front changed the architecture.
+- **Manifest V3 permissions are a UX tradeoff.** The eligibility badge needs to run
+  everywhere, which triggers Chrome's "read and change your data on all websites" prompt —
+  so I made it self-gate and added a one-click toggle to keep user trust.
