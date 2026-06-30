@@ -159,7 +159,11 @@ function labeledExperience(lower: string, kind: 'required' | 'preferred'): strin
 /** Pulls required / preferred years-of-experience figures from the posting. */
 function extractExperience(text: string): { required: string | null; preferred: string | null } {
   const lower = text.toLowerCase();
-  const YR = '(\\d{1,2})\\s*\\+?\\s*(?:to|–|—|-)?\\s*(\\d{1,2})?\\+?\\s*years?';
+  // A 1–20 year count (with leading/trailing-digit guards so "50 years" doesn't
+  // match as "5"). This is only a cheap backstop now — the real guard against
+  // company-age numbers ("For more than 50 years, we have…") is that we only read
+  // a number when it sits next to a requirement cue (findNear) or a labelled field.
+  const YR = '(?<!\\d)(20|1[0-9]|[1-9])(?!\\d)\\s*\\+?\\s*(?:to|–|—|-)?\\s*(\\d{1,2})?\\+?\\s*years?';
   const fmt = (m: RegExpMatchArray): string =>
     m[2] && m[2] !== m[1] ? `${m[1]}–${m[2]} yrs` : `${m[1]}+ yrs`;
 
@@ -178,15 +182,18 @@ function extractExperience(text: string): { required: string | null; preferred: 
     labeledExperience(lower, 'preferred') ?? findNear('preferred|a plus|nice to have|ideally|desirable');
   let required =
     labeledExperience(lower, 'required') ?? findNear('minimum|min\\.?|at least|required|must have|or more');
-  // Fall back to any "<n> years of experience" mention as the baseline requirement.
+  // "N years of experience" — the common requirement phrasing, where the number is
+  // bound directly to "experience" (the anchoring cue). The YR cap (≤20) rejects
+  // company-age numbers like "50 years…"; "industry" is intentionally NOT a cue
+  // here because "30 years of industry experience" is usually a company boast.
   if (!required) {
-    const generic = lower.match(new RegExp(`${YR}\\s+(?:of\\s+)?(?:experience|exp\\b|relevant|professional|industry)`));
+    const generic = lower.match(new RegExp(`${YR}\\s+(?:of\\s+)?(?:experience|exp\\b|professional|relevant)\\b`));
     if (generic) required = fmt(generic);
   }
   // Last resort: explicit "no experience" / entry-level phrasing with no number.
   if (!required) {
     if (/\bno(?:\s+prior)?\s+experience\s+(?:is\s+)?(?:required|necessary|needed)\b/.test(lower)) required = 'None';
-    else if (/\b(entry[- ]level|new grad(?:uate)?)\b/.test(lower)) required = 'New grad';
+    else if (/\b(entry[- ]level|new grad(?:uate)?s?)\b/.test(lower)) required = 'New grad';
   }
   return { required, preferred };
 }
@@ -778,7 +785,7 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   if (exp.required) expParts.push(`${exp.required} required`);
   if (exp.preferred) expParts.push(`${exp.preferred} preferred`);
   card.appendChild(
-    el('div', 'exp', `Experience: ${expParts.length ? expParts.join(' · ') : 'Not mentioned'}`),
+    el('div', 'exp', `Experience: ${expParts.length ? expParts.join(' · ') : 'Not Found'}`),
   );
 
   // Rules result → offer an AI re-read; AI result → just tag it.
