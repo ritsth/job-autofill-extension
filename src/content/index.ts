@@ -3,6 +3,7 @@
 
 import { getProfile, onProfileChanged } from '../lib/profile';
 import { getSavedJobs, onSavedJobsChanged } from '../lib/savedJobs';
+import { hostMatches } from '../lib/host';
 import { applyStandardFills, findOpenQuestions, fillInput, type OpenQuestion } from './adapters/shared';
 import { greenhouseAdapter } from './adapters/greenhouse';
 import { leverAdapter } from './adapters/lever';
@@ -39,7 +40,7 @@ const JOB_HOSTS = [
   'linkedin.com', 'joinhandshake.com', 'greenhouse.io', 'lever.co',
   'myworkdayjobs.com', 'myworkday.com', 'myworkdaysite.com', 'ashbyhq.com', 'ycombinator.com',
 ];
-const answersCapture = isTopFrame || JOB_HOSTS.some((h) => location.hostname.endsWith(h));
+const answersCapture = isTopFrame || JOB_HOSTS.some((h) => hostMatches(location.hostname, h));
 
 chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse) => {
   if (msg.type === 'CAPTURE_JOB') {

@@ -10,6 +10,7 @@ import { parseEligibilityJson } from '../lib/jobEligibility';
 import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
 import { getProfile, saveProfile } from '../lib/profile';
+import { hostMatches } from '../lib/host';
 
 export type Verdict = 'yes' | 'no' | 'caution' | 'unknown';
 
@@ -252,7 +253,7 @@ function isExpandLabel(raw: string): boolean {
 
 /** Clicks any collapsed-description expander within `root` (once per element). */
 function autoExpandDescription(root: ParentNode): void {
-  if (!EXPAND_HOSTS.some((d) => location.hostname.endsWith(d))) return;
+  if (!EXPAND_HOSTS.some((d) => hostMatches(location.hostname, d))) return;
   for (const el of root.querySelectorAll<HTMLElement>('button, a, [role="button"]')) {
     if (el.getAttribute('data-jaf-expanded')) continue;
     if (!isExpandLabel(el.textContent || '')) continue;
@@ -354,7 +355,7 @@ interface YcJob {
  * "1+ years", "Any (new grads ok)"), so this is more reliable than prose anyway.
  */
 function getYcJobText(): string | null {
-  if (!location.hostname.endsWith('ycombinator.com')) return null;
+  if (!hostMatches(location.hostname, 'ycombinator.com')) return null;
   if (!/\/jobs\/[A-Za-z0-9]/.test(location.pathname)) return null; // job detail only
   const raw = document.querySelector('[data-page]')?.getAttribute('data-page');
   if (!raw) return null;
@@ -385,7 +386,7 @@ export function getScanText(): string {
   const yc = getYcJobText();
   if (yc) return yc.slice(0, MAX_CHARS);
   const host = location.hostname;
-  const key = Object.keys(DETAIL_SELECTORS).find((d) => host.endsWith(d));
+  const key = Object.keys(DETAIL_SELECTORS).find((d) => hostMatches(host, d));
   if (key) {
     autoExpandDescription(document); // reveal collapsed descriptions before reading
     for (const sel of DETAIL_SELECTORS[key]) {
@@ -397,7 +398,7 @@ export function getScanText(): string {
     // known containers matched (an unfamiliar layout), try the layout-agnostic
     // title-anchored read before giving up. Still never fall back to the whole
     // page — that captures nav + profile rail + footer chrome.
-    if (location.hostname.endsWith('linkedin.com')) {
+    if (hostMatches(location.hostname, 'linkedin.com')) {
       // "About the job" section — survives LinkedIn's class-hashed layouts.
       const desc = linkedInDescription();
       if (desc.trim().length > 80) return desc.slice(0, MAX_CHARS);
@@ -669,7 +670,7 @@ function getJobMeta(): { company: string; role: string } {
   // one — on collections/split views it picks the left column's page heading
   // ("Top job picks for you"). Scope to the selected job's detail pane and read
   // its stable top-card containers instead.
-  if (location.hostname.endsWith('linkedin.com')) {
+  if (hostMatches(location.hostname, 'linkedin.com')) {
     const pick = (sels: string[]): string => {
       for (const sel of sels) {
         const t = clean(document.querySelector<HTMLElement>(sel)?.textContent || '');

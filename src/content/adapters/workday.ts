@@ -1,4 +1,5 @@
 import { type SiteAdapter, textOf, titleCaseSlug } from './types';
+import { hostMatches } from '../../lib/host';
 
 // Workday application forms (*.myworkdayjobs.com, *.myworkday.com). Unlike
 // Greenhouse/Lever, Workday identifies fields with data-automation-id attributes
@@ -11,9 +12,9 @@ export const workdayAdapter: SiteAdapter = {
   matches(url) {
     const h = url.hostname;
     return (
-      h.endsWith('myworkdayjobs.com') ||
-      h.endsWith('myworkday.com') ||
-      h.endsWith('myworkdaysite.com')
+      hostMatches(h, 'myworkdayjobs.com') ||
+      hostMatches(h, 'myworkday.com') ||
+      hostMatches(h, 'myworkdaysite.com')
     );
   },
 
