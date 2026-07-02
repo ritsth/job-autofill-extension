@@ -115,19 +115,29 @@ button:disabled { opacity: .6; cursor: default; }
 .jobusing.muted { color: var(--muted); }
 .jobclear { font-size: 11px; padding: 2px 4px; }
 .joblist { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
-.jobrow { display: flex; align-items: center; gap: 4px; border: 1px solid var(--border);
-  border-radius: 8px; padding: 2px 4px 2px 8px; background: #fff; }
-.jobrow.active { border-color: var(--primary); background: #f5f3ff; }
+.jobitem { border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.jobitem.active { border-color: var(--primary); background: #f5f3ff; }
+.jobrow { display: flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; }
 .jobpick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
   background: transparent; border: none; padding: 6px 0; font-size: 12px; text-align: left;
   color: var(--text); font-weight: 500; }
 .jobpick .dot { flex: none; width: 9px; height: 9px; border-radius: 50%;
   border: 1.5px solid var(--muted); box-sizing: border-box; }
-.jobrow.active .jobpick .dot { background: var(--primary); border-color: var(--primary); }
+.jobitem.active .jobpick .dot { background: var(--primary); border-color: var(--primary); }
 .jobname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jobtoggle { flex: none; background: transparent; border: none; color: var(--muted);
+  font-size: 12px; line-height: 1; padding: 4px 6px; cursor: pointer; }
+.jobtoggle:hover { color: var(--primary); }
 .jobdel { flex: none; background: transparent; border: none; color: var(--muted);
   font-size: 16px; line-height: 1; padding: 4px 6px; cursor: pointer; }
 .jobdel:hover { color: var(--danger); }
+
+/* Saved-job capture preview (verify the exact text fed to AI) */
+.jobpreview { padding: 6px 10px 10px; border-top: 1px solid var(--border); }
+.jobmeta { display: flex; gap: 12px; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.jobsnippet { max-height: 140px; overflow-y: auto; font-size: 11px; line-height: 1.5;
+  color: var(--text); background: #fff; border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px; white-space: pre-wrap; word-break: break-word; }
 
 .toggles-title { margin: 0 0 2px; font-size: 11px; font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: .04em; }

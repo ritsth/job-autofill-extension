@@ -204,8 +204,22 @@ function extractExperience(text: string): { required: string | null; preferred: 
 // boards check the posting you're viewing rather than the whole page.
 const DETAIL_SELECTORS: Record<string, string[]> = {
   'linkedin.com': [
+    // Description body first, so we read the posting — not the whole detail
+    // pane (feedback widget, "how you compare" upsell, applicant insights).
+    '.jobs-description-content__text',
+    '.jobs-box__html-content',
     '#job-details',
     '.jobs-description__content',
+    // Attribute-contains variants catch the SPA (in-app nav) render, whose
+    // wrapper classes differ from the server-rendered (post-reload) DOM.
+    '[class*="jobs-description__container"]',
+    '[class*="jobs-description"]',
+    // Detail-pane wrapper: on split/collections views this scopes to the
+    // SELECTED job (title + description) and keeps the left job-list, nav, and
+    // profile rail out when the description-specific classes above miss.
+    '.jobs-details__main-content',
+    '[class*="jobs-details__main-content"]',
+    '.jobs-search__job-details--wrapper',
     '.jobs-search__job-details',
     '.job-view-layout',
   ],
@@ -217,6 +231,9 @@ const MAX_CHARS = 200_000;
 // Boards that collapse the job description behind a "More"/"Show more" toggle
 // which only injects the full text into the DOM once expanded — so eligibility
 // wording stays hidden until then. We auto-click it (scoped to the detail pane).
+// NB: LinkedIn is intentionally NOT here — its full description is already in the
+// DOM (visually clamped, but innerText reads it whole), and auto-clicking its
+// "see more" toggles a company link that navigates the tab away from the posting.
 const EXPAND_HOSTS = ['joinhandshake.com'];
 const EXPAND_LABELS = new Set([
   'more',
@@ -268,6 +285,56 @@ function pickMainContent(): string | null {
     if (t && t.length > 200) return t;
   }
   return null;
+}
+
+/**
+ * Most robust LinkedIn description read: anchor on the "About the job" section
+ * heading. That label text is stable across ALL of LinkedIn's job layouts —
+ * including the newer ones whose CSS classes are hashed/obfuscated (`_243b3f31`
+ * …), where no semantic selector like `#job-details` or `.jobs-description`
+ * exists at all. Find the heading by its text, then return the smallest enclosing
+ * block that holds the description. Returns '' when there's no such section.
+ */
+function linkedInDescription(): string {
+  const heading = [...document.querySelectorAll<HTMLElement>('h1,h2,h3,[role="heading"]')].find(
+    (h) => /^(about the job|job description)\b/i.test((h.innerText || '').trim()),
+  );
+  if (!heading) return '';
+  // Climb to the first ancestor that also contains the description text (the
+  // section wrapping the heading), then stop — don't balloon into other sections.
+  let node: HTMLElement | null = heading.parentElement;
+  for (let i = 0; node && i < 6; i++, node = node.parentElement) {
+    const t = node.innerText?.trim() ?? '';
+    if (t.length >= 120 && t.length <= 20_000) return t.slice(0, MAX_CHARS);
+  }
+  return '';
+}
+
+/**
+ * Layout-agnostic LinkedIn read. LinkedIn's job surfaces (collections, /jobs/search,
+ * /jobs/view, email `/comm/` links, public pages) each use different container
+ * classes, so instead of chasing every one, anchor on the job-title element —
+ * matched loosely and case-insensitively by the stable "job-title" / "topcard"
+ * fragments — and climb to the smallest ancestor that also holds the description.
+ * Returns '' on a genuine miss so the caller can fail cleanly rather than grab
+ * page chrome. Runs per-frame, so with the all-frames CAPTURE_JOB responder the
+ * frame that actually holds the posting is the one that answers.
+ */
+function linkedInPostingText(): string {
+  const title = document.querySelector<HTMLElement>(
+    '[class*="top-card__job-title" i], [class*="topcard__title" i], h1[class*="job" i]',
+  );
+  if (!title) return '';
+  let best = '';
+  let node: HTMLElement | null = title;
+  for (let i = 0; node && i < 12; i++, node = node.parentElement) {
+    const t = node.innerText?.trim() ?? '';
+    // Keep the largest ancestor that's still posting-scale; once it balloons past
+    // ~40k it has folded in the left job-list / page chrome, so stop.
+    if (t.length >= 400 && t.length <= 40_000) best = t;
+    else if (t.length > 40_000) break;
+  }
+  return best.slice(0, MAX_CHARS);
 }
 
 interface YcJob {
@@ -325,6 +392,18 @@ export function getScanText(): string {
       const el = document.querySelector<HTMLElement>(sel);
       const t = el?.innerText?.trim();
       if (t && t.length > 80) return t.slice(0, MAX_CHARS);
+    }
+    // LinkedIn: the job detail pane is the ONLY valid source. If none of the
+    // known containers matched (an unfamiliar layout), try the layout-agnostic
+    // title-anchored read before giving up. Still never fall back to the whole
+    // page — that captures nav + profile rail + footer chrome.
+    if (location.hostname.endsWith('linkedin.com')) {
+      // "About the job" section — survives LinkedIn's class-hashed layouts.
+      const desc = linkedInDescription();
+      if (desc.trim().length > 80) return desc.slice(0, MAX_CHARS);
+      // Title-anchored posting block — classic top-card layouts.
+      const anchored = linkedInPostingText();
+      return anchored.trim().length > 80 ? anchored.slice(0, MAX_CHARS) : '';
     }
   }
   // Other sites (Greenhouse, Lever, Ashby, Workday, company pages): read just the
@@ -411,6 +490,30 @@ export function setBadgeFeatures(opts: { coverLetter: boolean; resume: boolean }
 export function captureJob(): { company: string; role: string; text: string } {
   const { company, role } = getJobMeta();
   return { company, role, text: getScanText() };
+}
+
+/**
+ * Like captureJob(), but waits for the posting to actually be readable first.
+ * On SPA job boards (LinkedIn, Handshake) an in-app navigation mounts the detail
+ * pane a beat before it paints — the containers exist in the DOM but their
+ * `innerText` is still empty, so a capture fired the instant the user clicks
+ * "Save" comes back blank (and a full page reload "fixes" it only because the
+ * server-rendered text is painted immediately). Poll getScanText() briefly until
+ * it returns a substantial description, then snapshot. Returns whatever we have
+ * once the deadline passes, so a genuinely empty page still fails cleanly.
+ */
+export async function captureJobWhenReady(
+  timeoutMs = 8000,
+  minChars = 400,
+): Promise<{ company: string; role: string; text: string }> {
+  const deadline = Date.now() + timeoutMs;
+  let text = getScanText();
+  while (text.trim().length < minChars && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    text = getScanText();
+  }
+  const { company, role } = getJobMeta();
+  return { company, role, text };
 }
 
 /** Forced scan (used on load / enable): renders regardless of the hash gate. */
@@ -560,6 +663,48 @@ function el(tag: string, cls: string, text: string): HTMLElement {
  */
 function getJobMeta(): { company: string; role: string } {
   const clean = (s: string): string => s.replace(/\s+/g, ' ').trim().slice(0, 120);
+
+  // LinkedIn renders several headings across the page (left job-list, feedback
+  // widgets, "how you compare" upsell), so a generic "first h1" grabs the wrong
+  // one — on collections/split views it picks the left column's page heading
+  // ("Top job picks for you"). Scope to the selected job's detail pane and read
+  // its stable top-card containers instead.
+  if (location.hostname.endsWith('linkedin.com')) {
+    const pick = (sels: string[]): string => {
+      for (const sel of sels) {
+        const t = clean(document.querySelector<HTMLElement>(sel)?.textContent || '');
+        if (t) return t;
+      }
+      return '';
+    };
+    // Most reliable + fully layout-independent: LinkedIn sets document.title to
+    // "Role | Company | LinkedIn" (sometimes "(N) Role | Company | LinkedIn") on
+    // every job surface, hashed-class layouts included.
+    let role = '';
+    let company = '';
+    const bits = document.title
+      .replace(/^\(\d+\)\s*/, '')
+      .split('|')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (bits.length >= 3 && /linkedin/i.test(bits[bits.length - 1])) {
+      role = clean(bits[0]);
+      company = clean(bits[1]);
+    }
+    // DOM fallback (older top-card markup) if the title wasn't a job title.
+    if (!role) role = pick(['[class*="top-card__job-title" i]', '[class*="topcard__title" i]']);
+    if (!company) {
+      company = pick([
+        '[class*="top-card__company-name" i] a',
+        '[class*="top-card__company-name" i]',
+        '[class*="topcard__org-name" i]',
+      ]);
+    }
+    // Never fall through to the generic page reader on LinkedIn — it grabs nav
+    // headings (e.g. "0 notifications"). Empty meta is fine; the save is gated on
+    // getScanText() finding real detail text anyway.
+    return { company, role };
+  }
 
   // Role: the job-title heading in the detail pane.
   const titleEl =

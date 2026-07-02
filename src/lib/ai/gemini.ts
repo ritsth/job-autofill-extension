@@ -34,14 +34,16 @@ export class GeminiProvider implements AIProvider {
         temperature: 0.7,
         maxOutputTokens: maxOutputTokens ?? 1024,
         // Gemini 2.5 models default thinking ON over REST, which can eat the
-        // whole output budget and truncate the answer. Pin the budget (dynamic
-        // when asked, off otherwise). thinkingConfig only applies to 2.5 models.
-        // 2.5 Pro can't disable thinking (budget 0 is rejected), so it always
-        // gets a dynamic budget.
+        // whole output budget and truncate the answer. Pin the budget: dynamic
+        // (-1) when the caller opts in; otherwise off (0). thinkingConfig only
+        // applies to 2.5 models. 2.5 Pro can't disable thinking (budget 0 is
+        // rejected), so give it a small BOUNDED budget (1024) rather than the
+        // dynamic -1, which would otherwise consume the output and truncate the
+        // reply mid-sentence.
         ...(modelId.includes('2.5')
           ? {
               thinkingConfig: {
-                thinkingBudget: thinking || modelId.includes('2.5-pro') ? -1 : 0,
+                thinkingBudget: thinking ? -1 : modelId.includes('2.5-pro') ? 1024 : 0,
               },
             }
           : {}),

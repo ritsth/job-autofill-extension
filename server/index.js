@@ -176,9 +176,10 @@ async function generate({ system, prompt, maxOutputTokens, json, thinking, model
       // Thinking on (dynamic budget) only when asked — better open-ended
       // answers. Off by default: 2.5 Flash otherwise spends the output budget
       // on hidden reasoning and truncates/empties short requests. 2.5 Pro can't
-      // disable thinking (budget 0 → 400 INVALID_ARGUMENT), so always give it a
-      // dynamic budget.
-      thinkingConfig: { thinkingBudget: thinking || modelId.includes('2.5-pro') ? -1 : 0 },
+      // disable thinking (budget 0 → 400 INVALID_ARGUMENT), so give it a small
+      // BOUNDED budget (1024) instead of dynamic -1 — dynamic thinking would
+      // otherwise eat the output budget and truncate the answer mid-sentence.
+      thinkingConfig: { thinkingBudget: thinking ? -1 : modelId.includes('2.5-pro') ? 1024 : 0 },
       // JSON mode for structured extraction (e.g. resume parsing) so the model
       // returns parseable JSON with no markdown fences or prose.
       ...(json ? { responseMimeType: 'application/json' } : {}),

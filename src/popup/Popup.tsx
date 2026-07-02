@@ -14,6 +14,18 @@ import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
 import { signIn, reconcileAuthUser, onAuthChanged, type AuthUser } from '../lib/auth';
 
+/** Compact "saved N ago" label for a saved job's timestamp. */
+function timeAgo(ts: number): string {
+  const secs = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (secs < 60) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hr ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
 export function Popup() {
   const [tabId, setTabId] = useState<number | null>(null);
   const [page, setPage] = useState<PageInfo | null>(null);
@@ -26,13 +38,16 @@ export function Popup() {
   const [fillMsg, setFillMsg] = useState('');
   const [letter, setLetter] = useState('');
   const [resume, setResume] = useState('');
-  const [busy, setBusy] = useState<'' | 'fill' | 'letter' | 'resume'>('');
+  const [busy, setBusy] = useState<'' | 'fill' | 'letter' | 'resume' | 'save'>('');
   const [error, setError] = useState('');
   const [scanEnabled, setScanEnabled] = useState(true);
   const [coverLetterEnabled, setCoverLetterEnabled] = useState(true);
   const [resumeEnabled, setResumeEnabled] = useState(true);
   const [jobs, setJobs] = useState<SavedJob[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  // Which saved-job rows show their capture preview. Collapsed by default; the
+  // user expands a row (chevron) to verify what text was captured for the AI.
+  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
   // Editable company/role, shared by the cover letter + resume (pre-filled from
   // page detection).
   const [company, setCompany] = useState('');
@@ -47,6 +62,15 @@ export function Popup() {
     setLocal(value);
     const profile = await getProfile();
     await saveProfile({ ...profile, [key]: value });
+  }
+
+  function toggleJobExpanded(id: string) {
+    setExpandedJobs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   // Re-read the active tab's job info. Runs on mount and whenever the user
@@ -187,6 +211,7 @@ export function Popup() {
   async function onSaveJob() {
     if (!tabId) return;
     setError('');
+    setBusy('save');
     try {
       const cap = await sendToTab<CapturedJob>(tabId, { type: 'CAPTURE_JOB' });
       if (!cap.text || cap.text.trim().length < 40) {
@@ -201,6 +226,8 @@ export function Popup() {
       });
     } catch {
       setError('Could not read this page. Reload it and try again.');
+    } finally {
+      setBusy('');
     }
   }
 
@@ -270,15 +297,11 @@ export function Popup() {
 
       <div className="block savedjob">
         <button className="full" onClick={onSaveJob} disabled={busy !== '' || !tabId}>
-          💾 Save this job
+          {busy === 'save' ? 'Saving…' : '💾 Save this job'}
         </button>
         {activeJob ? (
           <div className="jobusing">
-            Using saved job:{' '}
-            <strong>
-              {activeJob.role || 'saved posting'}
-              {activeJob.company ? ` · ${activeJob.company}` : ''}
-            </strong>{' '}
+            Using a saved job for AI answers &amp; documents.{' '}
             <button className="ghost jobclear" onClick={() => setActiveJob(null)}>
               use current page
             </button>
@@ -292,24 +315,48 @@ export function Popup() {
         )}
         {jobs.length > 0 && (
           <div className="joblist">
-            {jobs.map((j) => (
-              <div key={j.id} className={`jobrow${j.id === activeJobId ? ' active' : ''}`}>
-                <button
-                  className="jobpick"
-                  title="Use this posting as the context for AI answers & documents"
-                  onClick={() => setActiveJob(j.id === activeJobId ? null : j.id)}
-                >
-                  <span className="dot" />
-                  <span className="jobname">
-                    {j.role || 'Saved job'}
-                    {j.company ? ` · ${j.company}` : ''}
-                  </span>
-                </button>
-                <button className="jobdel" title="Delete" onClick={() => deleteJob(j.id)}>
-                  ×
-                </button>
-              </div>
-            ))}
+            {jobs.map((j) => {
+              const expanded = expandedJobs.has(j.id);
+              return (
+                <div key={j.id} className={`jobitem${j.id === activeJobId ? ' active' : ''}`}>
+                  <div className="jobrow">
+                    <button
+                      className="jobpick"
+                      title="Use this posting as the context for AI answers & documents"
+                      onClick={() => setActiveJob(j.id === activeJobId ? null : j.id)}
+                    >
+                      <span className="dot" />
+                      <span className="jobname">
+                        {j.role || 'Saved job'}
+                        {j.company ? ` · ${j.company}` : ''}
+                      </span>
+                    </button>
+                    <button
+                      className="jobtoggle"
+                      title={expanded ? 'Hide what was saved' : 'Show what was saved'}
+                      aria-expanded={expanded}
+                      onClick={() => toggleJobExpanded(j.id)}
+                    >
+                      {expanded ? '▴' : '▾'}
+                    </button>
+                    <button className="jobdel" title="Delete" onClick={() => deleteJob(j.id)}>
+                      ×
+                    </button>
+                  </div>
+                  {expanded && (
+                    <div className="jobpreview">
+                      <div className="jobmeta">
+                        <span>{j.text.length.toLocaleString()} chars</span>
+                        <span>saved {timeAgo(j.savedAt)}</span>
+                      </div>
+                      <div className="jobsnippet">
+                        {j.text.trim() || '(no text captured)'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

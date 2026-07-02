@@ -32,8 +32,11 @@ export function buildAnswerPrompt(
     // 2.5's dynamic "thinking" can consume the entire output budget and truncate
     // the visible answer to a word or two ("Fellow"). Disabling it gives the full
     // budget to the answer — quality is unaffected for short open-ended replies.
+    // 2.5 Pro can't fully disable thinking (it gets a bounded 1024 budget), so
+    // this budget must cover that reasoning PLUS a full answer — hence 4096, which
+    // also matches the server's MAX_OUTPUT_TOKENS clamp.
     thinking: false,
-    maxOutputTokens: 2048,
+    maxOutputTokens: 4096,
     prompt:
       `APPLICANT PROFILE:\n${context}\n\n` +
       job +
