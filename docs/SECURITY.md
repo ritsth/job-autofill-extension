@@ -101,12 +101,14 @@ Caveats:
   moved to Secret Manager + rotated. Command for reference:
 
 ```bash
+PROJECT_NUMBER="$(gcloud projects describe "$(gcloud config get-value project)" --format='value(projectNumber)')"
+
 # fresh admin token in Secret Manager (rotates the exposed one)
 printf '%s' "$(openssl rand -hex 24)" | \
   gcloud secrets create proxy-token --data-file=- 2>/dev/null || \
   printf '%s' "$(openssl rand -hex 24)" | gcloud secrets versions add proxy-token --data-file=-
 gcloud secrets add-iam-policy-binding proxy-token \
-  --member="serviceAccount:1074158639574-compute@developer.gserviceaccount.com" \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 gcloud run deploy job-autofill-proxy --source server --region us-central1 \
   --max-instances=3 --concurrency=40 --timeout=60 \
@@ -121,7 +123,7 @@ topic, so billing auto-**disables** at the hard cap (not just an alert). Setup f
 reference: Budget → Pub/Sub → a function that detaches the billing account.
 
 ```bash
-PROJECT_ID=chrome-extension-499519
+PROJECT_ID="$(gcloud config get-value project)"
 gcloud services enable cloudbilling.googleapis.com cloudfunctions.googleapis.com \
   pubsub.googleapis.com cloudbuild.googleapis.com run.googleapis.com
 gcloud pubsub topics create billing-killswitch
