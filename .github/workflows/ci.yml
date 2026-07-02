@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref (e.g. a new push to a PR branch).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  extension:
+    name: Lint · typecheck · test · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      # On pushes to main, also produce the Web Store zip and keep it as a
+      # downloadable artifact for the release.
+      - name: Package Web Store zip
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: npm run package
+
+      - name: Upload Web Store zip
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-store-package
+          path: web-store-package.zip
+          if-no-files-found: error
+
+  server:
+    name: Server syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # The proxy is a single ESM file with no build step — a syntax check is the
+      # right gate (does not execute or need dependencies installed).
+      - run: node --check server/index.js
