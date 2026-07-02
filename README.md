@@ -184,3 +184,11 @@ and deploy the server with `OAUTH_CLIENT_ID` + `DAILY_LIMIT`.
 - **Manifest V3 permissions are a UX tradeoff.** The eligibility badge needs to run
   everywhere, which triggers Chrome's "read and change your data on all websites" prompt —
   so I made it self-gate and added a one-click toggle to keep user trust.
+
+## Contributing
+
+Issues and pull requests are welcome — see the [good first issues](https://github.com/ritsth/job-autofill-extension/labels/good%20first%20issue) to get started. Before opening a PR, run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`.
+
+## License
+
+Released under the [MIT License](LICENSE).

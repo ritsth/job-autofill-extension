@@ -8,6 +8,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview",
     "package": "CRX_NO_KEY=1 npm run build && cd dist && zip -r -FS ../web-store-package.zip . -x '.DS_Store' && cd .."
   },
@@ -17,14 +20,20 @@
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.28",
+    "@eslint/js": "^9.39.4",
     "@types/chrome": "^0.0.270",
     "@types/node": "^22.19.21",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^15.15.0",
     "mammoth": "^1.8.0",
     "pdfjs-dist": "^4.7.76",
     "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "typescript-eslint": "^8.62.1",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.9"
   }
 }
