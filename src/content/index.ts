@@ -3,6 +3,7 @@
 
 import { getProfile, onProfileChanged } from '../lib/profile';
 import { getSavedJobs, onSavedJobsChanged } from '../lib/savedJobs';
+import { hostMatches } from '../lib/host';
 import { applyStandardFills, findOpenQuestions, fillInput, type OpenQuestion } from './adapters/shared';
 import { greenhouseAdapter } from './adapters/greenhouse';
 import { leverAdapter } from './adapters/lever';
@@ -16,7 +17,7 @@ import {
   setBadgeFeatures,
   setBadgeIntroSeen,
   getScanText,
-  captureJob,
+  captureJobWhenReady,
 } from './sponsorship';
 
 const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, workdayAdapter];
@@ -26,23 +27,37 @@ const BUTTON_CLASS = 'jaf-ai-btn';
 const MARK_ATTR = 'data-jaf-bound';
 
 // --- Messaging from popup ---
-// Only the top frame answers the popup. With all_frames enabled, registering this
-// in every sub-frame would make several frames race to sendResponse (the iframe
-// could win and shadow the real page), so the listener is top-frame-only.
 const isTopFrame = window.top === window.self;
-if (isTopFrame)
-  chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse) => {
+
+// "Save this job" must read the frame that actually holds the posting. On some
+// SPA / prerendered LinkedIn views the visible job renders in a SUB-FRAME, not the
+// top document, so a top-frame-only capture reads an empty page. So CAPTURE_JOB is
+// answered by the top frame AND any job-board sub-frame: empty frames poll the full
+// timeout and reply last, so whichever frame really holds the posting wins the
+// sendMessage race. Ad / tracker sub-frames are excluded by host so they can't
+// answer with their own body text. PAGE_INFO / PAGE_FILL stay top-frame only.
+const JOB_HOSTS = [
+  'linkedin.com', 'joinhandshake.com', 'greenhouse.io', 'lever.co',
+  'myworkdayjobs.com', 'myworkday.com', 'myworkdaysite.com', 'ashbyhq.com', 'ycombinator.com',
+];
+const answersCapture = isTopFrame || JOB_HOSTS.some((h) => hostMatches(location.hostname, h));
+
+chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse) => {
+  if (msg.type === 'CAPTURE_JOB') {
+    if (!answersCapture) return false;
+    // Async: also waits a beat for SPA detail panes to paint before snapshotting.
+    captureJobWhenReady().then(({ company, role, text }) => {
+      const captured: CapturedJob = { company, role, text, url: location.href, title: document.title };
+      sendResponse(captured);
+    });
+    return true;
+  }
+  if (!isTopFrame) return false;
   if (msg.type === 'PAGE_INFO') {
     const info: PageInfo = adapter
       ? { supported: true, site: adapter.id, ...adapter.getPageInfo(), jobText: getScanText() }
       : { supported: false, site: null, company: '', role: '', jobText: '' };
     sendResponse(info);
-    return false;
-  }
-  if (msg.type === 'CAPTURE_JOB') {
-    const { company, role, text } = captureJob();
-    const captured: CapturedJob = { company, role, text, url: location.href, title: document.title };
-    sendResponse(captured);
     return false;
   }
   if (msg.type === 'PAGE_FILL') {

@@ -1,4 +1,5 @@
 import { type SiteAdapter, textOf, titleCaseSlug } from './types';
+import { hostMatches } from '../../lib/host';
 
 // Handles both the classic boards.greenhouse.io and the newer
 // job-boards.greenhouse.io application pages.
@@ -6,7 +7,7 @@ export const greenhouseAdapter: SiteAdapter = {
   id: 'greenhouse',
 
   matches(url) {
-    return url.hostname.endsWith('greenhouse.io');
+    return hostMatches(url.hostname, 'greenhouse.io');
   },
 
   getPageInfo() {
