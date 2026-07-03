@@ -110,6 +110,17 @@ npm run build        # full production build
    before it can merge. A maintainer will review; please respond to feedback by pushing
    follow-up commits to the same branch.
 
+## Releases (maintainers)
+
+Releases are manual and follow the version in `package.json`:
+
+1. Bump `version` in `package.json` on `main` (via PR like any other change).
+2. Build the store package: `npm run package` (produces `web-store-package.zip`).
+3. Tag and publish: `git tag vX.Y.Z && git push origin vX.Y.Z`, then create a
+   GitHub Release for the tag attaching the zip
+   (`gh release create vX.Y.Z web-store-package.zip --title "vX.Y.Z" --notes "..."`),
+   and upload the same zip to the Chrome Web Store dashboard.
+
 ## Questions
 
 Open an issue or start a discussion. Thanks for helping make the project better!
