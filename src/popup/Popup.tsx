@@ -246,7 +246,12 @@ export function Popup() {
           <h1>Little AI Helper</h1>
           <p className="tagline">Autofill · cover letters · eligibility</p>
         </div>
-        <button className="ghost icon-btn" title="Refresh for the current tab" onClick={() => refresh()}>
+        <button
+          className="ghost icon-btn"
+          title="Refresh for the current tab"
+          aria-label="Refresh for the current tab"
+          onClick={() => refresh()}
+        >
           ↻
         </button>
       </header>
@@ -288,14 +293,24 @@ export function Popup() {
       )}
 
       <div className="block">
-        <button className="primary" disabled={!page?.supported || busy !== ''} onClick={onFill}>
+        <button
+          className="primary"
+          disabled={!page?.supported || busy !== ''}
+          onClick={onFill}
+          aria-label={busy === 'fill' ? 'Filling page' : 'Fill this page with profile data'}
+        >
           {busy === 'fill' ? 'Filling…' : 'Fill this page'}
         </button>
         {fillMsg && <div className="status">{fillMsg}</div>}
       </div>
 
       <div className="block savedjob">
-        <button className="full" onClick={onSaveJob} disabled={busy !== '' || !tabId}>
+        <button
+          className="full"
+          onClick={onSaveJob}
+          disabled={busy !== '' || !tabId}
+          aria-label={busy === 'save' ? 'Saving job details' : 'Save this job'}
+        >
           {busy === 'save' ? 'Saving…' : '💾 Save this job'}
         </button>
         {activeJob ? (
@@ -323,6 +338,7 @@ export function Popup() {
                       className="jobpick"
                       title="Use this posting as the context for AI answers & documents"
                       onClick={() => setActiveJob(j.id === activeJobId ? null : j.id)}
+                      aria-label={`${j.id === activeJobId ? 'Stop using' : 'Use'} ${j.role || 'saved job'}${j.company ? ` at ${j.company}` : ''} as AI context`}
                     >
                       <span className="dot" />
                       <span className="jobname">
@@ -334,11 +350,17 @@ export function Popup() {
                       className="jobtoggle"
                       title={expanded ? 'Hide what was saved' : 'Show what was saved'}
                       aria-expanded={expanded}
+                      aria-label={expanded ? `Hide saved details for ${j.role || 'job'}${j.company ? ` at ${j.company}` : ''}` : `Show saved details for ${j.role || 'job'}${j.company ? ` at ${j.company}` : ''}`}
                       onClick={() => toggleJobExpanded(j.id)}
                     >
                       {expanded ? '▴' : '▾'}
                     </button>
-                    <button className="jobdel" title="Delete" onClick={() => deleteJob(j.id)}>
+                    <button
+                      className="jobdel"
+                      title="Delete"
+                      aria-label={`Delete ${j.role || 'saved job'}${j.company ? ` at ${j.company}` : ''}`}
+                      onClick={() => deleteJob(j.id)}
+                    >
                       ×
                     </button>
                   </div>
@@ -376,7 +398,12 @@ export function Popup() {
           />
         </div>
 
-        <button className="primary" disabled={busy !== ''} onClick={onCoverLetter}>
+        <button
+          className="primary"
+          disabled={busy !== ''}
+          onClick={onCoverLetter}
+          aria-label={busy === 'letter' ? 'Generating cover letter' : 'Generate cover letter'}
+        >
           {busy === 'letter' ? 'Generating…' : 'Generate cover letter'}
         </button>
         {letter && (
@@ -401,6 +428,7 @@ export function Popup() {
           style={{ marginTop: 8 }}
           disabled={busy !== ''}
           onClick={onResume}
+          aria-label={busy === 'resume' ? 'Tailoring resume' : 'Generate tailored resume'}
         >
           {busy === 'resume' ? 'Tailoring…' : 'Generate tailored resume'}
         </button>
