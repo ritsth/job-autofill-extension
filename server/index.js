@@ -49,6 +49,12 @@ const GLOBAL_DAILY_LIMIT = Number(process.env.GLOBAL_DAILY_LIMIT || 2000);
 // 1 MB body cap) so one call can't be made arbitrarily expensive.
 const MAX_OUTPUT_TOKENS = Number(process.env.MAX_OUTPUT_TOKENS || 4096);
 const MAX_PROMPT_CHARS = Number(process.env.MAX_PROMPT_CHARS || 200_000);
+// Origin allowed to call this service from a browser context. Set it to the
+// extension's origin (chrome-extension://<id> — stable, the manifest pins a key)
+// so a random web page can't ride a user's session from the browser. '*' keeps
+// dev/self-hosted setups working out of the box; non-browser clients (curl)
+// aren't affected either way — real abuse still requires a valid bearer token.
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 
 if (!PROJECT) console.warn('[proxy] GOOGLE_CLOUD_PROJECT is not set');
 if (!OAUTH_CLIENT_ID) console.warn('[proxy] OAUTH_CLIENT_ID is not set — Google sign-in will be rejected!');
@@ -70,7 +76,10 @@ function safeEqual(a, b) {
 
 // tokeninfo is ~1 network call; access tokens live ~1h. Cache the verified
 // identity by token so we resolve a user at most once per token lifetime per
-// instance instead of on every /generate call.
+// instance instead of on every /generate call. Capped so a flood of distinct
+// tokens can't grow the map without bound on a long-lived instance; honest
+// traffic (one entry per signed-in user per hour) never gets near the cap.
+const TOKEN_CACHE_MAX = 5000;
 const tokenCache = new Map(); // accessToken -> { sub, email, exp(ms) }
 
 /**
@@ -100,6 +109,10 @@ async function verifyGoogleToken(accessToken) {
   if (expMs <= Date.now()) return null;
 
   const identity = { sub: info.sub, email: info.email || '', exp: expMs };
+  // Evict the oldest entry when full (Map iterates in insertion order).
+  if (tokenCache.size >= TOKEN_CACHE_MAX) {
+    tokenCache.delete(tokenCache.keys().next().value);
+  }
   tokenCache.set(accessToken, identity);
   return identity;
 }
@@ -140,7 +153,7 @@ async function checkAndIncrementQuota(sub, email) {
 }
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
 };
@@ -163,16 +176,23 @@ function readBody(req) {
 }
 
 async function generate({ system, prompt, maxOutputTokens, json, thinking, model: requested }) {
-  // Honor the client's model only if it's allowlisted; otherwise use the default.
-  const modelId = requested && MODEL_ALLOWLIST.has(requested) ? requested : MODEL;
+  // Honor the client's model only if it's an allowlisted string; otherwise use
+  // the default. The body is attacker-controlled JSON, so never trust its types.
+  const modelId =
+    typeof requested === 'string' && MODEL_ALLOWLIST.has(requested) ? requested : MODEL;
+  const requestedTokens = Number(maxOutputTokens);
   const model = vertex.getGenerativeModel({
     model: modelId,
     systemInstruction: system ? { role: 'system', parts: [{ text: system }] } : undefined,
     generationConfig: {
       temperature: 0.7,
       // Clamp to the server cap regardless of what the client requests, so a
-      // crafted body can't make one call arbitrarily expensive.
-      maxOutputTokens: Math.min(Number(maxOutputTokens) || 1024, MAX_OUTPUT_TOKENS),
+      // crafted body can't make one call arbitrarily expensive. Non-numeric or
+      // non-positive values fall back to the default rather than reaching Vertex.
+      maxOutputTokens: Math.min(
+        Number.isFinite(requestedTokens) && requestedTokens > 0 ? requestedTokens : 1024,
+        MAX_OUTPUT_TOKENS,
+      ),
       // Thinking on (dynamic budget) only when asked — better open-ended
       // answers. Off by default: 2.5 Flash otherwise spends the output budget
       // on hidden reasoning and truncates/empties short requests. 2.5 Pro can't
@@ -260,9 +280,14 @@ const server = http.createServer(async (req, res) => {
     if (!text) return send(res, 502, { error: 'Empty response from Vertex AI' });
     return send(res, 200, { text });
   } catch (err) {
+    // Full detail goes to Cloud Logging only. Vertex error messages can carry
+    // internal detail (project/region/quota specifics), so the client gets a
+    // generic message — the curated 4xx responses above are unaffected.
     console.error('[proxy] error', err);
-    const status = err?.code === 429 ? 429 : 500;
-    return send(res, status, { error: String(err?.message || err) });
+    if (err?.code === 429) {
+      return send(res, 429, { error: 'The AI service is busy right now. Try again shortly.' });
+    }
+    return send(res, 500, { error: 'Generation failed. Try again.' });
   }
 });
 

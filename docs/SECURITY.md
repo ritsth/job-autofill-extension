@@ -158,12 +158,27 @@ gcloud billing accounts add-iam-policy-binding "${BILLING_ACCT#billingAccounts/}
   Google accounts in a short window = Sybil signal). Today you'd only notice via the bill.
 - **Cloud Armor** per-IP rate limiting — needs an external HTTPS load balancer in front of
   Cloud Run; heavier setup. Optional unless abuse is observed.
-- **CORS:** currently `Access-Control-Allow-Origin: *`. Low risk (every call still needs a
-  token whose audience is our OAuth client), but tightening to the extension origin reduces
-  drive-by attempts.
+- **CORS:** ✅ configurable via `ALLOWED_ORIGIN` (default `*` for dev). In production set
+  it to the extension origin so a web page can't call the proxy from a browser context:
+  `gcloud run services update ai-proxy --set-env-vars ALLOWED_ORIGIN=chrome-extension://<EXTENSION_ID>`
+  (the ID is stable because the manifest pins `key`). Non-browser clients are unaffected —
+  abuse still requires a valid bearer token.
 - **Least privilege:** confirm the Cloud Run runtime SA holds only `aiplatform.user` +
   `datastore.user` (+ `secretmanager.secretAccessor` after P1), nothing broader.
 - **Supply chain:** `npm audit` in `server/`, pin dependency versions, enable Dependabot.
+
+### P5 — Server hardening round 2 — ✅ DONE (needs redeploy)
+- **Error sanitization:** ✅ unexpected (5xx) errors now return a generic message; the raw
+  Vertex error (which can include project/region/quota detail) goes only to Cloud Logging.
+  Curated 4xx messages (401/413/429 quota) are unchanged.
+- **Token cache bound:** ✅ the per-instance verified-token cache is capped at 5000 entries
+  with oldest-first eviction, so a flood of distinct tokens can't grow memory unbounded.
+- **Body type-guards:** ✅ `model` must be an allowlisted *string*; `maxOutputTokens` must
+  be a finite positive number or it falls back to the default before the server cap.
+- **Firestore TTL check:** the `usage` docs carry `expireAt`; verify the TTL policy is
+  actually enabled so they get pruned:
+  `gcloud firestore fields ttls list --collection-group=usage` (should list `expireAt`;
+  if empty: `gcloud firestore fields ttls update expireAt --collection-group=usage --enable-ttl`).
 
 ### P4 — App correctness / privacy — ✅ DONE
 - **Prompt injection:** ✅ The three prompts that consume page-scraped text
