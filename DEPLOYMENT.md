@@ -9,14 +9,14 @@ committed and not recorded here.**
 
 | Thing | Value |
 | --- | --- |
-| GCP project ID | `chrome-extension-499519` |
-| GCP project number | `1074158639574` |
-| GCP / dev account | `akitirsth@gmail.com` |
+| GCP project ID | `<PROJECT_ID>` (redacted — see your own `gcloud config get-value project`) |
+| GCP project number | `<PROJECT_NUMBER>` (redacted) |
+| GCP / dev account | `<your-google-account-email>` (redacted) |
 | Cloud Run service | `job-autofill-proxy` (region `us-central1`) |
 | Service URL | `https://job-autofill-proxy-rz75fufhtq-uc.a.run.app` |
 | OAuth client ID | `1074158639574-u0ukfm6q8tlk8473v1u9nlcg9jgd65ge.apps.googleusercontent.com` |
 | OAuth client name | `AI Job Assistant` (type: Chrome Extension) |
-| Runtime service account | `1074158639574-compute@developer.gserviceaccount.com` |
+| Runtime service account | `<PROJECT_NUMBER>-compute@developer.gserviceaccount.com` (redacted) |
 | Firestore | Native mode, location `nam5`, collection `usage` |
 | Daily limit | 50 requests / user / UTC day |
 
@@ -64,8 +64,10 @@ gcloud services enable firestore.googleapis.com
 gcloud firestore databases create --location=nam5
 
 # Let the Cloud Run runtime SA read/write Firestore:
-gcloud projects add-iam-policy-binding chrome-extension-499519 \
-  --member="serviceAccount:1074158639574-compute@developer.gserviceaccount.com" \
+PROJECT_ID="$(gcloud config get-value project)"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
   --role="roles/datastore.user"
 
 # Auto-prune spent day-counters:
@@ -123,7 +125,7 @@ printf '%s' "$(openssl rand -hex 24)" | \
 
 # 2. Let the Cloud Run runtime SA read it.
 gcloud secrets add-iam-policy-binding proxy-token \
-  --member="serviceAccount:1074158639574-compute@developer.gserviceaccount.com" \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
 # 3. Deploy: PROXY_TOKEN now comes from the secret; tune the caps + blast radius.

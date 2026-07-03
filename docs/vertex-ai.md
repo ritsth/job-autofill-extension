@@ -25,7 +25,7 @@ Cloud Run service  "job-autofill-proxy"   (server/index.js)
       ▼
 Vertex AI  (aiplatform.googleapis.com, region us-central1)
       │  publisher model:
-      │  projects/chrome-extension-499519/locations/us-central1/
+      │  projects/<PROJECT_ID>/locations/us-central1/
       │  publishers/google/models/gemini-2.5-flash:generateContent
       ▼
    { text }  ──────────────▶ back to the extension
@@ -58,12 +58,12 @@ console. So "nothing in Vertex AI" is expected even with heavy use.
 
 1. **Cloud Run (clearest, real-time)** — every AI call is one request here.
    - Console: Cloud Run → **job-autofill-proxy** → **Metrics** (request count) and **Logs**.
-   - URL: `https://console.cloud.google.com/run/detail/us-central1/job-autofill-proxy/metrics?project=chrome-extension-499519`
+   - URL: `https://console.cloud.google.com/run/detail/us-central1/job-autofill-proxy/metrics?project=<PROJECT_ID>`
    - CLI:
      ```bash
      gcloud logging read \
        'resource.type="cloud_run_revision" AND resource.labels.service_name="job-autofill-proxy" AND httpRequest.requestUrl:"/generate"' \
-       --project=chrome-extension-499519 --limit=20 --freshness=7d \
+       --project=<PROJECT_ID> --limit=20 --freshness=7d \
        --format='table(timestamp, httpRequest.status)'
      ```
    - Each `POST /generate → 200` = one Vertex Gemini call. (`401` = a request with a
@@ -71,7 +71,7 @@ console. So "nothing in Vertex AI" is expected even with heavy use.
 
 2. **Vertex AI API metrics** — traffic to `aiplatform.googleapis.com`.
    - Console: APIs & Services → **Vertex AI API** → **Metrics** (traffic, errors, latency).
-   - URL: `https://console.cloud.google.com/apis/api/aiplatform.googleapis.com/metrics?project=chrome-extension-499519`
+   - URL: `https://console.cloud.google.com/apis/api/aiplatform.googleapis.com/metrics?project=<PROJECT_ID>`
 
 3. **Billing → Reports** — the cost (covered by the trial credit).
    - Console: Billing → **Reports**, filter **Service = "Vertex AI Generative AI"** (or "Vertex AI").
