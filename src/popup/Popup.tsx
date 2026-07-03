@@ -141,7 +141,7 @@ export function Popup() {
   useEffect(() => {
     refresh();
     const onActivated = () => refresh();
-    const onUpdated = (_id: number, change: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+    const onUpdated = (_id: number, change: chrome.tabs.OnUpdatedInfo, tab: chrome.tabs.Tab) => {
       if (tab.active && change.status === 'complete') refresh();
     };
     chrome.tabs.onActivated.addListener(onActivated);
@@ -150,7 +150,6 @@ export function Popup() {
       chrome.tabs.onActivated.removeListener(onActivated);
       chrome.tabs.onUpdated.removeListener(onUpdated);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function onFill() {

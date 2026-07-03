@@ -33,7 +33,9 @@ function withDefaults(stored: Partial<SavedJobsState> | undefined): SavedJobsSta
 
 export async function getSavedJobs(): Promise<SavedJobsState> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
-  return withDefaults(result[STORAGE_KEY]);
+  // @types/chrome now types storage values as `unknown`; we control this key's
+  // shape and withDefaults guards missing/partial data, so the assertion is safe.
+  return withDefaults(result[STORAGE_KEY] as Partial<SavedJobsState> | undefined);
 }
 
 async function setSavedJobs(state: SavedJobsState): Promise<void> {
@@ -85,7 +87,7 @@ export function onSavedJobsChanged(cb: (state: SavedJobsState) => void): () => v
     area: string,
   ) => {
     if (area === 'local' && changes[STORAGE_KEY]) {
-      cb(withDefaults(changes[STORAGE_KEY].newValue));
+      cb(withDefaults(changes[STORAGE_KEY].newValue as Partial<SavedJobsState> | undefined));
     }
   };
   chrome.storage.onChanged.addListener(listener);

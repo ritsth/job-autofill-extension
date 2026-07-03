@@ -162,7 +162,9 @@ function withDefaults(stored: Partial<Profile> | undefined): Profile {
 
 export async function getProfile(): Promise<Profile> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
-  return withDefaults(result[STORAGE_KEY]);
+  // @types/chrome now types storage values as `unknown`; we control what's written
+  // to this key, and withDefaults guards missing/partial data, so the assertion is safe.
+  return withDefaults(result[STORAGE_KEY] as Partial<Profile> | undefined);
 }
 
 export async function saveProfile(profile: Profile): Promise<void> {
@@ -176,7 +178,7 @@ export function onProfileChanged(cb: (profile: Profile) => void): () => void {
     area: string,
   ) => {
     if (area === 'local' && changes[STORAGE_KEY]) {
-      cb(withDefaults(changes[STORAGE_KEY].newValue));
+      cb(withDefaults(changes[STORAGE_KEY].newValue as Partial<Profile> | undefined));
     }
   };
   chrome.storage.onChanged.addListener(listener);
