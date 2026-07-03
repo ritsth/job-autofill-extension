@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getProfile, saveProfile, onProfileChanged, type Profile } from '../lib/profile';
 import {
   getSavedJobs,
@@ -52,6 +52,7 @@ export function Popup() {
   // page detection).
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
+  const fillMsgTimer = useRef<number | null>(null);
 
   // Persist a boolean feature toggle and reflect it locally.
   async function toggleSetting(
@@ -62,6 +63,17 @@ export function Popup() {
     setLocal(value);
     const profile = await getProfile();
     await saveProfile({ ...profile, [key]: value });
+  }
+
+  function flashFillMsg(message: string) {
+    if (fillMsgTimer.current !== null) {
+      clearTimeout(fillMsgTimer.current);
+    }
+    setFillMsg(message);
+    fillMsgTimer.current = window.setTimeout(() => {
+      setFillMsg('');
+      fillMsgTimer.current = null;
+    }, 1500);
   }
 
   function toggleJobExpanded(id: string) {
@@ -149,6 +161,7 @@ export function Popup() {
     return () => {
       chrome.tabs.onActivated.removeListener(onActivated);
       chrome.tabs.onUpdated.removeListener(onUpdated);
+      if (fillMsgTimer.current !== null) clearTimeout(fillMsgTimer.current);
     };
   }, []);
 
@@ -159,11 +172,21 @@ export function Popup() {
     setError('');
     try {
       const res = await sendToTab<FillResult>(tabId, { type: 'PAGE_FILL' });
-      setFillMsg(`Filled ${res.filled} of ${res.total} recognised field${res.total === 1 ? '' : 's'}.`);
+      flashFillMsg(`Filled ${res.filled} of ${res.total} recognised field${res.total === 1 ? '' : 's'}.`);
     } catch {
       setError('Could not reach the page. Reload the job page and try again.');
     } finally {
       setBusy('');
+    }
+  }
+
+  async function onUseCurrentPage() {
+    setError('');
+    try {
+      await setActiveJob(null);
+      flashFillMsg('Now using the current page for AI answers.');
+    } catch {
+      setError('Could not update the active job. Try again.');
     }
   }
 
@@ -314,12 +337,12 @@ export function Popup() {
           {busy === 'save' ? 'Saving…' : '💾 Save this job'}
         </button>
         {activeJob ? (
-          <div className="jobusing">
-            Using a saved job for AI answers &amp; documents.{' '}
-            <button className="ghost jobclear" onClick={() => setActiveJob(null)}>
-              use current page
-            </button>
-          </div>
+            <div className="jobusing">
+              Using a saved job for AI answers &amp; documents.{' '}
+              <button className="ghost jobclear" onClick={onUseCurrentPage}>
+                use current page
+              </button>
+            </div>
         ) : (
           jobs.length > 0 && (
             <div className="jobusing muted">
