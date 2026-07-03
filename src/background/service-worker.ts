@@ -35,7 +35,11 @@ async function resolveProvider(ai: AISettings): Promise<AIProvider> {
   return getProvider(ai);
 }
 
-chrome.runtime.onMessage.addListener((msg: BackgroundMessage, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg: BackgroundMessage, sender, sendResponse) => {
+  // Only our own pages/content scripts may drive the AI hub. No
+  // externally_connectable is declared, so this can't fire for web pages today —
+  // the check makes that boundary explicit rather than implicit.
+  if (sender.id !== chrome.runtime.id) return false;
   // Only handle our AI messages; ignore content-targeted ones.
   if (
     msg?.type !== 'AI_GENERATE_ANSWER' &&
