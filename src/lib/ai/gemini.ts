@@ -23,9 +23,7 @@ export class GeminiProvider implements AIProvider {
 
     // Per-request override (free-text answers) wins; otherwise the fast default.
     const modelId = model || this.model;
-    const url = `${ENDPOINT}/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(
-      this.apiKey,
-    )}`;
+    const url = `${ENDPOINT}/${encodeURIComponent(modelId)}:generateContent`;
 
     const body = {
       systemInstruction: { parts: [{ text: system }] },
@@ -55,7 +53,9 @@ export class GeminiProvider implements AIProvider {
     try {
       res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // The key travels as a header, not a `?key=` query param — URLs leak
+        // into logs and history; headers don't.
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
         body: JSON.stringify(body),
       });
     } catch (e) {
