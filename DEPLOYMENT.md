@@ -146,6 +146,28 @@ curl -s https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/ | jq   # shows globa
 > won't print its value. Update the Admin token field in options with the new value if you
 > use the bypass.
 
+### CORS lockdown redeploy
+
+The proxy previously sent `Access-Control-Allow-Origin: *`, so any web page could send a
+valid Bearer token to it (see [`docs/SECURITY.md`](docs/SECURITY.md)). `server/index.js`
+now reads `ALLOWED_ORIGIN` from the environment and falls back to `*` only when it's
+unset, so locking it down is a redeploy, not a code change:
+
+```bash
+gcloud run deploy job-autofill-proxy \
+  --source server --region us-central1 \
+  --update-env-vars "ALLOWED_ORIGIN=chrome-extension://iibpijacaghdcckphindbaijjgcbaoll"
+
+curl -s https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/ | jq   # still healthy
+```
+
+`iibpijacaghdcckphindbaijjgcbaoll` is the published extension's ID (from the Chrome Web
+Store URL) — stable because the manifest pins a `key`. If you're testing an **unpacked/dev
+build**, its extension ID is different, so browser calls from dev would be CORS-blocked
+against this origin; either test against the store build, or temporarily redeploy with
+`ALLOWED_ORIGIN=*` or the dev build's ID while testing. Non-browser clients (curl) and the
+real security boundary — the bearer token — are unaffected either way.
+
 ## Verify
 
 1. `npm run build` → reload unpacked at `chrome://extensions` (ID should match Step 1).
