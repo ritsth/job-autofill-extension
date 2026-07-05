@@ -409,12 +409,14 @@ export function Popup() {
         <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
           <input
             style={{ flex: 1, minWidth: 0 }}
+            aria-label="Company"
             placeholder="Company"
             value={company}
             onChange={(e) => setCompany(e.target.value)}
           />
           <input
             style={{ flex: 1, minWidth: 0 }}
+            aria-label="Role"
             placeholder="Role"
             value={role}
             onChange={(e) => setRole(e.target.value)}
