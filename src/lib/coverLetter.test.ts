@@ -35,7 +35,7 @@ describe('letterFilename', () => {
     const longCompany = 'a'.repeat(50);
     const longRole = 'b'.repeat(50);
     const result = letterFilename(longCompany, longRole);
-    
+
     // Prefix "cover-letter-" is 13 chars.
     // The slug itself should be sliced at 60 chars.
     // Expected slug: 50 'a's + 1 hyphen + 9 'b's = 60 chars.
