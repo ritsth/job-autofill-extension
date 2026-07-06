@@ -2,6 +2,10 @@
 
 **[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/Little%20AI%20Helper/iibpijacaghdcckphindbaijjgcbaoll)**
 
+[![CI](https://github.com/ritsth/job-autofill-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/ritsth/job-autofill-extension/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/ritsth/job-autofill-extension/actions/workflows/codeql.yml/badge.svg)](https://github.com/ritsth/job-autofill-extension/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 ## Why I built this
 
 Applying to new-grad SWE roles means filling the *same* Greenhouse / Lever / Workday
@@ -46,8 +50,9 @@ The choice applies **only to ✨ AI answers** for open-ended questions; resume p
 the eligibility-badge check always run on the fast default model. The proxy validates the
 requested model against an allowlist server-side.
 
-**Where it runs:** full autofill on **Greenhouse**, **Lever**, and **Workday**
-(`*.myworkdayjobs.com`). The eligibility badge
+**Where it runs:** full autofill on **Greenhouse** (`*.greenhouse.io`), **Lever**
+(`jobs.lever.co`), and **Workday** (`*.myworkdayjobs.com`, `*.myworkday.com`,
+`*.myworkdaysite.com`). The eligibility badge
 runs on **every page** (so no job board is missed), but it self-gates — it only appears
 when the page actually looks like a job posting, and it stays current on single-page
 boards as you click between postings. Toggle it on/off any time from the side panel
@@ -60,7 +65,7 @@ nothing is sent to any server we run.
 
 ## Tech
 
-TypeScript · React (popup + options) · Vite + `@crxjs/vite-plugin` · Manifest V3.
+TypeScript · React (side panel + options) · Vite + `@crxjs/vite-plugin` · Manifest V3.
 
 ## Develop
 
@@ -75,6 +80,21 @@ Then load it in Chrome:
 1. Go to `chrome://extensions`, enable **Developer mode**.
 2. **Load unpacked** → select the `dist/` folder.
 3. Edits hot-reload. For a production bundle: `npm run build` (also typechecks).
+
+## Testing & CI
+
+```bash
+npm run lint       # ESLint
+npm run typecheck  # tsc --noEmit
+npm test           # Vitest (unit tests for pure helpers)
+npm run build      # typecheck + production build
+```
+
+Every push and PR runs the same four checks in GitHub Actions
+([`ci.yml`](.github/workflows/ci.yml)), plus a [CodeQL](.github/workflows/codeql.yml)
+security/quality scan. `main` is a protected branch (required checks + review), and
+Dependabot keeps npm and GitHub Actions dependencies up to date. See
+[`SECURITY.md`](SECURITY.md) to report a vulnerability.
 
 ## Setup (first run)
 
@@ -111,7 +131,8 @@ on-device fallback when no key is set and Chrome's built-in model is available.
 | Cover-letter helpers | `src/lib/coverLetter.ts` |
 | Background AI hub | `src/background/service-worker.ts` |
 | Autofill + question buttons | `src/content/` (`adapters/` per site) |
-| Options / Popup UI | `src/options/`, `src/popup/` |
+| Side panel entry point | `src/sidepanel/` (mounts the `Popup` component from `src/popup/`) |
+| Options UI | `src/options/` |
 
 The `AIProvider` interface is the seam for **v2**: a Cloud Run "managed mode" proxy
 becomes a new `ProxyProvider` with no other code changes. Workday support is a new
@@ -145,7 +166,9 @@ A few choices I'd defend in a code review:
 
 Shipped since v1: Cloud Run → Vertex AI managed proxy with **Google sign-in +
 per-user daily quotas**, Workday adapter, Handshake eligibility badge +
-cover-letter generator, tailored-resume generator, save-job context, PDF export.
+cover-letter generator, tailored-resume generator, save-job context, PDF export,
+CI/CodeQL + branch protection, and a proxy security-hardening pass (locked-down
+CORS, sanitized error responses, Secret Manager for the admin token).
 
 Still ahead (v2+):
 
@@ -187,7 +210,7 @@ and deploy the server with `OAUTH_CLIENT_ID` + `DAILY_LIMIT`.
 
 ## Contributing
 
-Issues and pull requests are welcome — see the [good first issues](https://github.com/ritsth/job-autofill-extension/labels/good%20first%20issue) to get started. Before opening a PR, run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. Participation is governed by our [Code of Conduct](CODE_OF_CONDUCT.md).
+Issues and pull requests are welcome — see the [good first issues](https://github.com/ritsth/job-autofill-extension/labels/good%20first%20issue) to get started, and read [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the pre-PR checklist. Participation is governed by our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
