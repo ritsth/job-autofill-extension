@@ -1,4 +1,4 @@
-import { extractJsonObject } from './resumeImport';
+import { parseLooseJson } from './resumeImport';
 import type { SponsorAnalysis } from '../content/sponsorship';
 
 // Parses the AI's job-eligibility JSON into the same shape the rules pass uses,
@@ -14,9 +14,8 @@ interface RawEligibility {
 }
 
 export function parseEligibilityJson(raw: string): SponsorAnalysis {
-  const json = extractJsonObject(raw);
-  if (!json) throw new Error('The AI did not return readable JSON.');
-  const d = JSON.parse(json) as RawEligibility;
+  const d = parseLooseJson(raw) as RawEligibility | null;
+  if (!d) throw new Error('The AI did not return readable JSON.');
 
   const sponsorship = (d.sponsorship || '').toLowerCase();
   const citizenship = (d.citizenship || '').toLowerCase();
