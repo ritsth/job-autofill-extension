@@ -42,4 +42,12 @@ describe('letterFilename', () => {
     expect(result).toHaveLength(73); // 13 + 60
     expect(result).toBe(`cover-letter-${'a'.repeat(50)}-${'b'.repeat(9)}`);
   });
+
+  it('does not leave a trailing hyphen when the slice boundary falls on the join separator', () => {
+    // 59 'a's + '-' + 50 'b's = 110 chars; slice(0, 60) yields 'a'.repeat(59) + '-'
+    // The fix removes the trailing hyphen.
+    expect(letterFilename('a'.repeat(59), 'b'.repeat(50))).toBe(
+      `cover-letter-${'a'.repeat(59)}`
+    );
+  });
 });

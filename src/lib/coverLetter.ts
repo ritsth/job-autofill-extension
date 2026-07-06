@@ -39,7 +39,8 @@ export function letterFilename(company: string, role: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
+    .slice(0, 60)
+    .replace(/-+$/, '');
   return `cover-letter${slug ? '-' + slug : ''}`;
 }
 
