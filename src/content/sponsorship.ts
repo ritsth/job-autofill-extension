@@ -841,6 +841,7 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
     .wrap {
       position: fixed; top: 14px; right: 14px; z-index: 2147483646;
       display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+      max-height: calc(100vh - 28px);
       font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     }
     .card {
@@ -848,6 +849,11 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
       background: #fff; color: #0f172a; border: 1px solid #e2e8f0;
       border-left: 6px solid ${s.color}; border-radius: 10px;
       box-shadow: 0 6px 24px rgba(0,0,0,.16);
+      /* .wrap bounds the whole column to the viewport; the card is the flex
+         item that shrinks and scrolls internally so a tall card can't push
+         the coachmark (or itself) off-screen. min-height: 0 overrides the
+         flex default that would otherwise keep it at its full content height. */
+      min-height: 0; overflow-y: auto;
     }
     .head { display: flex; align-items: center; gap: 8px; }
     .word { font-size: 20px; font-weight: 800; color: ${s.color}; letter-spacing: .5px; }
