@@ -908,6 +908,7 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   close.className = 'x';
   close.textContent = '×';
   close.title = 'Dismiss';
+  close.setAttribute('aria-label', 'Dismiss eligibility badge');
   close.addEventListener('click', () => {
     dismissed = true;
     removeBadge();
@@ -986,6 +987,8 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   foot.appendChild(el('span', '', 'Little AI Helper'));
   const off = el('span', 'off', '⚙ Turn off on all sites');
   off.title = 'Stop showing this badge on every page';
+  off.setAttribute('role', 'button');
+  off.setAttribute('aria-label', 'Turn off the eligibility badge on all sites');
   off.addEventListener('click', () => void disableScannerEverywhere());
   foot.appendChild(off);
   card.appendChild(foot);
