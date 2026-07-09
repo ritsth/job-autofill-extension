@@ -178,13 +178,23 @@ const scannerGlobal = window as unknown as { __jafScannerStarted?: boolean };
 if (window.top === window.self && !scannerGlobal.__jafScannerStarted) {
   scannerGlobal.__jafScannerStarted = true;
   (async () => {
-    const profile = await getProfile();
-    // Seed the one-time badge coachmark flag before enabling the scanner, so the
-    // first badge render knows whether to show it.
-    const { badgeIntroSeen } = await chrome.storage.local.get('badgeIntroSeen');
-    setBadgeIntroSeen(Boolean(badgeIntroSeen));
-    setBadgeFeatures({ coverLetter: profile.coverLetterEnabled, resume: profile.tailoredResumeEnabled });
-    setScannerEnabled(profile.scanEnabled);
+    try {
+      const profile = await getProfile();
+      // Seed the one-time badge coachmark flag before enabling the scanner, so the
+      // first badge render knows whether to show it.
+      const { badgeIntroSeen } = await chrome.storage.local.get('badgeIntroSeen');
+      setBadgeIntroSeen(Boolean(badgeIntroSeen));
+      setBadgeFeatures({ coverLetter: profile.coverLetterEnabled, resume: profile.tailoredResumeEnabled });
+      setScannerEnabled(profile.scanEnabled);
+    } catch (e) {
+      // A failed storage read (e.g. an extension-update limbo) must not silently
+      // kill the scanner — fall back to defaults. scanEnabled defaults ON in
+      // withDefaults, so this matches a fresh profile; force the coachmark to
+      // "seen" so a fallback never flashes the intro bubble.
+      console.warn('[Little AI Helper] scanner init failed; starting with defaults', e);
+      setBadgeIntroSeen(true);
+      setScannerEnabled(true);
+    }
     startSponsorshipWatch();
   })();
   onProfileChanged((profile) => {
