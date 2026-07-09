@@ -126,6 +126,13 @@ function stripQuestions(text: string): string {
       const t = seg.trim();
       if (/\?\s*\*?$/.test(t)) return false; // ends with ? (optionally a required-* marker)
       if (/^(are|do|does|did|will|can|have|has|had|would|is)\s+you\b/i.test(t)) return false;
+      // Imperative application-form prompts describe the FORM, not the employer's
+      // stance — e.g. "please indicate 'Yes' if you are a citizen of…" or "Solely
+      // for the purpose of determining if an export control license is needed…".
+      // These must be dropped too, or the export-control screening question every
+      // US application carries would trip the ITAR rule into a false NO.
+      if (/\bplease (indicate|select|answer|confirm|specify|check|state|provide)\b/i.test(t)) return false;
+      if (/\bfor the (sole )?purpose of determining\b/i.test(t)) return false;
       return true;
     })
     .join(' ');

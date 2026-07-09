@@ -36,6 +36,28 @@ describe('analyze — eligibility verdict', () => {
     const a = analyze('Are you authorized to work without sponsorship?');
     expect(a.verdict).not.toBe('no');
   });
+
+  it('does not flag the export-control citizenship SCREENING QUESTION as NO', () => {
+    // Imperative form prompt (no "?", not "are you…") that mentions "export
+    // control" — carried by nearly every US application. It must be stripped so
+    // it doesn't trip the ITAR rule into a false NO.
+    const a = analyze(
+      'Solely for the purpose of determining if an export control license is needed, ' +
+        'please indicate "Yes" if you are currently a citizen of any of the following ' +
+        'countries: Iran, Syria, N. Korea, Cuba, Ukraine, People’s Republic of China, ' +
+        'Hong Kong (China), Macau (China) or Russia.',
+    );
+    expect(a.verdict).not.toBe('no');
+    expect(a.restrictions).not.toContain('ITAR / export-controlled');
+  });
+
+  it('still flags a GENUINE export-control restriction in the posting prose as NO', () => {
+    // Regression guard: only the form's screening question is dropped — a real
+    // employer-stated ITAR restriction must still be a hard NO.
+    const a = analyze('This position is subject to ITAR; only U.S. persons are eligible.');
+    expect(a.verdict).toBe('no');
+    expect(a.restrictions).toContain('ITAR / export-controlled');
+  });
 });
 
 describe('analyze — experience extraction', () => {
