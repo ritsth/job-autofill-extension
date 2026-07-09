@@ -430,6 +430,13 @@ let watchUrl = '';
 let lastHash = 0;
 let observer: MutationObserver | null = null;
 let debounceTimer = 0;
+// Set by the MutationObserver, cleared by a full scan. Lets the interval tick
+// skip the whole-page innerText read when nothing has changed — its only real
+// job is catching SPA history changes that mutate little.
+let mutationDirty = false;
+// Signature of the badge currently on screen, so identical re-computations keep
+// the mounted DOM instead of tearing it down. Cleared by removeBadge().
+let renderedSig = '';
 // AI results cached per posting (by scanned-text hash) so revisiting a job — or
 // a re-render from the watcher — reuses the AI verdict without another call.
 const aiCache = new Map<number, SponsorAnalysis>();
@@ -520,6 +527,7 @@ export async function captureJobWhenReady(
 /** Forced scan (used on load / enable): renders regardless of the hash gate. */
 export function scanSponsorship(): void {
   watchUrl = location.href;
+  mutationDirty = false; // this is a full read; the interval needn't repeat it
   const text = getScanText();
   lastHash = hash(text);
   renderFrom(text);
@@ -528,9 +536,18 @@ export function scanSponsorship(): void {
 /** Re-scans only when the viewed content (or URL) changed — used by the watcher. */
 function tick(): void {
   if (!enabled) return;
+  // Hidden tabs don't need a live badge; skip the work (without clearing the
+  // dirty flag) and let the visibilitychange handler catch up on focus.
+  if (document.hidden) return;
+  const urlChanged = location.href !== watchUrl;
+  // Cheap short-circuit for the interval fallback: no mutation since the last
+  // full read and the URL is unchanged, so skip the expensive whole-page
+  // innerText read entirely. Content changes always set mutationDirty first
+  // (the MutationObserver path), so nothing is missed.
+  if (!mutationDirty && !urlChanged) return;
+  mutationDirty = false;
   const text = getScanText();
   const h = hash(text);
-  const urlChanged = location.href !== watchUrl;
   if (h === lastHash && !urlChanged) return;
   if (urlChanged) {
     watchUrl = location.href;
@@ -543,7 +560,6 @@ function tick(): void {
 
 function renderFrom(text: string): void {
   if (!enabled || dismissed) return;
-  removeBadge();
   if (!document.body) return;
   // Prefer the AI verdict the user pinned for this posting, then any hash-keyed
   // AI cache hit, then the instant rules pass.
@@ -551,7 +567,20 @@ function renderFrom(text: string): void {
     (pinnedAi && pinnedAiUrl === location.href ? pinnedAi : null) ??
     aiCache.get(hash(text)) ??
     analyze(text);
+  // Skip the teardown/rebuild when the badge already shows exactly this result —
+  // mutation-happy pages (live counts, timestamps) otherwise cause a rebuild
+  // every debounce even though nothing visible changed. The generator toggles
+  // are part of the signature so a settings change still re-renders.
+  const sig = [
+    analysis.verdict, analysis.source, analysis.reason ?? '',
+    analysis.restrictions.join(','), analysis.cautions.join(','), analysis.positives.join(','),
+    analysis.experience.required ?? '', analysis.experience.preferred ?? '',
+    showCoverLetterInBadge, showResumeInBadge,
+  ].join('|');
+  if (sig === renderedSig && document.getElementById(BANNER_ID)) return;
+  removeBadge();
   document.body.appendChild(renderBadge(analysis));
+  renderedSig = sig;
 }
 
 // Words that signal a work-eligibility requirement. Used to pull the relevant
@@ -626,13 +655,20 @@ export function startSponsorshipWatch(): void {
 
   if (document.body) {
     observer = new MutationObserver(() => {
+      mutationDirty = true;
       window.clearTimeout(debounceTimer);
       debounceTimer = window.setTimeout(tick, 600);
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
-  // Fallback for history changes that mutate little.
+  // Fallback for history changes that mutate little. tick() short-circuits to a
+  // string compare unless a mutation or URL change happened, so this stays cheap.
   setInterval(tick, 1200);
+  // tick() skips hidden tabs; catch up the moment the tab is focused so a job
+  // page opened in the background still gets its badge.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) tick();
+  });
 }
 
 // --- Badge rendering ---
@@ -646,6 +682,7 @@ const STYLES: Record<Verdict, { color: string; word: string; title: string }> = 
 
 /** Removes every instance of the badge host (guards against duplicates). */
 function removeBadge(): void {
+  renderedSig = ''; // whatever renders next is a fresh mount, never skipped
   document.querySelectorAll(`#${BANNER_ID}`).forEach((n) => n.remove());
 }
 
