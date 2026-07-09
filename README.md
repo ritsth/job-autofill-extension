@@ -53,11 +53,13 @@ requested model against an allowlist server-side.
 **Where it runs:** full autofill on **Greenhouse** (`*.greenhouse.io`), **Lever**
 (`jobs.lever.co`), and **Workday** (`*.myworkdayjobs.com`, `*.myworkday.com`,
 `*.myworkdaysite.com`). The eligibility badge
-runs on **every page** (so no job board is missed), but it self-gates — it only appears
-when the page actually looks like a job posting, and it stays current on single-page
-boards as you click between postings. Toggle it on/off any time from the side panel
-("Scan every page for visa/eligibility"). Because it runs everywhere, Chrome shows the
-"read and change your data on all websites" permission.
+runs on **every page** (so no job board is missed): it shows a bold YES / NO / MAYBE
+verdict when the page mentions sponsorship, citizenship, or clearance requirements, and a
+neutral gray "no eligibility info" card otherwise. It stays current on single-page boards
+as you click between postings. Toggle it on/off any time from the side panel ("Scan every
+page for visa/eligibility") or via the badge's own "Turn off on all sites" link. Because
+it runs everywhere, Chrome shows the "read and change your data on all websites"
+permission.
 
 All your data stays on your machine (`chrome.storage.local`). The AI layer is
 **bring-your-own-key** (default: free Google Gemini) with an on-device fallback —
@@ -206,7 +208,8 @@ and deploy the server with `OAUTH_CLIENT_ID` + `DAILY_LIMIT`.
   Thinking about metering up front changed the architecture.
 - **Manifest V3 permissions are a UX tradeoff.** The eligibility badge needs to run
   everywhere, which triggers Chrome's "read and change your data on all websites" prompt —
-  so I made it self-gate and added a one-click toggle to keep user trust.
+  so it ships with visible off-switches (the side-panel toggle and a "Turn off on all
+  sites" link on the badge itself) to keep user trust.
 
 ## Contributing
 

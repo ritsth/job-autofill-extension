@@ -45,8 +45,10 @@ export default defineManifest({
     type: 'module',
   },
   // `identity` powers Google sign-in (chrome.identity.getAuthToken) for the
-  // managed proxy, which meters AI usage per signed-in user.
-  permissions: ['storage', 'activeTab', 'scripting', 'sidePanel', 'identity'],
+  // managed proxy, which meters AI usage per signed-in user. Keep this list
+  // minimal — filling/AI buttons run via the declared content script, so no
+  // `scripting` (programmatic injection) is needed.
+  permissions: ['storage', 'activeTab', 'sidePanel', 'identity'],
   // OAuth client for sign-in. Create an "OAuth client ID → Chrome Extension"
   // bound to this extension's ID in Google Cloud Console, then paste it here.
   oauth2: {
