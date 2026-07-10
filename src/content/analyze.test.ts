@@ -1,11 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { analyze, isBadgeDismissKey } from './sponsorship';
+import { analyze, isBadgeDismissKey, shouldDismissBadge } from './sponsorship';
 
 describe('eligibility badge keyboard dismissal', () => {
   it('dismisses only for Escape', () => {
     expect(isBadgeDismissKey({ key: 'Escape' })).toBe(true);
     expect(isBadgeDismissKey({ key: 'Enter' })).toBe(false);
     expect(isBadgeDismissKey({ key: 'Esc' })).toBe(false);
+  });
+
+  it('dismisses only while the badge is mounted', () => {
+    expect(shouldDismissBadge({ key: 'Escape' }, true)).toBe(true);
+    expect(shouldDismissBadge({ key: 'Escape' }, false)).toBe(false);
+    expect(shouldDismissBadge({ key: 'Enter' }, true)).toBe(false);
   });
 });
 
