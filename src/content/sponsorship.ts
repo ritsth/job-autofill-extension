@@ -730,10 +730,40 @@ const STYLES: Record<Verdict, { color: string; word: string; title: string }> = 
   unknown: { color: '#6b7280', word: '—', title: 'No eligibility info detected' },
 };
 
+let removeBadgeKeydownListener: (() => void) | null = null;
+
 /** Removes every instance of the badge host (guards against duplicates). */
 function removeBadge(): void {
   renderedSig = ''; // whatever renders next is a fresh mount, never skipped
+  removeBadgeKeydownListener?.();
+  removeBadgeKeydownListener = null;
   document.querySelectorAll(`#${BANNER_ID}`).forEach((n) => n.remove());
+}
+
+/** Whether a badge-scoped keyboard event should dismiss the badge. */
+export function isBadgeDismissKey(event: Pick<KeyboardEvent, 'key'>): boolean {
+  return event.key === 'Escape';
+}
+
+/** Whether a document keyboard event should dismiss the currently mounted badge. */
+export function shouldDismissBadge(
+  event: Pick<KeyboardEvent, 'key'>,
+  badgeMounted: boolean,
+): boolean {
+  return badgeMounted && isBadgeDismissKey(event);
+}
+
+/** Registers document-level Escape dismissal and returns its teardown callback. */
+export function addBadgeDismissListener(
+  target: EventTarget,
+  badgeMounted: () => boolean,
+  dismissBadge: () => void,
+): () => void {
+  const onKeydown = (event: Event): void => {
+    if (shouldDismissBadge(event as KeyboardEvent, badgeMounted())) dismissBadge();
+  };
+  target.addEventListener('keydown', onKeydown);
+  return () => target.removeEventListener('keydown', onKeydown);
 }
 
 function el(tag: string, cls: string, text: string): HTMLElement {
@@ -996,10 +1026,18 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   close.textContent = '×';
   close.title = 'Dismiss';
   close.setAttribute('aria-label', 'Dismiss eligibility badge');
-  close.addEventListener('click', () => {
+  const dismissBadge = (): void => {
     dismissed = true;
     removeBadge();
-  });
+  };
+  close.addEventListener('click', dismissBadge);
+  // Listen on the document so Escape works without moving focus into the badge.
+  // Do not consume the event: the host page must retain its own Escape handling.
+  removeBadgeKeydownListener = addBadgeDismissListener(
+    document,
+    () => document.contains(host),
+    dismissBadge,
+  );
   head.append(el('span', 'word', s.word), el('span', 'title', s.title), close);
   card.appendChild(head);
 
