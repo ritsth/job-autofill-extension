@@ -736,6 +736,11 @@ function removeBadge(): void {
   document.querySelectorAll(`#${BANNER_ID}`).forEach((n) => n.remove());
 }
 
+/** Whether a badge-scoped keyboard event should dismiss the badge. */
+export function isBadgeDismissKey(event: Pick<KeyboardEvent, 'key'>): boolean {
+  return event.key === 'Escape';
+}
+
 function el(tag: string, cls: string, text: string): HTMLElement {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
@@ -996,9 +1001,15 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   close.textContent = '×';
   close.title = 'Dismiss';
   close.setAttribute('aria-label', 'Dismiss eligibility badge');
-  close.addEventListener('click', () => {
+  const dismissBadge = (): void => {
     dismissed = true;
     removeBadge();
+  };
+  close.addEventListener('click', dismissBadge);
+  // Keep the shortcut inside the badge's shadow root so the host page retains its
+  // own Escape handling. Removing the host also removes this listener with it.
+  root.addEventListener('keydown', (event) => {
+    if (event instanceof KeyboardEvent && isBadgeDismissKey(event)) dismissBadge();
   });
   head.append(el('span', 'word', s.word), el('span', 'title', s.title), close);
   card.appendChild(head);

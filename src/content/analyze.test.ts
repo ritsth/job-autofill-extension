@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { analyze } from './sponsorship';
+import { analyze, isBadgeDismissKey } from './sponsorship';
+
+describe('eligibility badge keyboard dismissal', () => {
+  it('dismisses only for Escape', () => {
+    expect(isBadgeDismissKey({ key: 'Escape' })).toBe(true);
+    expect(isBadgeDismissKey({ key: 'Enter' })).toBe(false);
+    expect(isBadgeDismissKey({ key: 'Esc' })).toBe(false);
+  });
+});
 
 describe('analyze — eligibility verdict', () => {
   it('flags a hard citizenship requirement as NO', () => {
