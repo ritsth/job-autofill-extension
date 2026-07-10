@@ -1,0 +1,35 @@
+# CodeRabbit configuration — https://docs.coderabbit.ai
+# Repo-level tuning for the AI PR reviewer. CodeRabbit works with no config;
+# this just tailors it to a Manifest V3 extension + Cloud Run proxy.
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+language: en-US
+tone_instructions: >-
+  Manifest V3 Chrome extension (TypeScript, React, Vite) + a Cloud Run proxy.
+  Prioritize: content-script <all_urls> safety, host-permission/DOM-injection
+  scope, PR-vs-description alignment, and test coverage for changed pure
+  functions.
+reviews:
+  profile: chill                    # quiet | chill | assertive — chill = balanced signal/noise
+  high_level_summary: true          # PR summary comment
+  poem: false                       # skip the novelty verse
+  request_changes_workflow: false   # advise only; merge gating stays with branch protection
+  auto_review:
+    enabled: true                   # review on PR open + push
+    drafts: false                   # skip draft PRs
+    base_branches:
+      - main
+    ignore_usernames:               # skip bot PRs — lockfile/version bumps aren't worth an AI pass
+      - "dependabot[bot]"
+  path_filters:                     # keep review on source, not build output / vendored noise
+    - "!dist/**"
+    - "!**/*.min.js"
+  path_instructions:
+    - path: "src/content/**"
+      instructions: >-
+        Content scripts run on every page. Flag any innerHTML/insertAdjacentHTML with
+        non-static input, un-scoped host checks (endsWith without a dot-boundary), and
+        new broad DOM reads that could leak into the eligibility scan.
+    - path: "server/**"
+      instructions: >-
+        This proxy is internet-facing. Flag unsanitized error passthrough, missing
+        input validation, and any secret/token logging.
