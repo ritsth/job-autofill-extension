@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { analyze, isBadgeDismissKey, shouldDismissBadge } from './sponsorship';
+import {
+  addBadgeDismissListener,
+  analyze,
+  isBadgeDismissKey,
+  shouldDismissBadge,
+} from './sponsorship';
 
 describe('eligibility badge keyboard dismissal', () => {
   it('dismisses only for Escape', () => {
@@ -12,6 +17,37 @@ describe('eligibility badge keyboard dismissal', () => {
     expect(shouldDismissBadge({ key: 'Escape' }, true)).toBe(true);
     expect(shouldDismissBadge({ key: 'Escape' }, false)).toBe(false);
     expect(shouldDismissBadge({ key: 'Enter' }, true)).toBe(false);
+  });
+
+  it('registers and cleans up unconsumed Escape dismissal', () => {
+    const target = new EventTarget();
+    let mounted = true;
+    let dismissals = 0;
+    const cleanup = addBadgeDismissListener(
+      target,
+      () => mounted,
+      () => {
+        dismissals += 1;
+        mounted = false;
+      },
+    );
+
+    const escape = Object.assign(new Event('keydown', { cancelable: true }), {
+      key: 'Escape',
+    });
+    target.dispatchEvent(escape);
+
+    expect(dismissals).toBe(1);
+    expect(escape.defaultPrevented).toBe(false);
+
+    cleanup();
+    mounted = true;
+    const afterTeardown = Object.assign(new Event('keydown', { cancelable: true }), {
+      key: 'Escape',
+    });
+    target.dispatchEvent(afterTeardown);
+    expect(dismissals).toBe(1);
+    expect(afterTeardown.defaultPrevented).toBe(false);
   });
 });
 

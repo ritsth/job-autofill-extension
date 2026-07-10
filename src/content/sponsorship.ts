@@ -753,6 +753,19 @@ export function shouldDismissBadge(
   return badgeMounted && isBadgeDismissKey(event);
 }
 
+/** Registers document-level Escape dismissal and returns its teardown callback. */
+export function addBadgeDismissListener(
+  target: EventTarget,
+  badgeMounted: () => boolean,
+  dismissBadge: () => void,
+): () => void {
+  const onKeydown = (event: Event): void => {
+    if (shouldDismissBadge(event as KeyboardEvent, badgeMounted())) dismissBadge();
+  };
+  target.addEventListener('keydown', onKeydown);
+  return () => target.removeEventListener('keydown', onKeydown);
+}
+
 function el(tag: string, cls: string, text: string): HTMLElement {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
@@ -1020,11 +1033,11 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   close.addEventListener('click', dismissBadge);
   // Listen on the document so Escape works without moving focus into the badge.
   // Do not consume the event: the host page must retain its own Escape handling.
-  const onDocumentKeydown = (event: KeyboardEvent): void => {
-    if (shouldDismissBadge(event, document.contains(host))) dismissBadge();
-  };
-  document.addEventListener('keydown', onDocumentKeydown);
-  removeBadgeKeydownListener = () => document.removeEventListener('keydown', onDocumentKeydown);
+  removeBadgeKeydownListener = addBadgeDismissListener(
+    document,
+    () => document.contains(host),
+    dismissBadge,
+  );
   head.append(el('span', 'word', s.word), el('span', 'title', s.title), close);
   card.appendChild(head);
 
