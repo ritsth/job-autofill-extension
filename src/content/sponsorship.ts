@@ -296,6 +296,27 @@ function pickMainContent(): string | null {
 }
 
 /**
+ * Text from the largest same-origin iframe document, '' when none is readable.
+ * ATSes like iCIMS render the posting in a same-origin frame, which innerText
+ * on the top document never includes — so without this the scan (rules AND AI)
+ * reads only the outer branding chrome and misses the real requirements.
+ * Cross-origin frames throw / return null on contentDocument access and are
+ * skipped, which also keeps ad frames out.
+ */
+function sameOriginFrameText(): string {
+  let best = '';
+  for (const f of document.querySelectorAll('iframe')) {
+    try {
+      const t = f.contentDocument?.body?.innerText?.trim() || '';
+      if (t.length > best.length) best = t;
+    } catch {
+      // Cross-origin — skip.
+    }
+  }
+  return best;
+}
+
+/**
  * Most robust LinkedIn description read: anchor on the "About the job" section
  * heading. That label text is stable across ALL of LinkedIn's job layouts —
  * including the newer ones whose CSS classes are hashed/obfuscated (`_243b3f31`
@@ -416,10 +437,15 @@ export function getScanText(): string {
   }
   // Other sites (Greenhouse, Lever, Ashby, Workday, company pages): read just the
   // description block, not the whole body, so the eligibility read isn't diluted.
-  const main = pickMainContent();
-  if (main) return main.slice(0, MAX_CHARS);
   // Badge text lives in a Shadow DOM, so innerText excludes it (no feedback loop).
-  return (document.body?.innerText || '').slice(0, MAX_CHARS);
+  const local = pickMainContent() ?? (document.body?.innerText || '');
+  // The posting may live in a same-origin iframe (iCIMS et al.) that innerText on
+  // this document can't see — merge the frame's text in. Concatenating (rather
+  // than picking one) keeps this recall-only: everything the scan saw before is
+  // still present, so no existing site regresses.
+  const frame = sameOriginFrameText();
+  const combined = frame ? `${local}\n\n${frame}` : local;
+  return combined.slice(0, MAX_CHARS);
 }
 
 function hash(s: string): number {
