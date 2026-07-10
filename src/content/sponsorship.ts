@@ -702,6 +702,23 @@ export function startSponsorshipWatch(): void {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) tick();
   });
+  // An iframe finishing to load is invisible to the top-document MutationObserver
+  // (its content mutates inside its own document), but ATSes like iCIMS deliver
+  // the posting exactly that way — the scan reads it via sameOriginFrameText(),
+  // so a late-loading frame must count as a content change or the badge sticks
+  // on the pre-frame verdict. `load` doesn't bubble, but capture-phase listeners
+  // on window still see subresource loads.
+  window.addEventListener(
+    'load',
+    (e) => {
+      if (e.target instanceof HTMLIFrameElement) {
+        mutationDirty = true;
+        window.clearTimeout(debounceTimer);
+        debounceTimer = window.setTimeout(tick, 600);
+      }
+    },
+    true,
+  );
 }
 
 // --- Badge rendering ---
