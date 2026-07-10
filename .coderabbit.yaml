@@ -4,10 +4,10 @@
 # yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
 language: en-US
 tone_instructions: >-
-  This is a Manifest V3 Chrome extension (TypeScript, React, Vite) with a small
-  Cloud Run proxy under server/. Prioritize: content-script safety on <all_urls>,
-  host-permission and DOM-injection scope, whether the change matches its PR
-  description and linked issue, and test coverage for changed pure functions.
+  Manifest V3 Chrome extension (TypeScript, React, Vite) + a Cloud Run proxy.
+  Prioritize: content-script <all_urls> safety, host-permission/DOM-injection
+  scope, PR-vs-description alignment, and test coverage for changed pure
+  functions.
 reviews:
   profile: chill                    # quiet | chill | assertive — chill = balanced signal/noise
   high_level_summary: true          # PR summary comment
