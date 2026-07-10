@@ -58,6 +58,17 @@ describe('analyze — eligibility verdict', () => {
     expect(a.verdict).toBe('no');
     expect(a.restrictions).toContain('ITAR / export-controlled');
   });
+
+  it('flags a citizenship + clearance qualification bullet as NO', () => {
+    // Real-world DoD-contractor phrasing (iCIMS posting). The rules must catch
+    // this whenever the scan can read it — the historical miss on iCIMS was the
+    // posting living in an iframe the scan never saw, not a rules gap.
+    const a = analyze(
+      'Must be a U.S. citizen, eligible for U.S. Department of Defense (DoD) SECRET security clearance*',
+    );
+    expect(a.verdict).toBe('no');
+    expect(a.restrictions).toContain('U.S. citizenship required');
+  });
 });
 
 describe('analyze — experience extraction', () => {
