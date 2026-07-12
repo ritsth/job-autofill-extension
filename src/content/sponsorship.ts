@@ -990,8 +990,10 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
     .tag { margin-top: 8px; font-size: 11px; color: #94a3b8;
            display: flex; justify-content: space-between; align-items: center; gap: 8px;
            border-top: 1px solid #eef2f7; padding-top: 7px; }
-    .off { color: #44506b; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .off { appearance: none; border: 0; background: transparent; padding: 0; font: inherit;
+           color: #44506b; font-weight: 600; cursor: pointer; white-space: nowrap; }
     .off:hover { text-decoration: underline; }
+    .off:focus-visible { outline: 2px solid #44506b; outline-offset: 2px; border-radius: 2px; }
     .coach { position: relative; width: 252px; box-sizing: border-box;
              background: #44506b; color: #fff; border-radius: 12px; padding: 14px 15px;
              box-shadow: 0 10px 30px rgba(15,23,42,.3); }
@@ -1110,9 +1112,9 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   const foot = document.createElement('div');
   foot.className = 'tag';
   foot.appendChild(el('span', '', 'Little AI Helper'));
-  const off = el('span', 'off', '⚙ Turn off on all sites');
+  const off = el('button', 'off', '⚙ Turn off on all sites');
+  off.setAttribute('type', 'button');
   off.title = 'Stop showing this badge on every page';
-  off.setAttribute('role', 'button');
   off.setAttribute('aria-label', 'Turn off the eligibility badge on all sites');
   off.addEventListener('click', () => void disableScannerEverywhere());
   foot.appendChild(off);
