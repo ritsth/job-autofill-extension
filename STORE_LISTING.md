@@ -73,7 +73,6 @@ English
 | --- | --- |
 | `storage` | Save the user's profile, resume, documents, and settings locally in the browser. |
 | `activeTab` | Read and fill fields on the job-application page the user is currently on, when they click the extension. |
-| `scripting` | Inject the autofill logic that populates form fields on supported application pages. |
 | `sidePanel` | The extension's main UI is a side panel that stays open while the user works through an application. |
 | `identity` | Optional Google sign-in (OpenID/email/profile) so users can authenticate to the managed AI proxy, which meters usage per user. |
 | Host access to Greenhouse, Lever, Workday (`*.greenhouse.io`, `jobs.lever.co`, `*.myworkdayjobs.com`, etc.) | Run the autofill content script on supported job-application sites. |
