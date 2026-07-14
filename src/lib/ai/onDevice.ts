@@ -17,6 +17,9 @@ interface LanguageModelLike {
   create(opts?: { initialPrompts?: Array<{ role: string; content: string }> }): Promise<PromptSession>;
 }
 
+const JSON_ONLY_INSTRUCTION =
+  '\n\nReturn only valid JSON. Do not use Markdown code fences or include explanatory text.';
+
 function getLanguageModel(): LanguageModelLike | null {
   const g = self as unknown as {
     LanguageModel?: LanguageModelLike;
@@ -46,7 +49,7 @@ export async function isOnDeviceAvailable(): Promise<boolean> {
 export class OnDeviceProvider implements AIProvider {
   readonly id = 'onDevice';
 
-  async generate({ system, prompt }: GenerateInput): Promise<string> {
+  async generate({ system, prompt, json }: GenerateInput): Promise<string> {
     const lm = getLanguageModel();
     if (!lm) {
       throw new AIError(
@@ -63,7 +66,11 @@ export class OnDeviceProvider implements AIProvider {
     }
 
     try {
-      const text = await session.prompt(prompt);
+      // The Prompt API has no native response MIME type. Put the format
+      // instruction after the untrusted page content so it is the model's most
+      // recent instruction and structured callers receive parseable output.
+      const request = json ? `${prompt}${JSON_ONLY_INSTRUCTION}` : prompt;
+      const text = await session.prompt(request);
       if (!text.trim()) throw new AIError('On-device model returned an empty response.');
       return text.trim();
     } finally {
