@@ -24,7 +24,11 @@ const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, workdayAdapter
 const adapter = ADAPTERS.find((a) => a.matches(new URL(location.href))) ?? null;
 
 const BUTTON_CLASS = 'jaf-ai-btn';
-const MARK_ATTR = 'data-jaf-bound';
+// Buttons WE created. Reconciliation and cleanup only ever touch members of this
+// set, so a host page element that happens to share our class can never mark a
+// question as handled or get deleted by us. A WeakSet (not a DOM attribute) means
+// the host can't forge membership by copying an attribute.
+const ownedButtons = new WeakSet<HTMLButtonElement>();
 
 // --- Messaging from popup ---
 const isTopFrame = window.top === window.self;
@@ -74,12 +78,49 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse
 });
 
 // --- AI answer buttons ---
+// Reconcile the page to exactly one button immediately after each open question.
+// We do NOT mark the textarea (an attribute or node identity the host framework
+// would strip on re-render): Oracle/Workday-style forms re-render the field
+// continuously, which previously made every observer cycle append another button
+// while the old ones orphaned — a runaway pile-up. Keying on structure instead
+// (button right after its textarea) is churn-proof: strays are removed, gaps are
+// filled, and the count can't exceed the number of current questions.
 function injectQuestionButtons(): void {
-  for (const q of findOpenQuestions()) {
-    if (q.el.getAttribute(MARK_ATTR)) continue;
-    q.el.setAttribute(MARK_ATTR, '1');
-    addButtonFor(q);
+  // Suspend the observer so our own DOM writes below don't re-trigger this pass.
+  const wasObserving = questionsOn;
+  if (wasObserving) observer.disconnect();
+
+  const questions = findOpenQuestions();
+  const wanted = new Set<Element>(questions.map((q) => q.el));
+
+  // Group OUR buttons by the current open-question textarea they sit right after.
+  // Anything else — a button orphaned by a re-render, or a stray — is dropped.
+  const byQuestion = new Map<Element, HTMLButtonElement[]>();
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(`.${BUTTON_CLASS}`)) {
+    if (!ownedButtons.has(btn)) continue; // ignore host elements sharing the class
+    const prev = btn.previousElementSibling;
+    if (prev && wanted.has(prev)) {
+      (byQuestion.get(prev) ?? byQuestion.set(prev, []).get(prev)!).push(btn);
+    } else {
+      btn.remove();
+    }
   }
+
+  // Keep exactly one button per question, preferring an in-flight one (disabled
+  // while its answer generates) so a pending fill still targets a live node.
+  const credited = new Set<Element>();
+  for (const [el, btns] of byQuestion) {
+    const keep = btns.find((b) => b.disabled) ?? btns[0];
+    for (const b of btns) if (b !== keep) b.remove();
+    credited.add(el);
+  }
+
+  // Add a button for any open question that doesn't already have one after it.
+  for (const q of questions) {
+    if (!credited.has(q.el)) addButtonFor(q);
+  }
+
+  if (wasObserving) observer.observe(document.body, { childList: true, subtree: true });
 }
 
 function addButtonFor(q: OpenQuestion): void {
@@ -87,6 +128,7 @@ function addButtonFor(q: OpenQuestion): void {
   btn.type = 'button';
   btn.className = BUTTON_CLASS;
   btn.textContent = '✨ AI answer';
+  ownedButtons.add(btn);
   btn.addEventListener('click', () => generateAnswer(q, btn));
 
   // Place the button right after the textarea.
@@ -159,9 +201,10 @@ function setQuestionButtons(on: boolean): void {
   } else {
     observer.disconnect();
     window.clearTimeout(pending); // cancel any debounced re-inject still queued
-    // Remove the buttons and unmark their textareas so they can re-bind later.
-    document.querySelectorAll(`.${BUTTON_CLASS}`).forEach((n) => n.remove());
-    document.querySelectorAll(`[${MARK_ATTR}]`).forEach((el) => el.removeAttribute(MARK_ATTR));
+    // Remove only OUR buttons; a later re-enable rebuilds them from scratch.
+    document
+      .querySelectorAll<HTMLButtonElement>(`.${BUTTON_CLASS}`)
+      .forEach((n) => ownedButtons.has(n) && n.remove());
   }
 }
 
