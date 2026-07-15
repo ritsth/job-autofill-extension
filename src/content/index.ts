@@ -24,6 +24,11 @@ const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, workdayAdapter
 const adapter = ADAPTERS.find((a) => a.matches(new URL(location.href))) ?? null;
 
 const BUTTON_CLASS = 'jaf-ai-btn';
+// Buttons WE created. Reconciliation and cleanup only ever touch members of this
+// set, so a host page element that happens to share our class can never mark a
+// question as handled or get deleted by us. A WeakSet (not a DOM attribute) means
+// the host can't forge membership by copying an attribute.
+const ownedButtons = new WeakSet<HTMLButtonElement>();
 
 // --- Messaging from popup ---
 const isTopFrame = window.top === window.self;
@@ -88,16 +93,26 @@ function injectQuestionButtons(): void {
   const questions = findOpenQuestions();
   const wanted = new Set<Element>(questions.map((q) => q.el));
 
-  // Drop orphaned / duplicate buttons: keep a button only if it sits right after
-  // a current open-question textarea that hasn't already been credited this pass.
-  const credited = new Set<Element>();
-  for (const btn of document.querySelectorAll(`.${BUTTON_CLASS}`)) {
+  // Group OUR buttons by the current open-question textarea they sit right after.
+  // Anything else — a button orphaned by a re-render, or a stray — is dropped.
+  const byQuestion = new Map<Element, HTMLButtonElement[]>();
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(`.${BUTTON_CLASS}`)) {
+    if (!ownedButtons.has(btn)) continue; // ignore host elements sharing the class
     const prev = btn.previousElementSibling;
-    if (prev && wanted.has(prev) && !credited.has(prev)) {
-      credited.add(prev);
+    if (prev && wanted.has(prev)) {
+      (byQuestion.get(prev) ?? byQuestion.set(prev, []).get(prev)!).push(btn);
     } else {
       btn.remove();
     }
+  }
+
+  // Keep exactly one button per question, preferring an in-flight one (disabled
+  // while its answer generates) so a pending fill still targets a live node.
+  const credited = new Set<Element>();
+  for (const [el, btns] of byQuestion) {
+    const keep = btns.find((b) => b.disabled) ?? btns[0];
+    for (const b of btns) if (b !== keep) b.remove();
+    credited.add(el);
   }
 
   // Add a button for any open question that doesn't already have one after it.
@@ -113,6 +128,7 @@ function addButtonFor(q: OpenQuestion): void {
   btn.type = 'button';
   btn.className = BUTTON_CLASS;
   btn.textContent = '✨ AI answer';
+  ownedButtons.add(btn);
   btn.addEventListener('click', () => generateAnswer(q, btn));
 
   // Place the button right after the textarea.
@@ -185,8 +201,10 @@ function setQuestionButtons(on: boolean): void {
   } else {
     observer.disconnect();
     window.clearTimeout(pending); // cancel any debounced re-inject still queued
-    // Remove the buttons; a later re-enable rebuilds them from scratch.
-    document.querySelectorAll(`.${BUTTON_CLASS}`).forEach((n) => n.remove());
+    // Remove only OUR buttons; a later re-enable rebuilds them from scratch.
+    document
+      .querySelectorAll<HTMLButtonElement>(`.${BUTTON_CLASS}`)
+      .forEach((n) => ownedButtons.has(n) && n.remove());
   }
 }
 
