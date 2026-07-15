@@ -24,7 +24,6 @@ const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, workdayAdapter
 const adapter = ADAPTERS.find((a) => a.matches(new URL(location.href))) ?? null;
 
 const BUTTON_CLASS = 'jaf-ai-btn';
-const MARK_ATTR = 'data-jaf-bound';
 
 // --- Messaging from popup ---
 const isTopFrame = window.top === window.self;
@@ -74,12 +73,39 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse
 });
 
 // --- AI answer buttons ---
+// Reconcile the page to exactly one button immediately after each open question.
+// We do NOT mark the textarea (an attribute or node identity the host framework
+// would strip on re-render): Oracle/Workday-style forms re-render the field
+// continuously, which previously made every observer cycle append another button
+// while the old ones orphaned — a runaway pile-up. Keying on structure instead
+// (button right after its textarea) is churn-proof: strays are removed, gaps are
+// filled, and the count can't exceed the number of current questions.
 function injectQuestionButtons(): void {
-  for (const q of findOpenQuestions()) {
-    if (q.el.getAttribute(MARK_ATTR)) continue;
-    q.el.setAttribute(MARK_ATTR, '1');
-    addButtonFor(q);
+  // Suspend the observer so our own DOM writes below don't re-trigger this pass.
+  const wasObserving = questionsOn;
+  if (wasObserving) observer.disconnect();
+
+  const questions = findOpenQuestions();
+  const wanted = new Set<Element>(questions.map((q) => q.el));
+
+  // Drop orphaned / duplicate buttons: keep a button only if it sits right after
+  // a current open-question textarea that hasn't already been credited this pass.
+  const credited = new Set<Element>();
+  for (const btn of document.querySelectorAll(`.${BUTTON_CLASS}`)) {
+    const prev = btn.previousElementSibling;
+    if (prev && wanted.has(prev) && !credited.has(prev)) {
+      credited.add(prev);
+    } else {
+      btn.remove();
+    }
   }
+
+  // Add a button for any open question that doesn't already have one after it.
+  for (const q of questions) {
+    if (!credited.has(q.el)) addButtonFor(q);
+  }
+
+  if (wasObserving) observer.observe(document.body, { childList: true, subtree: true });
 }
 
 function addButtonFor(q: OpenQuestion): void {
@@ -159,9 +185,8 @@ function setQuestionButtons(on: boolean): void {
   } else {
     observer.disconnect();
     window.clearTimeout(pending); // cancel any debounced re-inject still queued
-    // Remove the buttons and unmark their textareas so they can re-bind later.
+    // Remove the buttons; a later re-enable rebuilds them from scratch.
     document.querySelectorAll(`.${BUTTON_CLASS}`).forEach((n) => n.remove());
-    document.querySelectorAll(`[${MARK_ATTR}]`).forEach((el) => el.removeAttribute(MARK_ATTR));
   }
 }
 
