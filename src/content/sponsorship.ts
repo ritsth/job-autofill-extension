@@ -531,7 +531,10 @@ export function nearestCorner(cx: number, cy: number, vw: number, vh: number): B
 function saveCorner(corner: BadgeCorner): void {
   badgeCorner = corner;
   try {
-    void chrome.storage.local.set({ [CORNER_KEY]: corner });
+    // Catch both a synchronous throw (context invalidated) and an async
+    // rejection (e.g. quota) so neither surfaces as an unhandled rejection —
+    // the in-page move still works regardless.
+    void chrome.storage.local.set({ [CORNER_KEY]: corner }).catch(() => {});
   } catch {
     // Extension context invalidated — keep the in-page move working anyway.
   }
@@ -1229,6 +1232,10 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   head.addEventListener('pointercancel', endDrag);
 
   head.addEventListener('keydown', (e) => {
+    // Only navigate when the header handle itself has focus — an arrow key
+    // pressed while a child control (the × close) is focused bubbles here and
+    // must not move the badge.
+    if (e.target !== head) return;
     const c = badgeCorner;
     const next: BadgeCorner | null =
       e.key === 'ArrowLeft' ? (c === 'tr' ? 'tl' : c === 'br' ? 'bl' : null)
