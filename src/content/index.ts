@@ -16,6 +16,7 @@ import {
   setScannerEnabled,
   setBadgeFeatures,
   setBadgeIntroSeen,
+  setBadgeCorner,
   getScanText,
   captureJobWhenReady,
 } from './sponsorship';
@@ -223,10 +224,14 @@ if (window.top === window.self && !scannerGlobal.__jafScannerStarted) {
   (async () => {
     try {
       const profile = await getProfile();
-      // Seed the one-time badge coachmark flag before enabling the scanner, so the
-      // first badge render knows whether to show it.
-      const { badgeIntroSeen } = await chrome.storage.local.get('badgeIntroSeen');
+      // Seed the one-time badge coachmark flag and the user's badge corner before
+      // enabling the scanner, so the first badge render is already correct.
+      const { badgeIntroSeen, badgeCorner } = await chrome.storage.local.get([
+        'badgeIntroSeen',
+        'badgeCorner',
+      ]);
       setBadgeIntroSeen(Boolean(badgeIntroSeen));
+      setBadgeCorner(badgeCorner);
       setBadgeFeatures({ coverLetter: profile.coverLetterEnabled, resume: profile.tailoredResumeEnabled });
       setScannerEnabled(profile.scanEnabled);
     } catch (e) {

@@ -3,8 +3,24 @@ import {
   addBadgeDismissListener,
   analyze,
   isBadgeDismissKey,
+  nearestCorner,
   shouldDismissBadge,
 } from './sponsorship';
+
+describe('nearestCorner — badge drag snapping', () => {
+  it('maps each viewport quadrant to its corner', () => {
+    expect(nearestCorner(10, 10, 1000, 800)).toBe('tl');
+    expect(nearestCorner(990, 10, 1000, 800)).toBe('tr');
+    expect(nearestCorner(10, 790, 1000, 800)).toBe('bl');
+    expect(nearestCorner(990, 790, 1000, 800)).toBe('br');
+  });
+
+  it('breaks exact-center ties toward the bottom-right', () => {
+    // Center is not < half, so ties resolve to bottom/right — deterministic,
+    // and matches the badge's historical right-side home.
+    expect(nearestCorner(500, 400, 1000, 800)).toBe('br');
+  });
+});
 
 describe('eligibility badge keyboard dismissal', () => {
   it('dismisses only for Escape', () => {

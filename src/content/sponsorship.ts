@@ -509,6 +509,51 @@ function markIntroSeen(): void {
   chrome.storage.local.set({ [INTRO_SEEN_KEY]: true });
 }
 
+// Which viewport corner the badge sits in. The user can drag the badge (or use
+// arrow keys on its header) to any corner; the choice is persisted so every page
+// renders it where they put it. Loaded at content init (index.ts calls
+// setBadgeCorner), defaulting to the historical top-right.
+export type BadgeCorner = 'tl' | 'tr' | 'bl' | 'br';
+const CORNER_KEY = 'badgeCorner';
+let badgeCorner: BadgeCorner = 'tr';
+
+/** Seeds the badge corner from storage (called once from the content init). */
+export function setBadgeCorner(value: unknown): void {
+  if (value === 'tl' || value === 'tr' || value === 'bl' || value === 'br') badgeCorner = value;
+}
+
+/** Pure: the corner nearest to a point (the badge's center) in a vw×vh viewport. */
+export function nearestCorner(cx: number, cy: number, vw: number, vh: number): BadgeCorner {
+  return `${cy < vh / 2 ? 't' : 'b'}${cx < vw / 2 ? 'l' : 'r'}` as BadgeCorner;
+}
+
+/** Persists a new corner; must never throw in an orphaned extension context. */
+function saveCorner(corner: BadgeCorner): void {
+  badgeCorner = corner;
+  try {
+    void chrome.storage.local.set({ [CORNER_KEY]: corner });
+  } catch {
+    // Extension context invalidated — keep the in-page move working anyway.
+  }
+}
+
+/** Positions the badge column in a corner and flips stacking/arrow direction. */
+function applyCorner(wrap: HTMLElement, corner: BadgeCorner): void {
+  const st = wrap.style;
+  const left = corner === 'tl' || corner === 'bl';
+  const top = corner === 'tl' || corner === 'tr';
+  st.left = left ? '14px' : 'auto';
+  st.right = left ? 'auto' : '14px';
+  st.top = top ? '14px' : 'auto';
+  st.bottom = top ? 'auto' : '14px';
+  st.alignItems = left ? 'flex-start' : 'flex-end';
+  // Bottom corners stack in reverse so the card hugs the corner and the
+  // coachmark floats above it instead of running off-screen.
+  st.flexDirection = top ? 'column' : 'column-reverse';
+  wrap.classList.toggle('wrap--above', !top);
+  wrap.classList.toggle('wrap--left', left);
+}
+
 /**
  * Turns the eligibility scanner off everywhere by persisting scanEnabled=false.
  * The profile-change listener in index.ts then removes the badge and the
@@ -972,7 +1017,9 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
          flex default that would otherwise keep it at its full content height. */
       min-height: 0; overflow-y: auto;
     }
-    .head { display: flex; align-items: center; gap: 8px; }
+    .head { display: flex; align-items: center; gap: 8px;
+            cursor: grab; touch-action: none; }
+    .head:focus-visible { outline: 2px solid #44506b; outline-offset: 2px; border-radius: 4px; }
     .word { font-size: 20px; font-weight: 800; color: ${s.color}; letter-spacing: .5px; }
     .title { font-weight: 700; flex: 1; }
     .x { border: none; background: transparent; cursor: pointer; font-size: 18px;
@@ -999,6 +1046,10 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
              box-shadow: 0 10px 30px rgba(15,23,42,.3); }
     .coach::before { content: ''; position: absolute; top: -6px; right: 34px;
                      width: 14px; height: 14px; background: #44506b; transform: rotate(45deg); }
+    /* Corner variants: bottom corners stack the coachmark ABOVE the card (arrow
+       points down at it); left corners anchor the arrow on the left side. */
+    .wrap--above .coach::before { top: auto; bottom: -6px; }
+    .wrap--left .coach::before { right: auto; left: 34px; }
     .coach-t { font-weight: 700; font-size: 14px; margin-bottom: 5px; }
     .coach-d { font-size: 12px; line-height: 1.5; color: #dbe1ec; }
     .coach-row { display: flex; gap: 8px; margin-top: 12px; }
@@ -1120,11 +1171,76 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   foot.appendChild(off);
   card.appendChild(foot);
 
-  // Stack the card and (optionally) the coachmark in a fixed, right-aligned
-  // column so the coachmark floats as a separate bubble below the badge.
+  // Stack the card and (optionally) the coachmark in a fixed column anchored to
+  // the user's chosen corner (default top-right).
   const wrap = document.createElement('div');
   wrap.className = 'wrap';
   wrap.appendChild(card);
+  applyCorner(wrap, badgeCorner);
+
+  // --- Move the badge: drag the header to any corner (or use arrow keys). ---
+  head.title = 'Drag to move this badge to another corner';
+  head.setAttribute('tabindex', '0');
+  head.setAttribute('role', 'button');
+  head.setAttribute('aria-label', 'Move badge: drag it, or press an arrow key');
+
+  let dragFrom: { x: number; y: number; left: number; top: number } | null = null;
+  let dragging = false;
+  head.addEventListener('pointerdown', (e) => {
+    // The × close (and any other control) keeps its normal click behavior.
+    if ((e.target as HTMLElement).closest('button, a')) return;
+    const r = wrap.getBoundingClientRect();
+    dragFrom = { x: e.clientX, y: e.clientY, left: r.left, top: r.top };
+    // Capture so moves keep streaming to us even over iframes / out of the card.
+    // A failed capture (stale pointer id) just means a less-sticky drag.
+    try {
+      head.setPointerCapture(e.pointerId);
+    } catch {
+      // proceed uncaptured
+    }
+  });
+  head.addEventListener('pointermove', (e) => {
+    if (!dragFrom) return;
+    const dx = e.clientX - dragFrom.x;
+    const dy = e.clientY - dragFrom.y;
+    // A real drag needs ~5px of travel; below that it's just a sloppy click.
+    if (!dragging && Math.hypot(dx, dy) < 5) return;
+    dragging = true;
+    const st = wrap.style;
+    st.right = 'auto';
+    st.bottom = 'auto';
+    st.left = `${dragFrom.left + dx}px`;
+    st.top = `${dragFrom.top + dy}px`;
+    st.userSelect = 'none';
+    head.style.cursor = 'grabbing';
+  });
+  const endDrag = (): void => {
+    if (dragging) {
+      const r = wrap.getBoundingClientRect();
+      saveCorner(nearestCorner(r.left + r.width / 2, r.top + r.height / 2, innerWidth, innerHeight));
+      applyCorner(wrap, badgeCorner);
+    }
+    wrap.style.userSelect = '';
+    head.style.cursor = '';
+    dragFrom = null;
+    dragging = false;
+  };
+  head.addEventListener('pointerup', endDrag);
+  head.addEventListener('pointercancel', endDrag);
+
+  head.addEventListener('keydown', (e) => {
+    const c = badgeCorner;
+    const next: BadgeCorner | null =
+      e.key === 'ArrowLeft' ? (c === 'tr' ? 'tl' : c === 'br' ? 'bl' : null)
+      : e.key === 'ArrowRight' ? (c === 'tl' ? 'tr' : c === 'bl' ? 'br' : null)
+      : e.key === 'ArrowUp' ? (c === 'bl' ? 'tl' : c === 'br' ? 'tr' : null)
+      : e.key === 'ArrowDown' ? (c === 'tl' ? 'bl' : c === 'tr' ? 'br' : null)
+      : null;
+    if (!next) return;
+    e.preventDefault(); // moving the badge, not scrolling the page
+    saveCorner(next);
+    applyCorner(wrap, next);
+  });
 
   // One-time coachmark: a separate bubble below the badge the first time it ever
   // appears, explaining what it is with a one-click global off. Removed (and never
