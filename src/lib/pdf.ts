@@ -24,7 +24,7 @@ const EXTRA_W: Record<number, number> = {
   0x91: 222, 0x92: 222, 0x93: 333, 0x94: 333, 0x95: 350, 0x96: 556, 0x97: 1000, 0x85: 1000,
 };
 
-function glyph(ch: string): { byte: number; width: number } {
+export function glyph(ch: string): { byte: number; width: number } {
   let code = ch.charCodeAt(0);
   if (UNI_TO_WIN[code] !== undefined) code = UNI_TO_WIN[code];
   if (code >= 32 && code <= 126) return { byte: code, width: HELV[code - 32] };
@@ -41,7 +41,7 @@ function measure(s: string, fontSize: number): number {
 }
 
 /** Greedy word-wrap a single logical line to a max width (in points). */
-function wrapLine(line: string, fontSize: number, maxW: number): string[] {
+export function wrapLine(line: string, fontSize: number, maxW: number): string[] {
   if (line.trim() === '') return [''];
   const out: string[] = [];
   let cur = '';
@@ -59,7 +59,7 @@ function wrapLine(line: string, fontSize: number, maxW: number): string[] {
 }
 
 /** Escapes a string into PDF WinAnsi bytes (handling ( ) \ and high bytes). */
-function encodeText(s: string): string {
+export function encodeText(s: string): string {
   let out = '';
   for (const ch of s) {
     const { byte } = glyph(ch);
