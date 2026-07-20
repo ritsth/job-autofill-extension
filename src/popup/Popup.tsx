@@ -254,6 +254,9 @@ export function Popup() {
   }
 
   const activeJob = jobs.find((j) => j.id === activeJobId) ?? null;
+  // Cover letter + tailored resume need both fields — a blank company/role
+  // produces a weak, generic result, so gate generation on them.
+  const canGenerate = company.trim() !== '' && role.trim() !== '';
   const openOptions = () => chrome.runtime.openOptionsPage();
   const geminiNeedsKey = aiProvider === 'gemini' && !apiKeySet;
   // Proxy mode needs a signed-in account (unless the owner set an admin token).
@@ -423,9 +426,14 @@ export function Popup() {
           />
         </div>
 
+        {!canGenerate && (
+          <div className="help" style={{ marginTop: 4 }}>
+            Enter a company and role above to generate a cover letter or tailored resume.
+          </div>
+        )}
         <button
           className="primary"
-          disabled={busy !== ''}
+          disabled={busy !== '' || !canGenerate}
           onClick={onCoverLetter}
           aria-label={busy === 'letter' ? 'Generating cover letter' : 'Generate cover letter'}
         >
@@ -451,7 +459,7 @@ export function Popup() {
         <button
           className="primary"
           style={{ marginTop: 8 }}
-          disabled={busy !== ''}
+          disabled={busy !== '' || !canGenerate}
           onClick={onResume}
           aria-label={busy === 'resume' ? 'Tailoring resume' : 'Generate tailored resume'}
         >
