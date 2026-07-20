@@ -15,7 +15,7 @@ import { downloadResume } from '../lib/resume';
 import { signIn, reconcileAuthUser, onAuthChanged, type AuthUser } from '../lib/auth';
 
 /** Compact "saved N ago" label for a saved job's timestamp. */
-function timeAgo(ts: number): string {
+export function timeAgo(ts: number): string {
   const secs = Math.max(0, Math.round((Date.now() - ts) / 1000));
   if (secs < 60) return 'just now';
   const mins = Math.round(secs / 60);
