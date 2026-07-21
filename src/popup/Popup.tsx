@@ -16,6 +16,12 @@ import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
 import { signIn, reconcileAuthUser, onAuthChanged, type AuthUser } from '../lib/auth';
 
+/** Cover letter / tailored resume need both fields — blank or whitespace-only
+ * company/role produces a weak, generic result. */
+export function canGenerateDocuments(company: string, role: string): boolean {
+  return company.trim() !== '' && role.trim() !== '';
+}
+
 /** Compact "saved N ago" label for a saved job's timestamp. */
 export function timeAgo(ts: number): string {
   const secs = Math.max(0, Math.round((Date.now() - ts) / 1000));
@@ -261,6 +267,7 @@ export function Popup() {
   }
 
   const activeJob = jobs.find((j) => j.id === activeJobId) ?? null;
+  const canGenerate = canGenerateDocuments(company, role);
   const openOptions = () => chrome.runtime.openOptionsPage();
   const geminiNeedsKey = aiProvider === 'gemini' && !apiKeySet;
   // Proxy mode needs a signed-in account (unless the owner set an admin token).
@@ -430,9 +437,14 @@ export function Popup() {
           />
         </div>
 
+        {!canGenerate && (
+          <div className="help" style={{ marginTop: 4 }}>
+            Enter a company and role above to generate a cover letter or tailored resume.
+          </div>
+        )}
         <button
           className="primary"
-          disabled={busy !== ''}
+          disabled={busy !== '' || !canGenerate}
           onClick={onCoverLetter}
           aria-label={busy === 'letter' ? 'Generating cover letter' : 'Generate cover letter'}
         >
@@ -458,7 +470,7 @@ export function Popup() {
         <button
           className="primary"
           style={{ marginTop: 8 }}
-          disabled={busy !== ''}
+          disabled={busy !== '' || !canGenerate}
           onClick={onResume}
           aria-label={busy === 'resume' ? 'Tailoring resume' : 'Generate tailored resume'}
         >
