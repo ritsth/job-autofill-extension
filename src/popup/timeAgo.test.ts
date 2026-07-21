@@ -44,4 +44,14 @@ describe('timeAgo', () => {
     at(NOW);
     expect(timeAgo(NOW + 10_000)).toBe('just now');
   });
+
+  it('rounds a fractional elapsed time to the nearest second (round-half-up)', () => {
+    // timeAgo uses Math.round, not floor: 59.5s elapsed rounds to 60s, which
+    // fails the "< 60" check and reports "1 min ago" even though real elapsed
+    // time is under a minute. Documenting the actual (round-half-up) behavior
+    // rather than the floor semantics one might otherwise assume.
+    at(NOW);
+    expect(timeAgo(NOW - 59_500)).toBe('1 min ago');
+    expect(timeAgo(NOW - 59_400)).toBe('just now');
+  });
 });
