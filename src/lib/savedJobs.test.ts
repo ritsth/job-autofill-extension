@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { addJob, isJobTextTruncated, MAX_TEXT } from './savedJobs';
+import { addJob, isJobTextTruncated, MAX_TEXT, type SavedJobsState } from './savedJobs';
+
+const STORAGE_KEY = 'savedJobs';
 
 describe('isJobTextTruncated — save cap boundary', () => {
   it('is false at or below the cap', () => {
@@ -39,18 +41,22 @@ describe('addJob — storage-side truncation', () => {
 
   it('caps persisted text at MAX_TEXT and warns, for input one char over', async () => {
     const longText = 'a'.repeat(MAX_TEXT + 1);
-    const state = await addJob({ company: 'Acme', role: 'Engineer', url: 'https://x', text: longText });
+    await addJob({ company: 'Acme', role: 'Engineer', url: 'https://x', text: longText });
 
-    expect(state.jobs[0].text).toHaveLength(MAX_TEXT);
+    // Assert what actually landed in storage, not just addJob's return value —
+    // a regression could return the right shape while persisting something else.
+    const persisted = store[STORAGE_KEY] as SavedJobsState;
+    expect(persisted.jobs[0].text).toBe(longText.slice(0, MAX_TEXT));
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining(`${MAX_TEXT + 1} to ${MAX_TEXT}`),
     );
   });
 
   it('does not warn and stores text unchanged when under the cap', async () => {
-    const state = await addJob({ company: 'Acme', role: 'Engineer', url: 'https://x', text: 'short posting' });
+    await addJob({ company: 'Acme', role: 'Engineer', url: 'https://x', text: 'short posting' });
 
-    expect(state.jobs[0].text).toBe('short posting');
+    const persisted = store[STORAGE_KEY] as SavedJobsState;
+    expect(persisted.jobs[0].text).toBe('short posting');
     expect(console.warn).not.toHaveBeenCalled();
   });
 });
