@@ -14,6 +14,12 @@ import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
 import { signIn, reconcileAuthUser, onAuthChanged, type AuthUser } from '../lib/auth';
 
+/** Cover letter / tailored resume need both fields — blank or whitespace-only
+ * company/role produces a weak, generic result. */
+export function canGenerateDocuments(company: string, role: string): boolean {
+  return company.trim() !== '' && role.trim() !== '';
+}
+
 /** Compact "saved N ago" label for a saved job's timestamp. */
 function timeAgo(ts: number): string {
   const secs = Math.max(0, Math.round((Date.now() - ts) / 1000));
@@ -254,9 +260,7 @@ export function Popup() {
   }
 
   const activeJob = jobs.find((j) => j.id === activeJobId) ?? null;
-  // Cover letter + tailored resume need both fields — a blank company/role
-  // produces a weak, generic result, so gate generation on them.
-  const canGenerate = company.trim() !== '' && role.trim() !== '';
+  const canGenerate = canGenerateDocuments(company, role);
   const openOptions = () => chrome.runtime.openOptionsPage();
   const geminiNeedsKey = aiProvider === 'gemini' && !apiKeySet;
   // Proxy mode needs a signed-in account (unless the owner set an admin token).
