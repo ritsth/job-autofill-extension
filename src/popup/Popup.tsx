@@ -6,6 +6,8 @@ import {
   setActiveJob,
   deleteJob,
   onSavedJobsChanged,
+  isJobTextTruncated,
+  MAX_TEXT,
   type SavedJob,
 } from '../lib/savedJobs';
 import { sendToBackground, sendToTab } from '../lib/messages';
@@ -246,6 +248,11 @@ export function Popup() {
         url: cap.url,
         text: cap.text,
       });
+      flashFillMsg(
+        isJobTextTruncated(cap.text)
+          ? `Saved — the posting was long, so it was trimmed to ${MAX_TEXT.toLocaleString()} characters for AI context.`
+          : 'Job saved.',
+      );
     } catch {
       setError('Could not read this page. Reload it and try again.');
     } finally {

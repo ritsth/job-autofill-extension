@@ -6,7 +6,13 @@
 
 const STORAGE_KEY = 'savedJobs';
 const MAX_JOBS = 20;
-const MAX_TEXT = 12_000;
+/** Captured posting text is capped at this many characters before storage. */
+export const MAX_TEXT = 12_000;
+
+/** True when `text` is longer than the cap and would be trimmed on save. */
+export function isJobTextTruncated(text: string): boolean {
+  return text.length > MAX_TEXT;
+}
 
 export interface SavedJob {
   id: string;
@@ -53,6 +59,11 @@ export async function addJob(
   partial: Omit<SavedJob, 'id' | 'savedAt'>,
 ): Promise<SavedJobsState> {
   const state = await getSavedJobs();
+  if (isJobTextTruncated(partial.text)) {
+    console.warn(
+      `[Little AI Helper] Saved posting trimmed from ${partial.text.length} to ${MAX_TEXT} chars for AI context.`,
+    );
+  }
   const job: SavedJob = {
     ...partial,
     text: partial.text.slice(0, MAX_TEXT),
