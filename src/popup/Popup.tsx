@@ -393,13 +393,17 @@ export function Popup() {
                       {expanded ? '▴' : '▾'}
                     </button>
                     <button
-                      className="jobdel"
-                      title="Delete"
-                      aria-label={`Delete ${j.role || 'saved job'}${j.company ? ` at ${j.company}` : ''}`}
-                      onClick={() => deleteJob(j.id)}
-                    >
-                      ×
-                    </button>
+    className="jobdel"
+    title="Delete"
+  aria-label={`Delete ${j.role || 'saved job'}…`}
+  onClick={() => {
+    if (window.confirm(`Delete the saved job "${j.role || 'this job'}"? This can't be undone.`)) {
+      void deleteJob(j.id);
+    }
+  }}
+>
+  ×
+</button>
                   </div>
                   {expanded && (
                     <div className="jobpreview">
