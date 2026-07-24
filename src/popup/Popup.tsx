@@ -410,6 +410,16 @@ export function Popup() {
                       <div className="jobmeta">
                         <span>{j.text.length.toLocaleString()} chars</span>
                         <span>saved {timeAgo(j.savedAt)}</span>
+                        {j.url?.trim() ? (
+                          <a
+                            href={j.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={j.url}
+                          >
+                            Open original posting ↗
+                          </a>
+                        ) : null}
                       </div>
                       <div className="jobsnippet">
                         {j.text.trim() || '(no text captured)'}
