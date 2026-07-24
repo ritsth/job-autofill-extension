@@ -61,6 +61,9 @@ export function Popup() {
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
   const fillMsgTimer = useRef<number | null>(null);
+const [copied, setCopied] = useState<'' | 'letter' | 'resume'>('');
+const copyTimer = useRef<number | null>(null);
+
 
   // Persist a boolean feature toggle and reflect it locally.
   async function toggleSetting(
@@ -72,6 +75,20 @@ export function Popup() {
     const profile = await getProfile();
     await saveProfile({ ...profile, [key]: value });
   }
+
+  async function copyToClipboard(text: string, target: 'letter' | 'resume') {
+  try {
+    await navigator.clipboard.writeText(text);
+    if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+    setCopied(target);
+    copyTimer.current = window.setTimeout(() => {
+      setCopied('');
+      copyTimer.current = null;
+    }, 1500);
+  } catch {
+    setError('Could not copy to clipboard. Select the text and copy manually.');
+  }
+}
 
   function flashFillMsg(message: string) {
     if (fillMsgTimer.current !== null) {
@@ -170,6 +187,7 @@ export function Popup() {
       chrome.tabs.onActivated.removeListener(onActivated);
       chrome.tabs.onUpdated.removeListener(onUpdated);
       if (fillMsgTimer.current !== null) clearTimeout(fillMsgTimer.current);
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
     };
   }, []);
 
@@ -464,23 +482,33 @@ export function Popup() {
         >
           {busy === 'letter' ? 'Generating…' : 'Generate cover letter'}
         </button>
+       
         {letter && (
-          <>
-            <textarea
-              style={{ marginTop: 8 }}
-              value={letter}
-              onChange={(e) => setLetter(e.target.value)}
-            />
-            <button
-              className="full"
-              style={{ marginTop: 8 }}
-              onClick={() => downloadLetter(letter, company, role)}
-            >
-              ⬇ Download cover letter (.pdf)
-            </button>
-          </>
-        )}
-
+  <>
+    <textarea
+      style={{ marginTop: 8 }}
+      value={letter}
+      onChange={(e) => setLetter(e.target.value)}
+    />
+    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+      <button
+        className="full"
+        style={{ flex: 1 }}
+        onClick={() => downloadLetter(letter, company, role)}
+      >
+        ⬇ Download cover letter (.pdf)
+      </button>
+      <button
+        className="full"
+        style={{ flex: 1 }}
+        onClick={() => copyToClipboard(letter, 'letter')}
+        aria-label="Copy cover letter to clipboard"
+      >
+        {copied === 'letter' ? '✓ Copied!' : '📋 Copy'}
+      </button>
+    </div>
+  </>
+)}
         <button
           className="primary"
           style={{ marginTop: 8 }}
@@ -490,22 +518,32 @@ export function Popup() {
         >
           {busy === 'resume' ? 'Tailoring…' : 'Generate tailored resume'}
         </button>
-        {resume && (
-          <>
-            <textarea
-              style={{ marginTop: 8 }}
-              value={resume}
-              onChange={(e) => setResume(e.target.value)}
-            />
-            <button
-              className="full"
-              style={{ marginTop: 8 }}
-              onClick={() => downloadResume(resume, company, role)}
-            >
-              ⬇ Download resume (.pdf)
-            </button>
-          </>
-        )}
+       {resume && (
+  <>
+    <textarea
+      style={{ marginTop: 8 }}
+      value={resume}
+      onChange={(e) => setResume(e.target.value)}
+    />
+    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+      <button
+        className="full"
+        style={{ flex: 1 }}
+        onClick={() => downloadResume(resume, company, role)}
+      >
+        ⬇ Download resume (.pdf)
+      </button>
+      <button
+        className="full"
+        style={{ flex: 1 }}
+        onClick={() => copyToClipboard(resume, 'resume')}
+        aria-label="Copy resume to clipboard"
+      >
+        {copied === 'resume' ? '✓ Copied!' : '📋 Copy'}
+      </button>
+    </div>
+  </>
+)}
       </div>
 
       {error && <div className="status warn">{error}</div>}
