@@ -527,6 +527,13 @@ export function nearestCorner(cx: number, cy: number, vw: number, vh: number): B
   return `${cy < vh / 2 ? 't' : 'b'}${cx < vw / 2 ? 'l' : 'r'}` as BadgeCorner;
 }
 
+/** Clamp one axis so a size-`len` badge stays within a `viewport`-long axis. */
+export function clampAxis(pos: number, len: number, viewport: number): number {
+  // Inner max guards a badge larger than the viewport: pin it to the top/left
+  // edge (0) rather than letting a negative upper bound push it off-screen.
+  return Math.max(0, Math.min(pos, Math.max(0, viewport - len)));
+}
+
 /** Persists a new corner; must never throw in an orphaned extension context. */
 function saveCorner(corner: BadgeCorner): void {
   badgeCorner = corner;
@@ -1187,13 +1194,14 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   head.setAttribute('role', 'button');
   head.setAttribute('aria-label', 'Move badge: drag it, or press an arrow key');
 
-  let dragFrom: { x: number; y: number; left: number; top: number } | null = null;
+  let dragFrom: { x: number; y: number; left: number; top: number; w: number; h: number } | null =
+    null;
   let dragging = false;
   head.addEventListener('pointerdown', (e) => {
     // The × close (and any other control) keeps its normal click behavior.
     if ((e.target as HTMLElement).closest('button, a')) return;
     const r = wrap.getBoundingClientRect();
-    dragFrom = { x: e.clientX, y: e.clientY, left: r.left, top: r.top };
+    dragFrom = { x: e.clientX, y: e.clientY, left: r.left, top: r.top, w: r.width, h: r.height };
     // Capture so moves keep streaming to us even over iframes / out of the card.
     // A failed capture (stale pointer id) just means a less-sticky drag.
     try {
@@ -1212,8 +1220,10 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
     const st = wrap.style;
     st.right = 'auto';
     st.bottom = 'auto';
-    st.left = `${dragFrom.left + dx}px`;
-    st.top = `${dragFrom.top + dy}px`;
+    // Clamp to the viewport so the badge can never be dragged fully off-screen
+    // (and thus stranded, since its handle would go with it).
+    st.left = `${clampAxis(dragFrom.left + dx, dragFrom.w, innerWidth)}px`;
+    st.top = `${clampAxis(dragFrom.top + dy, dragFrom.h, innerHeight)}px`;
     st.userSelect = 'none';
     head.style.cursor = 'grabbing';
   });
@@ -1230,6 +1240,9 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   };
   head.addEventListener('pointerup', endDrag);
   head.addEventListener('pointercancel', endDrag);
+  // Safety net: if the pointer is released outside the window, pointerup /
+  // pointercancel can be dropped — losing capture still fires, so snap here too.
+  head.addEventListener('lostpointercapture', endDrag);
 
   head.addEventListener('keydown', (e) => {
     // Only navigate when the header handle itself has focus — an arrow key
