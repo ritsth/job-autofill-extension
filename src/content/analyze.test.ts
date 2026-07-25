@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   addBadgeDismissListener,
   analyze,
+  clampAxis,
   isBadgeDismissKey,
   nearestCorner,
   shouldDismissBadge,
@@ -19,6 +20,29 @@ describe('nearestCorner — badge drag snapping', () => {
     // Center is not < half, so ties resolve to bottom/right — deterministic,
     // and matches the badge's historical right-side home.
     expect(nearestCorner(500, 400, 1000, 800)).toBe('br');
+  });
+});
+
+describe('clampAxis — keep the dragged badge on-screen', () => {
+  it('leaves an in-range position unchanged', () => {
+    expect(clampAxis(100, 200, 1000)).toBe(100);
+  });
+
+  it('clamps a negative position to the near edge', () => {
+    expect(clampAxis(-50, 200, 1000)).toBe(0);
+  });
+
+  it('clamps past the far edge to viewport - len', () => {
+    // 200-wide badge in a 1000 viewport can sit at most at 800.
+    expect(clampAxis(950, 200, 1000)).toBe(800);
+    expect(clampAxis(800, 200, 1000)).toBe(800);
+  });
+
+  it('pins to 0 when the badge is larger than the viewport', () => {
+    // viewport - len is negative; the badge pins to the top/left edge instead
+    // of being pushed off-screen by a negative upper bound.
+    expect(clampAxis(100, 1200, 1000)).toBe(0);
+    expect(clampAxis(-100, 1200, 1000)).toBe(0);
   });
 });
 
