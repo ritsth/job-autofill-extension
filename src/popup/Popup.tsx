@@ -427,7 +427,12 @@ const copyTimer = useRef<number | null>(null);
                     <div className="jobpreview">
                       <div className="jobmeta">
                         <span>{j.text.length.toLocaleString()} chars</span>
-                        <span>saved {timeAgo(j.savedAt)}</span>
+                        <time
+                          dateTime={new Date(j.savedAt).toISOString()}
+                          title={new Date(j.savedAt).toLocaleString()}
+                        >
+                          saved {timeAgo(j.savedAt)}
+                        </time>
                         {j.url?.trim() ? (
                           <a
                             href={j.url}
