@@ -536,6 +536,9 @@ function OptionsView({
           On a job page, the popup substitutes the company/role/date placeholders.
         </div>
       </section>
+      <footer className="help" style={{ marginTop: 16, textAlign: 'center' }}>
+        Little AI Helper v{chrome.runtime.getManifest().version}
+      </footer>
     </div>
   );
 }
