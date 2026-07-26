@@ -1,4 +1,5 @@
-import { Children, cloneElement, isValidElement, useEffect, useId, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Field } from './Field';
 import type { EducationEntry, Profile, WorkEntry } from '../lib/profile';
 import { useProfile } from '../ui/useProfile';
 import { extractText } from '../lib/documents';
@@ -536,38 +537,6 @@ function OptionsView({
           On a job page, the popup substitutes the company/role/date placeholders.
         </div>
       </section>
-    </div>
-  );
-}
-
-const LABELABLE_TAGS = new Set(['input', 'select', 'textarea']);
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  const id = useId();
-  const childArray = Children.toArray(children);
-  const [first, ...rest] = childArray;
-
-  const canAssociate =
-    isValidElement(first) &&
-    typeof first.type === 'string' &&
-    LABELABLE_TAGS.has(first.type);
-
-  if (!canAssociate) {
-    // Not a single form control (e.g. a div of buttons like the Account
-    // field) — keep the plain label rather than force an incorrect htmlFor.
-    return (
-      <div className="field">
-        <label>{label}</label>
-        {children}
-      </div>
-    );
-  }
-
-  return (
-    <div className="field">
-      <label htmlFor={id}>{label}</label>
-      {cloneElement(first as React.ReactElement<{ id?: string }>, { id })}
-      {rest}
     </div>
   );
 }
