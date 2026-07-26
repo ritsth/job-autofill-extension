@@ -62,6 +62,8 @@ function OptionsView({
     msg: '',
     err: '',
   });
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showProxyToken, setShowProxyToken] = useState(false);
 
   // Google sign-in state for the managed proxy.
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -205,12 +207,22 @@ function OptionsView({
         </div>
         {p.ai.provider === 'gemini' && (
           <Field label="Gemini API key">
-            <input
-              type="password"
-              value={p.ai.apiKey}
-              placeholder="Paste your AI Studio key"
-              onChange={(e) => setAI('apiKey', e.target.value)}
-            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                value={p.ai.apiKey}
+                placeholder="Paste your AI Studio key"
+                onChange={(e) => setAI('apiKey', e.target.value)}
+              />
+              <button
+                className="ghost"
+                type="button"
+                aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                onClick={() => setShowApiKey((visible) => !visible)}
+              >
+                {showApiKey ? 'Hide' : 'Show'}
+              </button>
+            </div>
             <div className="help">
               Get a free key at{' '}
               <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
@@ -253,12 +265,22 @@ function OptionsView({
               />
             </Field>
             <Field label="Admin token (optional)">
-              <input
-                type="password"
-                value={p.ai.proxyToken}
-                placeholder="Only the proxy owner needs this — bypasses sign-in & quota"
-                onChange={(e) => setAI('proxyToken', e.target.value)}
-              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type={showProxyToken ? 'text' : 'password'}
+                  value={p.ai.proxyToken}
+                  placeholder="Only the proxy owner needs this — bypasses sign-in & quota"
+                  onChange={(e) => setAI('proxyToken', e.target.value)}
+                />
+                <button
+                  className="ghost"
+                  type="button"
+                  aria-label={showProxyToken ? 'Hide admin token' : 'Show admin token'}
+                  onClick={() => setShowProxyToken((visible) => !visible)}
+                >
+                  {showProxyToken ? 'Hide' : 'Show'}
+                </button>
+              </div>
               <div className="help">
                 Leave blank for normal use. If you deployed the proxy yourself (see the{' '}
                 <code>server/</code> folder), paste its <code>PROXY_TOKEN</code> to bypass sign-in
