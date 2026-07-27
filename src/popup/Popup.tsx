@@ -492,6 +492,7 @@ const copyTimer = useRef<number | null>(null);
   <>
     <textarea
       style={{ marginTop: 8 }}
+      aria-label="Generated cover letter"
       value={letter}
       onChange={(e) => setLetter(e.target.value)}
     />
@@ -527,6 +528,7 @@ const copyTimer = useRef<number | null>(null);
   <>
     <textarea
       style={{ marginTop: 8 }}
+      aria-label="Generated tailored resume"
       value={resume}
       onChange={(e) => setResume(e.target.value)}
     />
