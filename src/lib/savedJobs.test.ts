@@ -5,6 +5,7 @@ import {
   getActiveJob,
   getSavedJobs,
   isJobTextTruncated,
+  MAX_JOBS,
   MAX_TEXT,
   setActiveJob,
   type SavedJob,
@@ -12,8 +13,6 @@ import {
 } from './savedJobs';
 
 const STORAGE_KEY = 'savedJobs';
-// Mirrors the module-private MAX_JOBS cap in savedJobs.ts.
-const MAX_JOBS = 20;
 
 // Minimal in-memory chrome.storage.local: enough for get/set with one key.
 // Shared by every suite below so each starts from empty storage.
@@ -147,6 +146,22 @@ describe('addJob — MAX_JOBS eviction cap', () => {
 
     expect(jobs).toHaveLength(2);
     expect(jobs.some((j) => j.id === 'a')).toBe(true);
+  });
+
+  it('reports the dropped job so the UI can say so', async () => {
+    const existing = Array.from({ length: MAX_JOBS }, (_, i) => job({ id: `old-${i}` }));
+    seed({ jobs: existing, activeId: 'old-0' });
+
+    const { evicted } = await addJob(partial('newest'));
+
+    // Without this the 21st save silently loses the oldest posting (#85).
+    expect(evicted.map((j) => j.id)).toEqual([`old-${MAX_JOBS - 1}`]);
+  });
+
+  it('reports nothing evicted while under the cap', async () => {
+    seed({ jobs: [job({ id: 'a' })], activeId: 'a' });
+
+    expect((await addJob(partial('newest'))).evicted).toEqual([]);
   });
 });
 

@@ -7,6 +7,7 @@ import {
   deleteJob,
   onSavedJobsChanged,
   isJobTextTruncated,
+  MAX_JOBS,
   MAX_TEXT,
   type SavedJob,
 } from '../lib/savedJobs';
@@ -20,6 +21,30 @@ import { signIn, reconcileAuthUser, onAuthChanged, type AuthUser } from '../lib/
  * company/role produces a weak, generic result. */
 export function canGenerateDocuments(company: string, role: string): boolean {
   return company.trim() !== '' && role.trim() !== '';
+}
+
+/**
+ * Status line shown after saving a job. Both caps can bite on the same save, so
+ * the notices are composed rather than chosen — silently dropping either one is
+ * how a trimmed posting or an evicted job goes unnoticed.
+ */
+export function saveJobNotice({
+  truncated,
+  evicted,
+}: {
+  truncated: boolean;
+  evicted: boolean;
+}): string {
+  const notices: string[] = [];
+  if (truncated) {
+    notices.push(
+      `the posting was long, so it was trimmed to ${MAX_TEXT.toLocaleString()} characters for AI context`,
+    );
+  }
+  if (evicted) {
+    notices.push(`your oldest saved job was dropped to stay under ${MAX_JOBS}`);
+  }
+  return notices.length === 0 ? 'Job saved.' : `Saved — ${notices.join('; ')}.`;
 }
 
 /** Compact "saved N ago" label for a saved job's timestamp. */
@@ -266,16 +291,17 @@ const copyTimer = useRef<number | null>(null);
         setError('No job posting detected on this page to save.');
         return;
       }
-      await addJob({
+      const { evicted } = await addJob({
         company: cap.company,
         role: cap.role || cap.title,
         url: cap.url,
         text: cap.text,
       });
       flashFillMsg(
-        isJobTextTruncated(cap.text)
-          ? `Saved — the posting was long, so it was trimmed to ${MAX_TEXT.toLocaleString()} characters for AI context.`
-          : 'Job saved.',
+        saveJobNotice({
+          truncated: isJobTextTruncated(cap.text),
+          evicted: evicted.length > 0,
+        }),
       );
     } catch {
       setError('Could not read this page. Reload it and try again.');
