@@ -42,7 +42,9 @@ export function saveJobNotice({
     );
   }
   if (evicted) {
-    notices.push(`your oldest saved job was dropped to stay under ${MAX_JOBS}`);
+    // "within the N-job limit", not "under N": after eviction the list holds
+    // exactly MAX_JOBS, so "under" would be off by one.
+    notices.push(`your oldest saved job was dropped to stay within the ${MAX_JOBS}-job limit`);
   }
   return notices.length === 0 ? 'Job saved.' : `Saved — ${notices.join('; ')}.`;
 }
