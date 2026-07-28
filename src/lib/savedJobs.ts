@@ -5,7 +5,8 @@
 // + resume so they don't quietly lose the role.
 
 const STORAGE_KEY = 'savedJobs';
-const MAX_JOBS = 20;
+/** The saved-jobs list is capped here; adding past it drops the oldest. */
+export const MAX_JOBS = 20;
 /** Captured posting text is capped at this many characters before storage. */
 export const MAX_TEXT = 12_000;
 
@@ -54,10 +55,18 @@ export async function getActiveJob(): Promise<SavedJob | null> {
   return jobs.find((j) => j.id === activeId) ?? null;
 }
 
+export interface AddJobResult extends SavedJobsState {
+  /**
+   * Jobs pushed off the end by the MAX_JOBS cap. Reported so the UI can say the
+   * oldest save was dropped instead of letting it vanish silently.
+   */
+  evicted: SavedJob[];
+}
+
 /** Adds a captured job (newest first), makes it active, and returns the new state. */
 export async function addJob(
   partial: Omit<SavedJob, 'id' | 'savedAt'>,
-): Promise<SavedJobsState> {
+): Promise<AddJobResult> {
   const state = await getSavedJobs();
   if (isJobTextTruncated(partial.text)) {
     console.warn(
@@ -70,12 +79,15 @@ export async function addJob(
     id: crypto.randomUUID(),
     savedAt: Date.now(),
   };
+  const all = [job, ...state.jobs];
   const next: SavedJobsState = {
-    jobs: [job, ...state.jobs].slice(0, MAX_JOBS),
+    jobs: all.slice(0, MAX_JOBS),
     activeId: job.id,
   };
   await setSavedJobs(next);
-  return next;
+  // Computed here rather than by comparing counts in the caller, whose copy of
+  // the list can lag behind storage.
+  return { ...next, evicted: all.slice(MAX_JOBS) };
 }
 
 export async function setActiveJob(id: string | null): Promise<void> {
