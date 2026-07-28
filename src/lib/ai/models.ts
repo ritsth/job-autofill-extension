@@ -2,7 +2,8 @@
 // truth for the dropdown and for default/normalization logic. All three ids exist
 // on both AI Studio (BYO key, src/lib/ai/gemini.ts) and Vertex AI (the managed
 // proxy, server/index.js). When this list changes, mirror it in the server's
-// MODEL_ALLOWLIST so the proxy accepts the new ids.
+// MODEL_ALLOWLIST so the proxy accepts the new ids — modelAllowlist.test.ts
+// fails if the two drift.
 
 export interface ModelOption {
   id: string;

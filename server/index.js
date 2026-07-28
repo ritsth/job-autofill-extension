@@ -27,8 +27,10 @@ const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
 // gemini-2.5-flash is broadly available; older 1.5/2.0 IDs 404 on newer projects.
 const MODEL = process.env.VERTEX_MODEL || 'gemini-2.5-flash';
 // Models a client is allowed to request via the request body. Keep in sync with
-// the curated list in src/lib/ai/models.ts. Anything outside this set falls back
-// to MODEL, so a client can't bill the project against an arbitrary/expensive id.
+// the curated list in src/lib/ai/models.ts — src/lib/ai/modelAllowlist.test.ts
+// reads this declaration and fails CI if the two drift. Anything outside this set
+// falls back to MODEL, so a client can't bill the project against an
+// arbitrary/expensive id.
 const MODEL_ALLOWLIST = new Set([
   'gemini-2.5-pro',
   'gemini-2.5-flash',
