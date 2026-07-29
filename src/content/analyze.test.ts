@@ -197,6 +197,54 @@ describe('analyze — eligibility verdict', () => {
     expect(a.verdict).toBe('caution');
   });
 
+  it('treats a work-authorization requirement as a caution, not a hard NO', () => {
+    // Someone on F-1/OPT is already authorized, so this mainly rules out people
+    // needing sponsorship from scratch — a MAYBE, not a NO.
+    for (const text of [
+      'US work authorization required',
+      'U.S. work authorization required',
+      'Work authorization is required for this role.',
+      'Must be authorized to work in the United States.',
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('caution');
+      expect(a.cautions, text).toContain('U.S. work authorization required');
+    }
+  });
+
+  it('marks an explicit OPT/CPT welcome as YES', () => {
+    for (const text of ['Open to candidates with OPT/CPT', 'We welcome OPT and CPT candidates']) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('yes');
+      expect(a.positives, text).toContain('Open to OPT/CPT');
+    }
+  });
+
+  it('does not read a REFUSED OPT/CPT as friendly', () => {
+    // The affirmative cue has to lead and "not" is excluded, so a refusal can't
+    // masquerade as a positive.
+    expect(analyze('We do not accept OPT/CPT').verdict).not.toBe('yes');
+    expect(analyze('This role is not open to candidates with OPT/CPT').verdict).not.toBe('yes');
+  });
+
+  it('lets an explicit positive outrank the work-authorization boilerplate', () => {
+    // A caution normally beats a positive. "Work authorization required" is
+    // boilerplate on a huge share of US postings, so on its own it would drag
+    // genuinely sponsor-friendly postings down to MAYBE.
+    const optCpt = analyze('US work authorization required. Open to candidates with OPT/CPT.');
+    expect(optCpt.verdict).toBe('yes');
+    expect(optCpt.cautions).not.toContain('U.S. work authorization required');
+
+    expect(analyze('US work authorization required. Sponsorship is available.').verdict).toBe('yes');
+  });
+
+  it('still lets a hard restriction outrank both', () => {
+    expect(analyze('Must be a U.S. citizen. US work authorization required.').verdict).toBe('no');
+    expect(
+      analyze('We are unable to provide visa sponsorship. US work authorization required.').verdict,
+    ).toBe('no');
+  });
+
   it('returns unknown when no eligibility signal is present', () => {
     const a = analyze('We are a small team building developer tools in San Francisco.');
     expect(a.verdict).toBe('unknown');
