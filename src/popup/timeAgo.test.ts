@@ -44,6 +44,7 @@ describe('timeAgo', () => {
   it('reports weeks at and after seven days', () => {
     at(NOW);
     expect(timeAgo(secondsAgo(7 * 24 * 60 * 60))).toBe('1 wk ago');
+    expect(timeAgo(secondsAgo(32 * 24 * 60 * 60))).toBe('5 wk ago');
     expect(timeAgo(secondsAgo(4 * 7 * 24 * 60 * 60))).toBe('4 wk ago');
   });
 
@@ -55,6 +56,7 @@ describe('timeAgo', () => {
 
   it('reports years at and after twelve months', () => {
     at(NOW);
+    expect(timeAgo(secondsAgo(345 * 24 * 60 * 60))).toBe('12 mo ago');
     expect(timeAgo(secondsAgo(12 * 30 * 24 * 60 * 60))).toBe('1 yr ago');
     expect(timeAgo(secondsAgo(2 * 365 * 24 * 60 * 60))).toBe('2 yr ago');
   });
