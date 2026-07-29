@@ -34,10 +34,29 @@ describe('timeAgo', () => {
     expect(timeAgo(secondsAgo(5 * 60 * 60))).toBe('5 hr ago');
   });
 
-  it('reports days, singular vs plural', () => {
+  it('reports days, singular vs plural before the week boundary', () => {
     at(NOW);
     expect(timeAgo(secondsAgo(24 * 60 * 60))).toBe('1 day ago');
     expect(timeAgo(secondsAgo(3 * 24 * 60 * 60))).toBe('3 days ago');
+    expect(timeAgo(secondsAgo(6 * 24 * 60 * 60))).toBe('6 days ago');
+  });
+
+  it('reports weeks at and after seven days', () => {
+    at(NOW);
+    expect(timeAgo(secondsAgo(7 * 24 * 60 * 60))).toBe('1 wk ago');
+    expect(timeAgo(secondsAgo(4 * 7 * 24 * 60 * 60))).toBe('4 wk ago');
+  });
+
+  it('reports months at and after five weeks', () => {
+    at(NOW);
+    expect(timeAgo(secondsAgo(5 * 7 * 24 * 60 * 60))).toBe('1 mo ago');
+    expect(timeAgo(secondsAgo(11 * 30 * 24 * 60 * 60))).toBe('11 mo ago');
+  });
+
+  it('reports years at and after twelve months', () => {
+    at(NOW);
+    expect(timeAgo(secondsAgo(12 * 30 * 24 * 60 * 60))).toBe('1 yr ago');
+    expect(timeAgo(secondsAgo(2 * 365 * 24 * 60 * 60))).toBe('2 yr ago');
   });
 
   it('clamps a future timestamp to "just now" instead of a negative age', () => {
