@@ -211,6 +211,8 @@ function OptionsView({
             <div style={{ display: 'flex', gap: 8 }}>
               <input
                 type={showApiKey ? 'text' : 'password'}
+                autoComplete="off"
+                spellCheck={false}
                 value={p.ai.apiKey}
                 placeholder="Paste your AI Studio key"
                 onChange={(e) => setAI('apiKey', e.target.value)}
@@ -269,6 +271,8 @@ function OptionsView({
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   type={showProxyToken ? 'text' : 'password'}
+                  autoComplete="off"
+                  spellCheck={false}
                   value={p.ai.proxyToken}
                   placeholder="Only the proxy owner needs this — bypasses sign-in & quota"
                   onChange={(e) => setAI('proxyToken', e.target.value)}
