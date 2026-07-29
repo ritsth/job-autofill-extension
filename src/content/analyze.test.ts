@@ -2,11 +2,60 @@ import { describe, it, expect } from 'vitest';
 import {
   addBadgeDismissListener,
   analyze,
+  badgeSignature,
   clampAxis,
   isBadgeDismissKey,
   nearestCorner,
   shouldDismissBadge,
 } from './sponsorship';
+
+describe('badgeSignature — what forces a badge rebuild', () => {
+  // Two postings that analyse identically. Very common: any two postings with no
+  // eligibility wording both come back "unknown/rules", so the analysis alone
+  // cannot distinguish them.
+  const same = analyze('We are seeking a new grad to join the team.');
+  const acme = { company: 'Acme Corp', role: 'Software Engineer' };
+
+  it('changes when the posting company/role changes', () => {
+    // The bug: the generator forms are seeded once at build time, so if the
+    // signature ignores company/role, switching jobs in a split view keeps the
+    // previous posting's values in the cover-letter form.
+    expect(badgeSignature(same, acme, true, true)).not.toBe(
+      badgeSignature(same, { company: 'Saroot Labs', role: 'Software Engineer' }, true, true),
+    );
+    expect(badgeSignature(same, acme, true, true)).not.toBe(
+      badgeSignature(same, { company: 'Acme Corp', role: 'Data Analyst' }, true, true),
+    );
+  });
+
+  it('is stable for the same posting and settings', () => {
+    // Guards the perf win: mutation-happy pages must not rebuild every debounce.
+    expect(badgeSignature(same, acme, true, true)).toBe(badgeSignature(same, acme, true, true));
+  });
+
+  it('still changes when the verdict or generator toggles change', () => {
+    const restricted = analyze('Must be a U.S. citizen. No visa sponsorship.');
+    expect(badgeSignature(same, acme, true, true)).not.toBe(
+      badgeSignature(restricted, acme, true, true),
+    );
+    expect(badgeSignature(same, acme, true, true)).not.toBe(
+      badgeSignature(same, acme, false, true),
+    );
+    expect(badgeSignature(same, acme, true, true)).not.toBe(
+      badgeSignature(same, acme, true, false),
+    );
+  });
+
+  it('does not collide when a delimiter character sits in scraped company/role text', () => {
+    // Regression guard: company/role come from unsanitized DOM text, so a plain
+    // join('|') let company "A|B" + role "C" collide with company "A" + role
+    // "B|C" — two different postings would be treated as the same one and the
+    // rebuild (with it, the generator forms) would be skipped.
+    expect(badgeSignature(same, { company: 'A|B', role: 'C' }, true, true)).not.toBe(
+      badgeSignature(same, { company: 'A', role: 'B|C' }, true, true),
+    );
+  });
+});
 
 describe('nearestCorner — badge drag snapping', () => {
   it('maps each viewport quadrant to its corner', () => {

@@ -470,6 +470,10 @@ let mutationDirty = false;
 // Signature of the badge currently on screen, so identical re-computations keep
 // the mounted DOM instead of tearing it down. Cleared by removeBadge().
 let renderedSig = '';
+// Bumped every time the mounted badge is replaced. Lets an in-flight async
+// action (the AI check) notice a posting switch happened while it was awaiting
+// and discard its now-stale result instead of clobbering the new badge.
+let badgeGeneration = 0;
 // AI results cached per posting (by scanned-text hash) so revisiting a job — or
 // a re-render from the watcher — reuses the AI verdict without another call.
 const aiCache = new Map<number, SponsorAnalysis>();
@@ -646,6 +650,41 @@ function tick(): void {
   renderFrom(text);
 }
 
+/** Company/role scraped from the posting, used to seed the generator forms. */
+export interface JobMeta {
+  company: string;
+  role: string;
+}
+
+/**
+ * Identity of what the badge is currently showing. The rebuild is skipped while
+ * this is unchanged, so anything the badge *displays* has to be in here.
+ *
+ * That includes the posting's company/role: the generator forms are seeded once
+ * at build time, so leaving them out let a split-view job switch keep the
+ * previous posting's values whenever both postings analysed the same (very
+ * common — two "no eligibility info" postings produce an identical verdict).
+ */
+export function badgeSignature(
+  a: SponsorAnalysis,
+  meta: JobMeta,
+  showCoverLetter: boolean,
+  showResume: boolean,
+): string {
+  // JSON.stringify, not join('|'): scraped DOM text is unsanitized, so a
+  // company/role that happens to contain the delimiter (e.g. company "A|B" vs
+  // company "A" + role "B|...") would collide under a plain join. JSON encodes
+  // each field's own quotes/length, so distinct inputs can't produce the same
+  // string.
+  return JSON.stringify([
+    a.verdict, a.source, a.reason ?? '',
+    a.restrictions, a.cautions, a.positives,
+    a.experience.required ?? '', a.experience.preferred ?? '',
+    meta.company, meta.role,
+    showCoverLetter, showResume,
+  ]);
+}
+
 function renderFrom(text: string): void {
   if (!enabled || dismissed) return;
   if (!document.body) return;
@@ -655,19 +694,25 @@ function renderFrom(text: string): void {
     (pinnedAi && pinnedAiUrl === location.href ? pinnedAi : null) ??
     aiCache.get(hash(text)) ??
     analyze(text);
+  // Read the meta once and reuse it for both the signature and the render, so a
+  // mutation landing between two reads can't sign one posting while showing
+  // another.
+  //
+  // Only when a generator is actually shown: getJobMeta()'s non-LinkedIn path
+  // falls back to a bare `h1` / ancestor-content read, and the content script
+  // runs on <all_urls>, so this DOM read must stay opt-in rather than firing on
+  // every render everywhere. With neither generator visible there's no form to
+  // seed, so a constant empty meta is both cheaper and exactly as correct.
+  const meta: JobMeta =
+    showCoverLetterInBadge || showResumeInBadge ? getJobMeta() : { company: '', role: '' };
   // Skip the teardown/rebuild when the badge already shows exactly this result —
   // mutation-happy pages (live counts, timestamps) otherwise cause a rebuild
   // every debounce even though nothing visible changed. The generator toggles
   // are part of the signature so a settings change still re-renders.
-  const sig = [
-    analysis.verdict, analysis.source, analysis.reason ?? '',
-    analysis.restrictions.join(','), analysis.cautions.join(','), analysis.positives.join(','),
-    analysis.experience.required ?? '', analysis.experience.preferred ?? '',
-    showCoverLetterInBadge, showResumeInBadge,
-  ].join('|');
+  const sig = badgeSignature(analysis, meta, showCoverLetterInBadge, showResumeInBadge);
   if (sig === renderedSig && document.getElementById(BANNER_ID)) return;
   removeBadge();
-  document.body.appendChild(renderBadge(analysis));
+  document.body.appendChild(renderBadge(analysis, meta));
   renderedSig = sig;
 }
 
@@ -790,6 +835,7 @@ let removeBadgeKeydownListener: (() => void) | null = null;
 /** Removes every instance of the badge host (guards against duplicates). */
 function removeBadge(): void {
   renderedSig = ''; // whatever renders next is a fresh mount, never skipped
+  badgeGeneration++;
   removeBadgeKeydownListener?.();
   removeBadgeKeydownListener = null;
   document.querySelectorAll(`#${BANNER_ID}`).forEach((n) => n.remove());
@@ -926,10 +972,11 @@ function getJobMeta(): { company: string; role: string } {
  */
 function buildGeneratorSection(cfg: {
   toggleLabel: string;
+  meta: JobMeta;
   request: (company: string, role: string, jobText: string) => Promise<AIResult>;
   download: (text: string, company: string, role: string) => void;
 }): HTMLElement {
-  const meta = getJobMeta();
+  const meta = cfg.meta;
   const wrap = document.createElement('div');
   wrap.className = 'cl';
 
@@ -978,18 +1025,20 @@ function buildGeneratorSection(cfg: {
   return wrap;
 }
 
-function buildCoverLetterSection(): HTMLElement {
+function buildCoverLetterSection(meta: JobMeta): HTMLElement {
   return buildGeneratorSection({
     toggleLabel: '📄 Cover letter',
+    meta,
     request: (company, role, jobText) =>
       sendToBackground<AIResult>({ type: 'AI_GENERATE_COVER_LETTER', company, role, jobText }),
     download: downloadLetter,
   });
 }
 
-function buildResumeSection(): HTMLElement {
+function buildResumeSection(meta: JobMeta): HTMLElement {
   return buildGeneratorSection({
     toggleLabel: '🧾 Tailored resume',
+    meta,
     request: (company, role, jobText) =>
       sendToBackground<AIResult>({ type: 'AI_GENERATE_RESUME', company, role, jobText }),
     download: downloadResume,
@@ -1000,7 +1049,7 @@ function buildResumeSection(): HTMLElement {
  * Renders the badge inside a Shadow DOM so the host page's CSS can't bleed in
  * (which otherwise garbles/duplicates the text). Returns the host element.
  */
-function renderBadge(a: SponsorAnalysis): HTMLElement {
+function renderBadge(a: SponsorAnalysis, meta: JobMeta): HTMLElement {
   const s = STYLES[a.verdict];
 
   const host = document.createElement('div');
@@ -1140,13 +1189,34 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
     ai.addEventListener('click', async () => {
       ai.textContent = 'Analyzing…';
       ai.disabled = true;
+      // Snapshot what this click is FOR, before the await: on a split-view board
+      // the user can switch to a different posting while the request is in
+      // flight, and generation only changes when a badge is actually replaced —
+      // unlike re-hashing scan text, a harmless mutation (a "N people viewed
+      // this" counter) can't cause a false "stale" read here.
+      const startUrl = location.href;
+      const startGeneration = badgeGeneration;
       try {
         const analysis = await runAiCheck();
-        // Pin it to this posting so the watcher's re-renders don't revert to rules.
+        if (badgeGeneration !== startGeneration) {
+          // The badge was already replaced (a genuine posting switch, or the
+          // user dismissed/toggled it) — this result is for a posting that is
+          // no longer showing. Applying it now would silently overwrite the
+          // current, correct badge with stale analysis and meta.
+          return;
+        }
+        // Pin it to this posting so the watcher's re-renders don't revert to
+        // rules. Use the URL captured at click time, not a fresh read — if it
+        // did change without a generation bump, pinning against the new URL
+        // would attach this analysis to the wrong posting.
         pinnedAi = analysis;
-        pinnedAiUrl = location.href;
+        pinnedAiUrl = startUrl;
         removeBadge();
-        if (document.body && enabled && !dismissed) document.body.appendChild(renderBadge(analysis));
+        // Same posting the badge was built for, so reuse its meta rather than
+        // re-reading the DOM and risking a different posting's company/role.
+        if (document.body && enabled && !dismissed) {
+          document.body.appendChild(renderBadge(analysis, meta));
+        }
       } catch (e) {
         ai.textContent = `⚠ ${String((e as Error).message).slice(0, 32)}`;
         ai.disabled = false;
@@ -1164,8 +1234,8 @@ function renderBadge(a: SponsorAnalysis): HTMLElement {
   // Offer one-click tailor-and-download for a cover letter + resume right here,
   // below the AI check, on any posting. Each generator is shown unless the user
   // turned it off in settings.
-  if (showCoverLetterInBadge) card.appendChild(buildCoverLetterSection());
-  if (showResumeInBadge) card.appendChild(buildResumeSection());
+  if (showCoverLetterInBadge) card.appendChild(buildCoverLetterSection(meta));
+  if (showResumeInBadge) card.appendChild(buildResumeSection(meta));
 
   // Footer: brand tag + an always-available "turn the scanner off everywhere"
   // link, so the global off-switch is reachable from the badge itself (not only
