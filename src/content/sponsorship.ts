@@ -42,8 +42,11 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
   // Strong inability cue anywhere in the same sentence as "sponsor(ship)" —
   // catches "unable to consider candidates who require visa sponsorship".
   { re: /\b(unable to|not able to|cannot|can.?t|won.?t|will not|not in a position to|ineligible|not eligible|are unable to|is unable to)\b[^.!?]{0,70}\bsponsor(ship|ed|ing)?\b/i, label: 'No visa sponsorship' },
-  // "do/does not ... sponsor" kept narrow so it doesn't catch "do not hesitate".
-  { re: /\b(do not|does not|don.?t|are not|aren.?t)\s+(currently |presently )?(provide |offer |support )?sponsor/i, label: 'No visa sponsorship' },
+  // "do/does not ... sponsor". The verb and the qualifier ("visa", "employer")
+  // are both enumerated rather than using a wildcard gap, so this stays narrow
+  // enough not to catch "do not hesitate". Without the qualifier slot the very
+  // common "do not provide VISA sponsorship" slipped through as a false negative.
+  { re: /\b(do not|does not|don.?t|are not|aren.?t)\s+(currently |presently )?(provid(?:e|ing) |offer(?:ing)? |support(?:ing)? )?(visa |employer |work |immigration |h-?1b )?sponsor/i, label: 'No visa sponsorship' },
   // "sponsorship is not available / not provided / not offered" word order.
   { re: /\bsponsor(ship|ed|ing)?\b[^.!?]{0,40}\b(is not|are not|not (available|provided|offered)|will not|cannot|can.?t)\b/i, label: 'No visa sponsorship' },
   { re: /\bno (visa |employer )?sponsorship\b/i, label: 'No visa sponsorship' },
