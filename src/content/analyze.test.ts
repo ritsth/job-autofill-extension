@@ -116,6 +116,13 @@ describe('analyze — eligibility verdict', () => {
       'We do not support visa sponsorship.',
       'This company does not provide visa sponsorship.',
       'We are not currently offering visa sponsorship.',
+      // Every enumerated qualifier and verb form gets its own case so a typo'd
+      // alternative in the regex fails here instead of shipping silently.
+      'We are not supporting H-1B sponsorship.',
+      'We do not support work sponsorship.',
+      'We do not provide immigration sponsorship.',
+      "This company doesn't provide visa sponsorship.",
+      "We don't offer visa sponsorship.",
     ]) {
       const a = analyze(text);
       expect(a.verdict, text).toBe('no');

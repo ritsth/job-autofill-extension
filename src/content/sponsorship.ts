@@ -46,7 +46,7 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
   // are both enumerated rather than using a wildcard gap, so this stays narrow
   // enough not to catch "do not hesitate". Without the qualifier slot the very
   // common "do not provide VISA sponsorship" slipped through as a false negative.
-  { re: /\b(do not|does not|don.?t|are not|aren.?t)\s+(currently |presently )?(provid(?:e|ing) |offer(?:ing)? |support(?:ing)? )?(visa |employer |work |immigration |h-?1b )?sponsor/i, label: 'No visa sponsorship' },
+  { re: /\b(do not|does not|don.?t|doesn.?t|are not|aren.?t)\s+(currently |presently )?(provid(?:e|ing) |offer(?:ing)? |support(?:ing)? )?(visa |employer |work |immigration |h-?1b )?sponsor/i, label: 'No visa sponsorship' },
   // "sponsorship is not available / not provided / not offered" word order.
   { re: /\bsponsor(ship|ed|ing)?\b[^.!?]{0,40}\b(is not|are not|not (available|provided|offered)|will not|cannot|can.?t)\b/i, label: 'No visa sponsorship' },
   { re: /\bno (visa |employer )?sponsorship\b/i, label: 'No visa sponsorship' },
