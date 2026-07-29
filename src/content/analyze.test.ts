@@ -153,6 +153,39 @@ describe('analyze — eligibility verdict', () => {
     expect(a.restrictions).toContain('No visa sponsorship');
   });
 
+  it('flags "do not provide/offer VISA sponsorship" as NO', () => {
+    // Regression guard. The "do/does not … sponsor" rule allowed only an
+    // immediate verb ("do not provide sponsorship"), so the far more common
+    // wording with a qualifier in between — "do not provide VISA sponsorship" —
+    // matched nothing and the badge reported "no eligibility info detected".
+    for (const text of [
+      'We do not provide visa sponsorship.',
+      'We do not offer visa sponsorship at this time.',
+      'We do not offer employer sponsorship.',
+      'We do not support visa sponsorship.',
+      'This company does not provide visa sponsorship.',
+      'We are not currently offering visa sponsorship.',
+      // Every enumerated qualifier and verb form gets its own case so a typo'd
+      // alternative in the regex fails here instead of shipping silently.
+      'We are not supporting H-1B sponsorship.',
+      'We do not support work sponsorship.',
+      'We do not provide immigration sponsorship.',
+      "This company doesn't provide visa sponsorship.",
+      "We don't offer visa sponsorship.",
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('no');
+      expect(a.restrictions, text).toContain('No visa sponsorship');
+    }
+  });
+
+  it('keeps the sponsorship negation narrow enough to skip "do not hesitate"', () => {
+    // The rule enumerates verbs/qualifiers instead of using a wildcard gap
+    // precisely so an unrelated "do not" near the word "sponsor" is not a NO.
+    const a = analyze('Please do not hesitate to contact us about our sponsor program.');
+    expect(a.verdict).not.toBe('no');
+  });
+
   it('marks an employer that will sponsor as YES', () => {
     const a = analyze('We will sponsor visas for the right candidate.');
     expect(a.verdict).toBe('yes');
