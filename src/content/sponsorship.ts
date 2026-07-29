@@ -470,6 +470,10 @@ let mutationDirty = false;
 // Signature of the badge currently on screen, so identical re-computations keep
 // the mounted DOM instead of tearing it down. Cleared by removeBadge().
 let renderedSig = '';
+// Bumped every time the mounted badge is replaced. Lets an in-flight async
+// action (the AI check) notice a posting switch happened while it was awaiting
+// and discard its now-stale result instead of clobbering the new badge.
+let badgeGeneration = 0;
 // AI results cached per posting (by scanned-text hash) so revisiting a job — or
 // a re-render from the watcher — reuses the AI verdict without another call.
 const aiCache = new Map<number, SponsorAnalysis>();
@@ -667,13 +671,18 @@ export function badgeSignature(
   showCoverLetter: boolean,
   showResume: boolean,
 ): string {
-  return [
+  // JSON.stringify, not join('|'): scraped DOM text is unsanitized, so a
+  // company/role that happens to contain the delimiter (e.g. company "A|B" vs
+  // company "A" + role "B|...") would collide under a plain join. JSON encodes
+  // each field's own quotes/length, so distinct inputs can't produce the same
+  // string.
+  return JSON.stringify([
     a.verdict, a.source, a.reason ?? '',
-    a.restrictions.join(','), a.cautions.join(','), a.positives.join(','),
+    a.restrictions, a.cautions, a.positives,
     a.experience.required ?? '', a.experience.preferred ?? '',
     meta.company, meta.role,
     showCoverLetter, showResume,
-  ].join('|');
+  ]);
 }
 
 function renderFrom(text: string): void {
@@ -688,7 +697,14 @@ function renderFrom(text: string): void {
   // Read the meta once and reuse it for both the signature and the render, so a
   // mutation landing between two reads can't sign one posting while showing
   // another.
-  const meta = getJobMeta();
+  //
+  // Only when a generator is actually shown: getJobMeta()'s non-LinkedIn path
+  // falls back to a bare `h1` / ancestor-content read, and the content script
+  // runs on <all_urls>, so this DOM read must stay opt-in rather than firing on
+  // every render everywhere. With neither generator visible there's no form to
+  // seed, so a constant empty meta is both cheaper and exactly as correct.
+  const meta: JobMeta =
+    showCoverLetterInBadge || showResumeInBadge ? getJobMeta() : { company: '', role: '' };
   // Skip the teardown/rebuild when the badge already shows exactly this result —
   // mutation-happy pages (live counts, timestamps) otherwise cause a rebuild
   // every debounce even though nothing visible changed. The generator toggles
@@ -819,6 +835,7 @@ let removeBadgeKeydownListener: (() => void) | null = null;
 /** Removes every instance of the badge host (guards against duplicates). */
 function removeBadge(): void {
   renderedSig = ''; // whatever renders next is a fresh mount, never skipped
+  badgeGeneration++;
   removeBadgeKeydownListener?.();
   removeBadgeKeydownListener = null;
   document.querySelectorAll(`#${BANNER_ID}`).forEach((n) => n.remove());
@@ -1172,11 +1189,28 @@ function renderBadge(a: SponsorAnalysis, meta: JobMeta): HTMLElement {
     ai.addEventListener('click', async () => {
       ai.textContent = 'Analyzing…';
       ai.disabled = true;
+      // Snapshot what this click is FOR, before the await: on a split-view board
+      // the user can switch to a different posting while the request is in
+      // flight, and generation only changes when a badge is actually replaced —
+      // unlike re-hashing scan text, a harmless mutation (a "N people viewed
+      // this" counter) can't cause a false "stale" read here.
+      const startUrl = location.href;
+      const startGeneration = badgeGeneration;
       try {
         const analysis = await runAiCheck();
-        // Pin it to this posting so the watcher's re-renders don't revert to rules.
+        if (badgeGeneration !== startGeneration) {
+          // The badge was already replaced (a genuine posting switch, or the
+          // user dismissed/toggled it) — this result is for a posting that is
+          // no longer showing. Applying it now would silently overwrite the
+          // current, correct badge with stale analysis and meta.
+          return;
+        }
+        // Pin it to this posting so the watcher's re-renders don't revert to
+        // rules. Use the URL captured at click time, not a fresh read — if it
+        // did change without a generation bump, pinning against the new URL
+        // would attach this analysis to the wrong posting.
         pinnedAi = analysis;
-        pinnedAiUrl = location.href;
+        pinnedAiUrl = startUrl;
         removeBadge();
         // Same posting the badge was built for, so reuse its meta rather than
         // re-reading the DOM and risking a different posting's company/role.

@@ -45,6 +45,16 @@ describe('badgeSignature — what forces a badge rebuild', () => {
       badgeSignature(same, acme, true, false),
     );
   });
+
+  it('does not collide when a delimiter character sits in scraped company/role text', () => {
+    // Regression guard: company/role come from unsanitized DOM text, so a plain
+    // join('|') let company "A|B" + role "C" collide with company "A" + role
+    // "B|C" — two different postings would be treated as the same one and the
+    // rebuild (with it, the generator forms) would be skipped.
+    expect(badgeSignature(same, { company: 'A|B', role: 'C' }, true, true)).not.toBe(
+      badgeSignature(same, { company: 'A', role: 'B|C' }, true, true),
+    );
+  });
 });
 
 describe('nearestCorner — badge drag snapping', () => {
