@@ -57,8 +57,18 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
   { re: /\b(u\.?s\.?|united states)\s+persons?\b/i, label: 'U.S. person (export control)' },
 ];
 
+/**
+ * "US work authorization required" is a caution, not a NO: someone on F-1/OPT is
+ * already authorized, so it mainly rules out candidates who need sponsorship
+ * from scratch. It's also boilerplate on a large share of US postings, which is
+ * why it must never dominate an explicit sponsorship positive — see analyze().
+ */
+const WORK_AUTH_CAUTION = 'U.S. work authorization required';
+
 // Soft / preference signals → amber caution (not a hard disqualifier).
 const CAUTIONS: { re: RegExp; label: string }[] = [
+  { re: /\bwork authoriz(?:ation|ed)\b[^.!?]{0,20}\b(require[sd]?|must)\b/i, label: WORK_AUTH_CAUTION },
+  { re: /\bmust be authorized to work\b[^.!?]{0,40}\b(u\.?s\.?|united states)\b/i, label: WORK_AUTH_CAUTION },
   { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.!?]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'U.S. citizenship preferred' },
   { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?]{0,30}\b(u\.?s\.?|united states)\s+citizen/i, label: 'U.S. citizenship preferred' },
   { re: /\b(security )?clearance\b[^.!?]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'Clearance preferred' },
@@ -74,6 +84,10 @@ const POSITIVES: { re: RegExp; label: string }[] = [
   { re: /\bsponsorship\b[^.!?]{0,25}\bfor the right candidate\b/i, label: 'Sponsorship available' },
   { re: /\bopen to international (candidates|applicants|hires)\b/i, label: 'Open to international candidates' },
   { re: /\bh-?1b\b[^.]{0,30}(sponsor|welcome|transfer)/i, label: 'H-1B sponsorship' },
+  // Explicitly welcoming OPT/CPT. The affirmative cue has to lead (and "not" is
+  // excluded) so "we do not accept OPT/CPT" can't read as friendly.
+  { re: /(?<!\bnot\s)\bopen to\b[^.!?]{0,40}\b(opt|cpt)\b/i, label: 'Open to OPT/CPT' },
+  { re: /(?<!\bnot\s)\bwelcomes?\b[^.!?]{0,30}\b(opt|cpt)\b/i, label: 'Open to OPT/CPT' },
 ];
 
 // Spelled-out numbers → digits so "a minimum of three years" is caught.
@@ -101,8 +115,15 @@ export function analyze(text: string): SponsorAnalysis {
   // stance, and would otherwise produce a false NO.
   const prose = stripQuestions(norm);
   const restrictions = dedupe(RESTRICTIONS.filter((r) => r.re.test(prose)).map((r) => r.label));
-  const cautions = dedupe(CAUTIONS.filter((c) => c.re.test(prose)).map((c) => c.label));
   const positives = dedupe(POSITIVES.filter((p) => p.re.test(prose)).map((p) => p.label));
+  const allCautions = dedupe(CAUTIONS.filter((c) => c.re.test(prose)).map((c) => c.label));
+  // A caution outranks a positive below, so the boilerplate work-authorization
+  // line would otherwise drag a posting that explicitly sponsors (or welcomes
+  // OPT/CPT) down to MAYBE. An explicit positive answers that line directly, so
+  // drop it — every other caution is a genuine preference and still stands.
+  const cautions = positives.length
+    ? allCautions.filter((c) => c !== WORK_AUTH_CAUTION)
+    : allCautions;
   // Hard restriction dominates; then soft preference; then a positive signal.
   const verdict: Verdict = restrictions.length
     ? 'no'
