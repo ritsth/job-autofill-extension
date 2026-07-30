@@ -501,6 +501,7 @@ let badgeGeneration = 0;
 // AI results cached per posting (by scanned-text hash) so revisiting a job — or
 // a re-render from the watcher — reuses the AI verdict without another call.
 const aiCache = new Map<number, SponsorAnalysis>();
+const AI_CACHE_MAX = 50;
 // The AI verdict the user explicitly requested for the posting currently in view,
 // pinned to its URL. The watcher mutates often (live counts, timestamps) which
 // shifts the scanned-text hash; without this pin a re-render would miss the
@@ -796,8 +797,17 @@ async function runAiCheck(): Promise<SponsorAnalysis> {
   const local = extractExperience(normalizeText(raw));
   analysis.experience.required ??= local.required;
   analysis.experience.preferred ??= local.preferred;
-  aiCache.set(hash(raw), analysis);
+  cacheAiResult(hash(raw), analysis);
   return analysis;
+}
+
+/** Stores an AI result while keeping the tab-lifetime cache bounded. */
+function cacheAiResult(key: number, analysis: SponsorAnalysis): void {
+  if (aiCache.size >= AI_CACHE_MAX) {
+    const oldest = aiCache.keys().next().value;
+    if (oldest !== undefined) aiCache.delete(oldest);
+  }
+  aiCache.set(key, analysis);
 }
 
 /**
