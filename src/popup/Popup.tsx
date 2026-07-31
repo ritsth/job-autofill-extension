@@ -58,12 +58,13 @@ export function timeAgo(ts: number): string {
   const hrs = Math.round(mins / 60);
   if (hrs < 24) return `${hrs} hr ago`;
   const days = Math.round(hrs / 24);
-  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
-  const weeks = Math.round(days / 7);
-  if (weeks < 5) return `${weeks} wk ago`;
-  const months = Math.round(days / 30);
-  if (months < 12) return `${months} mo ago`;
-  const years = Math.round(days / 365);
+  const daysElapsed = secs / (24 * 60 * 60);
+  if (daysElapsed < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+  const weeks = Math.round(daysElapsed / 7);
+  if (daysElapsed < 35) return `${weeks} wk ago`;
+  const months = Math.round(daysElapsed / 30);
+  if (daysElapsed < 360) return `${months} mo ago`;
+  const years = Math.round(daysElapsed / 365);
   return `${years} yr ago`;
 }
 
