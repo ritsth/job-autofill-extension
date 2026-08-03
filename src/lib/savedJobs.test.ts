@@ -7,6 +7,7 @@ import {
   isJobTextTruncated,
   MAX_JOBS,
   MAX_TEXT,
+  onSavedJobsChanged,
   setActiveJob,
   type SavedJob,
   type SavedJobsState,
@@ -17,15 +18,29 @@ const STORAGE_KEY = 'savedJobs';
 // Minimal in-memory chrome.storage.local: enough for get/set with one key.
 // Shared by every suite below so each starts from empty storage.
 let store: Record<string, unknown>;
+type StorageChangeListener = (
+  changes: { [key: string]: chrome.storage.StorageChange },
+  area: string,
+) => void;
+let storageChangeListeners: Set<StorageChangeListener>;
 
 beforeEach(() => {
   store = {};
+  storageChangeListeners = new Set();
   vi.stubGlobal('chrome', {
     storage: {
       local: {
         get: vi.fn(async (key: string) => ({ [key]: store[key] })),
         set: vi.fn(async (items: Record<string, unknown>) => {
           Object.assign(store, items);
+        }),
+      },
+      onChanged: {
+        addListener: vi.fn((listener: StorageChangeListener) => {
+          storageChangeListeners.add(listener);
+        }),
+        removeListener: vi.fn((listener: StorageChangeListener) => {
+          storageChangeListeners.delete(listener);
         }),
       },
     },
@@ -46,6 +61,13 @@ function persisted(): SavedJobsState {
 /** Seeds storage directly, bypassing addJob. */
 function seed(state: SavedJobsState): void {
   store[STORAGE_KEY] = state;
+}
+
+function emitStorageChange(
+  changes: { [key: string]: chrome.storage.StorageChange },
+  area: string,
+): void {
+  for (const listener of storageChangeListeners) listener(changes, area);
 }
 
 function job(overrides: Partial<SavedJob> = {}): SavedJob {
@@ -183,6 +205,57 @@ describe('getSavedJobs — defaults for missing or partial state', () => {
     const first = await getSavedJobs();
     first.jobs.push(job());
     expect((await getSavedJobs()).jobs).toEqual([]);
+  });
+});
+
+describe('onSavedJobsChanged', () => {
+  it('calls back with the new saved-jobs state for local changes', () => {
+    const callback = vi.fn();
+    const next = { jobs: [job({ id: 'new' })], activeId: 'new' };
+    onSavedJobsChanged(callback);
+
+    emitStorageChange({ [STORAGE_KEY]: { newValue: next } }, 'local');
+
+    expect(callback).toHaveBeenCalledOnce();
+    expect(callback).toHaveBeenCalledWith(next);
+  });
+
+  it('ignores saved-jobs changes from the sync area', () => {
+    const callback = vi.fn();
+    onSavedJobsChanged(callback);
+
+    emitStorageChange({ [STORAGE_KEY]: { newValue: { jobs: [], activeId: null } } }, 'sync');
+
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('ignores unrelated local storage changes', () => {
+    const callback = vi.fn();
+    onSavedJobsChanged(callback);
+
+    emitStorageChange({ profile: { newValue: { name: 'Ada' } } }, 'local');
+
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('uses empty defaults when the saved-jobs key is removed', () => {
+    const callback = vi.fn();
+    onSavedJobsChanged(callback);
+
+    emitStorageChange({ [STORAGE_KEY]: { newValue: undefined } }, 'local');
+
+    expect(callback).toHaveBeenCalledWith({ jobs: [], activeId: null });
+  });
+
+  it('stops delivering changes after unsubscribe', () => {
+    const callback = vi.fn();
+    const unsubscribe = onSavedJobsChanged(callback);
+
+    unsubscribe();
+    emitStorageChange({ [STORAGE_KEY]: { newValue: { jobs: [], activeId: null } } }, 'local');
+
+    expect(callback).not.toHaveBeenCalled();
+    expect(chrome.storage.onChanged.removeListener).toHaveBeenCalledOnce();
   });
 });
 
