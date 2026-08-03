@@ -17,9 +17,10 @@ export function parseEligibilityJson(raw: string): SponsorAnalysis {
   const d = parseLooseJson(raw) as RawEligibility | null;
   if (!d) throw new Error('The AI did not return readable JSON.');
 
-  const sponsorship = (d.sponsorship || '').toLowerCase();
-  const citizenship = (d.citizenship || '').toLowerCase();
-  const clearance = (d.clearance || '').toLowerCase();
+  const enumVal = (v: unknown): string => (typeof v === 'string' ? v.toLowerCase() : '');
+  const sponsorship = enumVal(d.sponsorship);
+  const citizenship = enumVal(d.citizenship);
+  const clearance = enumVal(d.clearance);
 
   const restrictions: string[] = [];
   const cautions: string[] = [];

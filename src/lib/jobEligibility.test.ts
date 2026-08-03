@@ -79,6 +79,24 @@ describe('parseEligibilityJson', () => {
     expect(result.reason).toBeUndefined();
   });
 
+  it('gracefully handles non-string enum values without throwing', () => {
+    const result = parseEligibilityJson(
+      JSON.stringify({ sponsorship: 5, citizenship: true, clearance: { a: 1 } }),
+    );
+    expect(result.verdict).toBe('unknown');
+    expect(result.restrictions).toEqual([]);
+    expect(result.cautions).toEqual([]);
+    expect(result.positives).toEqual([]);
+  });
+
+  it('keeps valid enum values when other enum values are non-strings', () => {
+    const result = parseEligibilityJson(
+      JSON.stringify({ sponsorship: 5, citizenship: 'required' }),
+    );
+    expect(result.verdict).toBe('no');
+    expect(result.restrictions).toEqual(['U.S. citizenship required']);
+  });
+
   it('accepts the fenced JSON returned by some model responses', () => {
     expect(parseEligibilityJson('```json\n{"sponsorship":"available"}\n```').verdict).toBe('yes');
   });
