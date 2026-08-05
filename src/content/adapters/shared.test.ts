@@ -46,11 +46,11 @@ describe('normalize — label text canonicalisation', () => {
     expect(normalize(normalize(label))).toBe(normalize(label));
   });
 
-  // Documents current behaviour, not desired behaviour: JS \s does NOT match
-  // U+200B, so a zero-width space inside label text survives normalisation and
-  // the label can never match its rule. Left as-is here — see PR discussion.
-  it('does not strip a zero-width space', () => {
-    expect(normalize('First\u200BName')).toBe('first\u200bname');
+  // Pins current (incorrect) behaviour: \s does not match U+200B, so the ZWSP
+  // survives normalization and breaks multi-word rule matching in matchRule.
+  // Tracked in https://github.com/ritsth/job-autofill-extension/issues/176
+  it('documents a known bug — zero-width space is not a separator (see #176)', () => {
+    expect(normalize('First\u200BName')).toBe('first\u200Bname');
   });
 
 });
