@@ -1,4 +1,5 @@
 import type { GenerateInput } from './provider';
+import { MAX_TEXT } from '../savedJobs';
 
 // Prompt templates. Kept in one place so tone/behaviour is easy to tune.
 
@@ -26,7 +27,7 @@ export function buildAnswerPrompt(
   jobText?: string,
 ): GenerateInput {
   const job = jobText?.trim()
-    ? `JOB POSTING (tailor the answer to this role):\n${jobText.trim().slice(0, 8000)}\n\n`
+    ? `JOB POSTING (tailor the answer to this role):\n${jobText.trim().slice(0, MAX_TEXT)}\n\n`
     : '';
   return {
     system: ANSWER_SYSTEM,
@@ -106,7 +107,7 @@ export function buildJobEligibilityPrompt(jobText: string): GenerateInput {
     system: JOB_ELIGIBILITY_SYSTEM,
     json: true,
     maxOutputTokens: 512,
-    prompt: `JOB POSTING:\n${jobText.slice(0, 12000)}\n\nReturn the JSON:`,
+    prompt: `JOB POSTING:\n${jobText.slice(0, MAX_TEXT)}\n\nReturn the JSON:`,
   };
 }
 
@@ -134,7 +135,7 @@ export function buildTailoredResumePrompt(
   role?: string,
 ): GenerateInput {
   const job = jobText?.trim()
-    ? `JOB POSTING (tailor the resume to this role):\n${jobText.trim().slice(0, 8000)}\n\n`
+    ? `JOB POSTING (tailor the resume to this role):\n${jobText.trim().slice(0, MAX_TEXT)}\n\n`
     : '';
   return {
     system: RESUME_SYSTEM,
@@ -150,4 +151,3 @@ export function buildTailoredResumePrompt(
       `Return the tailored resume:`,
   };
 }
-
