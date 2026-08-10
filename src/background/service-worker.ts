@@ -66,10 +66,8 @@ async function handle(msg: BackgroundMessage): Promise<string> {
   const context = profileToContext(profile);
 
   if (
-    (msg.type === 'AI_GENERATE_ANSWER' ||
-      msg.type === 'AI_GENERATE_COVER_LETTER' ||
-      msg.type === 'AI_GENERATE_RESUME') &&
-    context.trim() === ''
+    (msg.type === 'AI_GENERATE_ANSWER' || msg.type === 'AI_GENERATE_RESUME') &&
+      context.trim() === ''
   ) {
     throw new AIError('Your profile is empty — add your details in Options first.');
   }
