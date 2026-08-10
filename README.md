@@ -34,8 +34,9 @@ Auto-fills repetitive job applications on **Greenhouse**, **Lever**, and
   placeholders substituted), downloadable as a `.pdf`.
 - **Flag eligibility at a glance** every covered page is scanned for visa-sponsorship /
   U.S.-citizenship / security-clearance language and shows a bold **YES / NO** badge
-  in the corner. On **Handshake** the badge also hosts a one-click cover-letter
-  generator (employer/role auto-detected from the posting).
+  in the corner. Drag it by its header to any corner to see what's under it; it
+  remembers where you put it. On **Handshake** the badge also hosts a one-click
+  cover-letter generator (employer/role auto-detected from the posting).
 
 The UI is a **side panel** (stays open while you browse, closes only when you close it).
 
