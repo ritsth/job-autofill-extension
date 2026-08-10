@@ -111,18 +111,21 @@ const copyTimer = useRef<number | null>(null);
   }
 
   async function copyToClipboard(text: string, target: 'letter' | 'resume') {
-  try {
-    await navigator.clipboard.writeText(text);
-    if (copyTimer.current !== null) clearTimeout(copyTimer.current);
-    setCopied(target);
-    copyTimer.current = window.setTimeout(() => {
-      setCopied('');
-      copyTimer.current = null;
-    }, 1500);
-  } catch {
-    setError('Could not copy to clipboard. Select the text and copy manually.');
+    // Clear first, like every other handler here: without this a failed copy
+    // leaves its error on screen next to a later "✓ Copied!".
+    setError('');
+    try {
+      await navigator.clipboard.writeText(text);
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+      setCopied(target);
+      copyTimer.current = window.setTimeout(() => {
+        setCopied('');
+        copyTimer.current = null;
+      }, 1500);
+    } catch {
+      setError('Could not copy to clipboard. Select the text and copy manually.');
+    }
   }
-}
 
   function flashFillMsg(message: string) {
     if (fillMsgTimer.current !== null) {
