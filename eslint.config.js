@@ -1,7 +1,13 @@
-// Flat ESLint config (ESLint 9). Pragmatic: TypeScript + React Hooks rules for
+// Flat ESLint config (ESLint 10). Pragmatic: TypeScript + React Hooks rules for
 // the extension source, plain-JS recommended for the Node server. TypeScript's
 // own strict compiler (tsc --noEmit) remains the primary gate; this catches the
 // things the type-checker doesn't (hook misuse, unused vars, empty blocks).
+//
+// eslint-plugin-react-hooks v7 ships flat-config presets (recommended-latest et
+// al.) that also turn on its React Compiler rule set. We deliberately keep the
+// manual two-rule wiring below instead: those are the rules this codebase has
+// opted into, and adopting the preset would enable a much larger set as a side
+// effect of a dependency bump rather than a considered decision.
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
