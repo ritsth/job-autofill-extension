@@ -192,7 +192,8 @@ export function onProfileChanged(cb: (profile: Profile) => void): () => void {
 export function profileToContext(p: Profile): string {
   const lines: string[] = [];
   const { personal: pi } = p;
-  lines.push(`Name: ${pi.firstName} ${pi.lastName}`.trim());
+  const fullName = [pi.firstName, pi.lastName].filter(Boolean).join(' ');
+  if (fullName) lines.push(`Name: ${fullName}`);
   if (pi.email) lines.push(`Email: ${pi.email}`);
   if (pi.city || pi.state || pi.country)
     lines.push(`Location: ${[pi.city, pi.state, pi.country].filter(Boolean).join(', ')}`);
