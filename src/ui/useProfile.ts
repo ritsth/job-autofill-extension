@@ -31,10 +31,15 @@ export function useProfile() {
       setSaveState('saving');
       window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(async () => {
-        await saveProfile(next);
-        setSaveState('saved');
-        editing.current = false;
-        window.setTimeout(() => setSaveState('idle'), 1500);
+        try {
+          await saveProfile(next);
+          setSaveState('saved');
+          window.setTimeout(() => setSaveState('idle'), 1500);
+        } catch {
+          setSaveState('idle');
+        } finally {
+          editing.current = false;
+        }
       }, 500);
       return next;
     });
