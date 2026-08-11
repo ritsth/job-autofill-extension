@@ -125,7 +125,7 @@ describe('addJob — storage-side truncation', () => {
 describe('addJob — ordering and active selection', () => {
   it('prepends the new job and makes it active', async () => {
     const first = await addJob(partial('first'));
-    const second = await addJob(partial('second'));
+    const second = await addJob({ ...partial('second'), url: 'https://y' });
 
     expect(second.jobs.map((j) => j.text)).toEqual(['second', 'first']);
     // The newest job is the one AI tailoring should use.
@@ -139,15 +139,82 @@ describe('addJob — ordering and active selection', () => {
     expect(jobs[0].id).toBeTruthy();
     expect(jobs[0].savedAt).toBeGreaterThan(0);
 
-    const after = await addJob(partial());
+    const after = await addJob({ ...partial(), url: 'https://y' });
     expect(after.jobs[0].id).not.toBe(after.jobs[1].id);
+  });
+});
+
+describe('addJob — duplicate URL', () => {
+  it('keeps the list length and existing id unchanged', async () => {
+    seed({ jobs: [job({ id: 'existing' })], activeId: null });
+
+    const { jobs } = await addJob(partial('fresh capture'));
+
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].id).toBe('existing');
+    expect(persisted().jobs).toHaveLength(1);
+  });
+
+  it('moves the existing entry to the front, refreshes savedAt, and makes it active', async () => {
+    seed({
+      jobs: [
+        job({ id: 'other', url: 'https://other', savedAt: 2 }),
+        job({ id: 'existing', savedAt: 1 }),
+      ],
+      activeId: 'other',
+    });
+
+    const result = await addJob({
+      ...partial('fresh capture'),
+      company: 'Updated Acme',
+      role: 'Staff Engineer',
+    });
+
+    expect(result.jobs.map((saved) => saved.id)).toEqual(['existing', 'other']);
+    expect(result.jobs[0].savedAt).toBeGreaterThan(1);
+    expect(result.jobs[0]).toMatchObject({ company: 'Updated Acme', role: 'Staff Engineer' });
+    expect(result.activeId).toBe('existing');
+    expect(persisted().activeId).toBe('existing');
+  });
+
+  it('does not match a genuinely different URL', async () => {
+    seed({ jobs: [job({ id: 'existing' })], activeId: 'existing' });
+
+    const { jobs } = await addJob({ ...partial('another posting'), url: 'https://different' });
+
+    expect(jobs).toHaveLength(2);
+    expect(jobs[0].id).not.toBe('existing');
+    expect(jobs[1].id).toBe('existing');
+  });
+
+  it('preserves the original captured text', async () => {
+    seed({ jobs: [job({ id: 'existing', text: 'original posting' })], activeId: null });
+
+    const { jobs } = await addJob(partial('later application form boilerplate'));
+
+    expect(jobs[0].text).toBe('original posting');
+  });
+
+  it('does not evict another job when the capped list already contains the URL', async () => {
+    const existing = Array.from({ length: MAX_JOBS }, (_, i) =>
+      job({ id: `old-${i}`, url: `https://old/${i}` }),
+    );
+    existing[MAX_JOBS - 1] = job({ id: 'duplicate', url: 'https://x' });
+    seed({ jobs: existing, activeId: 'old-0' });
+
+    const result = await addJob(partial('fresh capture'));
+
+    expect(result.jobs).toHaveLength(MAX_JOBS);
+    expect(result.jobs[0].id).toBe('duplicate');
+    expect(result.evicted).toEqual([]);
+    expect(result.jobs.some((saved) => saved.id === 'old-0')).toBe(true);
   });
 });
 
 describe('addJob — MAX_JOBS eviction cap', () => {
   it('keeps at most MAX_JOBS, dropping the oldest', async () => {
     const existing = Array.from({ length: MAX_JOBS }, (_, i) =>
-      job({ id: `old-${i}`, text: `old-${i}` }),
+      job({ id: `old-${i}`, url: `https://old/${i}`, text: `old-${i}` }),
     );
     seed({ jobs: existing, activeId: 'old-0' });
 
@@ -162,7 +229,7 @@ describe('addJob — MAX_JOBS eviction cap', () => {
   });
 
   it('does not evict while under the cap', async () => {
-    seed({ jobs: [job({ id: 'a' })], activeId: 'a' });
+    seed({ jobs: [job({ id: 'a', url: 'https://other' })], activeId: 'a' });
 
     const { jobs } = await addJob(partial('newest'));
 
@@ -171,7 +238,9 @@ describe('addJob — MAX_JOBS eviction cap', () => {
   });
 
   it('reports the dropped job so the UI can say so', async () => {
-    const existing = Array.from({ length: MAX_JOBS }, (_, i) => job({ id: `old-${i}` }));
+    const existing = Array.from({ length: MAX_JOBS }, (_, i) =>
+      job({ id: `old-${i}`, url: `https://old/${i}` }),
+    );
     seed({ jobs: existing, activeId: 'old-0' });
 
     const { evicted } = await addJob(partial('newest'));
@@ -181,7 +250,7 @@ describe('addJob — MAX_JOBS eviction cap', () => {
   });
 
   it('reports nothing evicted while under the cap', async () => {
-    seed({ jobs: [job({ id: 'a' })], activeId: 'a' });
+    seed({ jobs: [job({ id: 'a', url: 'https://other' })], activeId: 'a' });
 
     expect((await addJob(partial('newest'))).evicted).toEqual([]);
   });
