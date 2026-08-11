@@ -331,3 +331,51 @@ describe('deleteJob', () => {
     expect(persisted().activeId).toBe('a');
   });
 });
+
+describe('addJob — dedupe by url (#195)', () => {
+  it('saving the same URL again leaves list length unchanged', async () => {
+    await addJob({ ...partial(), url: 'https://jobs.example/a', text: 'posting alpha' });
+    await addJob({ ...partial(), url: 'https://jobs.example/a', text: 'posting alpha again' });
+    expect(persisted().jobs).toHaveLength(1);
+  });
+
+  it('moves the existing entry to the front and makes it active', async () => {
+    await addJob({ ...partial(), url: 'https://jobs.example/old', text: 'older posting text here' });
+    await addJob({ ...partial(), url: 'https://jobs.example/keep', text: 'keep this posting text' });
+    const beforeId = persisted().jobs.find((j) => j.url === 'https://jobs.example/old')!.id;
+    await addJob({ ...partial(), url: 'https://jobs.example/old', text: 'short' });
+    expect(persisted().jobs[0].url).toBe('https://jobs.example/old');
+    expect(persisted().jobs[0].id).toBe(beforeId);
+    expect(persisted().activeId).toBe(beforeId);
+  });
+
+  it('two different URLs still produce two entries', async () => {
+    await addJob({ ...partial(), url: 'https://jobs.example/a', text: 'posting one text' });
+    await addJob({ ...partial(), url: 'https://jobs.example/b', text: 'posting two text' });
+    expect(persisted().jobs).toHaveLength(2);
+  });
+
+  it('keeps the longer stored text when the re-save is shorter', async () => {
+    await addJob({
+      ...partial(),
+      url: 'https://jobs.example/a',
+      text: 'a long original posting that should be kept',
+    });
+    await addJob({ ...partial(), url: 'https://jobs.example/a', text: 'short form page' });
+    expect(persisted().jobs[0].text).toBe(
+      'a long original posting that should be kept',
+    );
+  });
+
+  it('upgrades stored text when the re-save is longer', async () => {
+    await addJob({ ...partial(), url: 'https://jobs.example/a', text: 'short capture' });
+    await addJob({
+      ...partial(),
+      url: 'https://jobs.example/a',
+      text: 'a much longer and better posting capture',
+    });
+    expect(persisted().jobs[0].text).toBe(
+      'a much longer and better posting capture',
+    );
+  });
+});

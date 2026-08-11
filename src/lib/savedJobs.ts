@@ -73,9 +73,31 @@ export async function addJob(
       `[Little AI Helper] Saved posting trimmed from ${partial.text.length} to ${MAX_TEXT} chars for AI context.`,
     );
   }
+  const truncated = partial.text.slice(0, MAX_TEXT);
+  const existingIdx = state.jobs.findIndex((j) => j.url === partial.url);
+  if (existingIdx >= 0) {
+    // Same posting URL: refresh in place instead of minting a duplicate that
+    // would burn a MAX_JOBS slot. Keep the longer text so a re-save on a thin
+    // application page cannot degrade a good capture.
+    const existing = state.jobs[existingIdx];
+    const text =
+      truncated.length > existing.text.length ? truncated : existing.text;
+    const job: SavedJob = {
+      ...existing,
+      ...partial,
+      text,
+      id: existing.id,
+      savedAt: Date.now(),
+    };
+    const rest = state.jobs.filter((_, i) => i !== existingIdx);
+    const next: SavedJobsState = { jobs: [job, ...rest], activeId: job.id };
+    await setSavedJobs(next);
+    return { ...next, evicted: [] };
+  }
+
   const job: SavedJob = {
     ...partial,
-    text: partial.text.slice(0, MAX_TEXT),
+    text: truncated,
     id: crypto.randomUUID(),
     savedAt: Date.now(),
   };
