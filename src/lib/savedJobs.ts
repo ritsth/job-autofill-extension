@@ -63,23 +63,40 @@ export interface AddJobResult extends SavedJobsState {
   evicted: SavedJob[];
 }
 
-/** Adds a captured job (newest first), makes it active, and returns the new state. */
+/** Adds or refreshes a captured job (newest first), makes it active, and returns the state. */
 export async function addJob(
   partial: Omit<SavedJob, 'id' | 'savedAt'>,
 ): Promise<AddJobResult> {
   const state = await getSavedJobs();
-  if (isJobTextTruncated(partial.text)) {
-    console.warn(
-      `[Little AI Helper] Saved posting trimmed from ${partial.text.length} to ${MAX_TEXT} chars for AI context.`,
-    );
+  const existing = state.jobs.find((saved) => saved.url === partial.url);
+  let job: SavedJob;
+  let all: SavedJob[];
+  if (existing) {
+    job = {
+      ...existing,
+      ...partial,
+      id: existing.id,
+      // Re-saving from a later application step can capture form boilerplate.
+      // Keep the known-good posting text instead of silently degrading it.
+      text: existing.text,
+      savedAt: Date.now(),
+    };
+    // Also heal duplicates created by releases that always minted a new id.
+    all = [job, ...state.jobs.filter((saved) => saved.url !== partial.url)];
+  } else {
+    if (isJobTextTruncated(partial.text)) {
+      console.warn(
+        `[Little AI Helper] Saved posting trimmed from ${partial.text.length} to ${MAX_TEXT} chars for AI context.`,
+      );
+    }
+    job = {
+      ...partial,
+      text: partial.text.slice(0, MAX_TEXT),
+      id: crypto.randomUUID(),
+      savedAt: Date.now(),
+    };
+    all = [job, ...state.jobs];
   }
-  const job: SavedJob = {
-    ...partial,
-    text: partial.text.slice(0, MAX_TEXT),
-    id: crypto.randomUUID(),
-    savedAt: Date.now(),
-  };
-  const all = [job, ...state.jobs];
   const next: SavedJobsState = {
     jobs: all.slice(0, MAX_JOBS),
     activeId: job.id,
