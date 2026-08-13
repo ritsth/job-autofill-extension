@@ -14,6 +14,8 @@ export interface PageInfo {
 export interface FillResult {
   filled: number;
   total: number;
+  /** Recognised fields left untouched because they already held a value. */
+  alreadyFilled: number;
 }
 
 // --- Background-handled (AI) ---
