@@ -15,15 +15,31 @@ export interface ExtractResult {
 
 export async function extractText(file: File): Promise<ExtractResult> {
   const name = file.name.toLowerCase();
-  if (name.endsWith('.pdf')) return extractPdf(file);
-  if (name.endsWith('.docx')) return extractDocx(file);
-  if (name.endsWith('.txt') || name.endsWith('.md') || file.type.startsWith('text/')) {
-    return { text: await file.text() };
+  let result: ExtractResult;
+
+  if (name.endsWith('.pdf')) {
+    result = await extractPdf(file);
+  } else if (name.endsWith('.docx')) {
+    result = await extractDocx(file);
+  } else if (
+    name.endsWith('.txt') ||
+    name.endsWith('.md') ||
+    file.type.startsWith('text/')
+  ) {
+    result = { text: await file.text() };
+  } else if (name.endsWith('.doc')) {
+    result = {
+      text: '',
+      warning: 'Legacy .doc is not supported — please upload a PDF or .docx.',
+    };
+  } else {
+    result = { text: '', warning: `Unsupported file type: ${file.name}` };
   }
-  if (name.endsWith('.doc')) {
-    return { text: '', warning: 'Legacy .doc is not supported — please upload a PDF or .docx.' };
+
+  if (!result.text.trim() && !result.warning) {
+    return { text: '', warning: 'No text found in this file.' };
   }
-  return { text: '', warning: `Unsupported file type: ${file.name}` };
+  return result;
 }
 
 async function extractPdf(file: File): Promise<ExtractResult> {
