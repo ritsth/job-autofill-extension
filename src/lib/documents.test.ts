@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
+const { getDocumentMock } = vi.hoisted(() => ({ getDocumentMock: vi.fn() }));
+
 vi.mock('pdfjs-dist', () => ({
   GlobalWorkerOptions: { workerSrc: '' },
-  getDocument: vi.fn(),
+  getDocument: getDocumentMock,
 }));
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: 'pdf.worker.mjs' }));
 vi.mock('mammoth', () => ({
@@ -39,6 +41,24 @@ describe('extractText', () => {
     await expect(extractText(file)).resolves.toEqual({
       text: '',
       warning: 'No text found in this file.',
+    });
+  });
+
+  it('preserves the specific warning for a PDF with no selectable text', async () => {
+    getDocumentMock.mockReturnValueOnce({
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage: vi.fn().mockResolvedValue({
+          getTextContent: vi.fn().mockResolvedValue({ items: [] }),
+          getAnnotations: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    });
+    const file = new File([], 'resume.pdf', { type: 'application/pdf' });
+
+    await expect(extractText(file)).resolves.toEqual({
+      text: '',
+      warning: 'No selectable text found (scanned PDF?). Try a text-based PDF.',
     });
   });
 
