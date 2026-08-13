@@ -160,6 +160,8 @@ function matchRule(label: string, el: FillableField): Rule | undefined {
 export interface FillSummary {
   filled: number;
   total: number;
+  /** Recognised fields left untouched because they already held a value. */
+  alreadyFilled: number;
 }
 
 /** Fills every recognised, empty field within `root`. */
@@ -170,6 +172,7 @@ export function applyStandardFills(profile: Profile, root: ParentNode = document
 
   let filled = 0;
   let total = 0;
+  let alreadyFilled = 0;
 
   for (const el of fields) {
     const label = getLabelText(el);
@@ -182,13 +185,16 @@ export function applyStandardFills(profile: Profile, root: ParentNode = document
     if (el instanceof HTMLSelectElement) {
       if (fillSelect(el, value)) filled++;
     } else {
-      if (el.value.trim()) continue; // don't clobber existing input
+      if (el.value.trim()) {
+        alreadyFilled++;
+        continue; // don't clobber existing input
+      }
       fillInput(el, value);
       filled++;
     }
   }
 
-  return { filled, total };
+  return { filled, total, alreadyFilled };
 }
 
 function isFillable(el: FillableField): boolean {

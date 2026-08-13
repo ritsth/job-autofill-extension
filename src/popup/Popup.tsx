@@ -49,6 +49,26 @@ export function saveJobNotice({
   return notices.length === 0 ? 'Job saved.' : `Saved — ${notices.join('; ')}.`;
 }
 
+/**
+ * Status line shown after "Fill this page". A field the extension recognised
+ * but left alone because it already held a value is not a failure — without
+ * this split, re-clicking Fill on an already-filled page reports "Filled 0 of
+ * N" at the exact moment nothing actually went wrong.
+ */
+export function fillNotice({
+  filled,
+  total,
+  alreadyFilled,
+}: {
+  filled: number;
+  total: number;
+  alreadyFilled: number;
+}): string {
+  const base = `Filled ${filled} of ${total} recognised field${total === 1 ? '' : 's'}.`;
+  if (alreadyFilled === 0) return base;
+  return `Filled ${filled} of ${total} — ${alreadyFilled} already had your details.`;
+}
+
 /** Compact "saved N ago" label for a saved job's timestamp. */
 export function timeAgo(ts: number): string {
   const secs = Math.max(0, Math.round((Date.now() - ts) / 1000));
@@ -235,7 +255,7 @@ const copyTimer = useRef<number | null>(null);
     setError('');
     try {
       const res = await sendToTab<FillResult>(tabId, { type: 'PAGE_FILL' });
-      flashFillMsg(`Filled ${res.filled} of ${res.total} recognised field${res.total === 1 ? '' : 's'}.`);
+      flashFillMsg(fillNotice(res));
     } catch {
       setError('Could not reach the page. Reload the job page and try again.');
     } finally {

@@ -70,9 +70,13 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse
       .then((profile) => {
         const summary = applyStandardFills(profile);
         injectQuestionButtons();
-        sendResponse({ filled: summary.filled, total: summary.total } satisfies FillResult);
+        sendResponse({
+          filled: summary.filled,
+          total: summary.total,
+          alreadyFilled: summary.alreadyFilled,
+        } satisfies FillResult);
       })
-      .catch(() => sendResponse({ filled: 0, total: 0 } satisfies FillResult));
+      .catch(() => sendResponse({ filled: 0, total: 0, alreadyFilled: 0 } satisfies FillResult));
     return true;
   }
   return false;
