@@ -46,11 +46,36 @@ describe('normalize — label text canonicalisation', () => {
     expect(normalize(normalize(label))).toBe(normalize(label));
   });
 
-  // Pins current (incorrect) behaviour: \s does not match U+200B, so the ZWSP
-  // survives normalization and breaks multi-word rule matching in matchRule.
-  // Tracked in https://github.com/ritsth/job-autofill-extension/issues/176
-  it('documents a known bug — zero-width space is not a separator (see #176)', () => {
-    expect(normalize('First\u200BName')).toBe('first\u200Bname');
+  it('treats a zero-width space as a word separator', () => {
+    // JS \s does not match U+200B, so it needs explicit handling (#176).
+    // Collapsing to a space rather than deleting is deliberate — see the
+    // boundary-preservation test below.
+    expect(normalize('First​Name')).toBe('first name');
+    expect(normalize('​First Name​')).toBe('first name');
+  });
+
+  it('treats the other zero-width characters as separators too', () => {
+    // ZWNJ, ZWJ, word joiner and the BOM / zero-width no-break space are all
+    // invisible and all unmatched by \s, so they fail identically to U+200B.
+    expect(normalize('First‌Name')).toBe('first name');
+    expect(normalize('First‍Name')).toBe('first name');
+    expect(normalize('First⁠Name')).toBe('first name');
+    expect(normalize('First﻿Name')).toBe('first name');
+  });
+
+  it('collapses a zero-width run mixed with ordinary whitespace to one space', () => {
+    expect(normalize('First​ ​\tName')).toBe('first name');
+  });
+
+  it('keeps the word boundary that the fill rules match on', () => {
+    // This is *why* zero-width chars collapse to a space instead of being
+    // removed. Deleting them yields "emailaddress", which /\be-?mail\b/ cannot
+    // match, so the field would silently never autofill — and the same breaks
+    // every single-word rule (city, github, phone...). Guards that choice.
+    expect(normalize('Email​Address')).toBe('email address');
+    expect(/\be-?mail\b/.test(normalize('Email​Address'))).toBe(true);
+    expect(/\bcity\b/.test(normalize('City​Field'))).toBe(true);
+    expect(/\bgithub\b/.test(normalize('GitHub​URL'))).toBe(true);
   });
 
 });

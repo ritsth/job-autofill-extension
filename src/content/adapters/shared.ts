@@ -6,8 +6,25 @@ import type { Profile } from '../../lib/profile';
 
 export type FillableField = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
+// Zero-width characters that JS `\s` does NOT match: ZWSP, ZWNJ, ZWJ, word
+// joiner, and the BOM / zero-width no-break space. They turn up in scraped
+// label markup (line-break hints inside long identifiers, copy-pasted text).
+const ZERO_WIDTH = '\\u200b-\\u200d\\u2060\\ufeff';
+const SEPARATORS = new RegExp(`[\\s${ZERO_WIDTH}]+`, 'g');
+
+/**
+ * Canonicalises label text for rule matching: lowercase, all runs of separators
+ * collapsed to one space, trimmed.
+ *
+ * Zero-width characters collapse to a space rather than being deleted, even
+ * though they render as no gap at all. Deleting them would weld the surrounding
+ * words together and destroy the `\b` boundary that most rules in `RULES` rely
+ * on — "Email<ZWSP>Address" would become "emailaddress", which `/\be-?mail\b/`
+ * no longer matches. Collapsing keeps every rule matching, and mirrors how `\s`
+ * already treats the non-breaking space.
+ */
 export function normalize(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, ' ').trim();
+  return s.toLowerCase().replace(SEPARATORS, ' ').trim();
 }
 
 /**
