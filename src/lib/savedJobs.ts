@@ -79,6 +79,8 @@ export async function addJob(
       // Re-saving from a later application step can capture form boilerplate.
       // Keep the known-good posting text instead of silently degrading it.
       text: existing.text,
+      company: partial.company || existing.company,
+      role: partial.role || existing.role,
       savedAt: Date.now(),
     };
     // Also heal duplicates created by releases that always minted a new id.

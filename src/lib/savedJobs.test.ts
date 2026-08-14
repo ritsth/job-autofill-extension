@@ -195,6 +195,18 @@ describe('addJob — duplicate URL', () => {
     expect(jobs[0].text).toBe('original posting');
   });
 
+  it('preserves known company and role when a duplicate capture has blank metadata', async () => {
+    seed({
+      jobs: [job({ id: 'existing', company: 'Acme', role: 'Engineer' })],
+      activeId: null,
+    });
+
+    const { jobs } = await addJob({ ...partial('fresh capture'), company: '', role: '' });
+
+    expect(jobs[0]).toMatchObject({ company: 'Acme', role: 'Engineer' });
+    expect(persisted().jobs[0]).toMatchObject({ company: 'Acme', role: 'Engineer' });
+  });
+
   it('does not evict another job when the capped list already contains the URL', async () => {
     const existing = Array.from({ length: MAX_JOBS }, (_, i) =>
       job({ id: `old-${i}`, url: `https://old/${i}` }),
