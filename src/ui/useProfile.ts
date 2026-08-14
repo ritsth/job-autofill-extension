@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_PROFILE, getProfile, onProfileChanged, saveProfile, type Profile } from '../lib/profile';
 
-export type SaveState = 'idle' | 'saving' | 'saved';
+export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+function profileSaveErrorMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/quota/i.test(msg)) {
+    return 'Could not save — local storage is full. Remove an uploaded document to free space, then edit again.';
+  }
+  return `Could not save — ${msg}`;
+}
 
 /**
  * Loads the profile and auto-saves edits (debounced). External changes (e.g.
@@ -11,6 +19,7 @@ export function useProfile() {
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [loaded, setLoaded] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveError, setSaveError] = useState('');
   const saveTimer = useRef<number | undefined>(undefined);
   const editing = useRef(false);
 
@@ -29,16 +38,23 @@ export function useProfile() {
     setProfile((prev) => {
       const next = updater(prev);
       setSaveState('saving');
+      setSaveError('');
       window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(async () => {
-        await saveProfile(next);
-        setSaveState('saved');
-        editing.current = false;
-        window.setTimeout(() => setSaveState('idle'), 1500);
+        try {
+          await saveProfile(next);
+          setSaveState('saved');
+          window.setTimeout(() => setSaveState('idle'), 1500);
+        } catch (err) {
+          setSaveState('error');
+          setSaveError(profileSaveErrorMessage(err));
+        } finally {
+          editing.current = false;
+        }
       }, 500);
       return next;
     });
   }
 
-  return { profile, loaded, saveState, update, setProfile };
+  return { profile, loaded, saveState, saveError, update, setProfile };
 }

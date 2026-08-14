@@ -12,7 +12,7 @@ import { AIError } from '../lib/ai';
 import { signIn, signOut, reconcileAuthUser, onAuthChanged, getCachedToken, type AuthUser } from '../lib/auth';
 
 export function Options() {
-  const { profile, loaded, saveState, update } = useProfile();
+  const { profile, loaded, saveState, saveError, update } = useProfile();
 
   if (!loaded) return <div className="options">Loading…</div>;
 
@@ -28,6 +28,7 @@ export function Options() {
     <OptionsView
       p={p}
       saveState={saveState}
+      saveError={saveError}
       setPersonal={setPersonal}
       setPref={setPref}
       setAI={setAI}
@@ -39,6 +40,7 @@ export function Options() {
 function OptionsView({
   p,
   saveState,
+  saveError,
   setPersonal,
   setPref,
   setAI,
@@ -46,6 +48,7 @@ function OptionsView({
 }: {
   p: Profile;
   saveState: ReturnType<typeof useProfile>['saveState'];
+  saveError: ReturnType<typeof useProfile>['saveError'];
   setPersonal: (k: keyof Profile['personal'], v: string) => void;
   setPref: (k: keyof Profile['preferences'], v: string) => void;
   setAI: (k: keyof Profile['ai'], v: string) => void;
@@ -172,6 +175,7 @@ function OptionsView({
         <h1 style={{ flex: 1 }}>Little AI Helper — Settings</h1>
         {saveState === 'saving' && <span className="help">Saving…</span>}
         {saveState === 'saved' && <span className="saved">✓ Saved</span>}
+        {saveState === 'error' && saveError && <span className="warn">{saveError}</span>}
       </div>
       <p className="sub">
         Everything here stays on this device (local storage). Your API key is only sent to your
