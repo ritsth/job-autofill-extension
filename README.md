@@ -8,8 +8,8 @@
 
 ## Why I built this
 
-Applying to new-grad SWE roles means filling the *same* Greenhouse / Lever / Workday
-forms dozens of times, re-writing the same "why this company?" answers, and manually
+Applying to new-grad SWE roles means filling the *same* Greenhouse / Lever / Workday /
+Ashby forms dozens of times, re-writing the same "why this company?" answers, and manually
 checking each posting for visa-sponsorship language before wasting time on a dead end.
 Little AI Helper collapses that loop: structured autofill for the boilerplate, an on-page
 AI draft for the open-ended questions, and an instant eligibility badge so I never apply
@@ -23,13 +23,13 @@ somewhere that won't sponsor.
 | **Autofilled fields + ✨ AI answers** | **Configurable AI provider (data stays local)** |
 | ![Autofill](docs/shot-autofill.png) | ![Settings](docs/shot-settings.png) |
 
-Auto-fills repetitive job applications on **Greenhouse**, **Lever**, and
-**Workday** from a structured profile, and uses AI to:
+Auto-fills repetitive job applications on **Greenhouse**, **Lever**, **Workday**, and
+**Ashby** from a structured profile, and uses AI to:
 
 - **Answer open-ended questions** an "✨ AI answer" button appears beside free-text
   questions; it drafts an answer from your resume + uploaded documents. On Greenhouse,
-  Lever, and Workday it's automatic; on any other job site, **save the job** (💾 in the
-  side panel) and the same button lights up next to that application's questions.
+  Lever, Workday, and Ashby it's automatic; on any other job site, **save the job** (💾 in
+  the side panel) and the same button lights up next to that application's questions.
 - **Generate a cover letter** from your base template (company / role / date
   placeholders substituted), downloadable as a `.pdf`.
 - **Flag eligibility at a glance** every covered page is scanned for visa-sponsorship /
@@ -52,8 +52,8 @@ the eligibility-badge check always run on the fast default model. The proxy vali
 requested model against an allowlist server-side.
 
 **Where it runs:** full autofill on **Greenhouse** (`*.greenhouse.io`), **Lever**
-(`jobs.lever.co`), and **Workday** (`*.myworkdayjobs.com`, `*.myworkday.com`,
-`*.myworkdaysite.com`). The eligibility badge
+(`jobs.lever.co`), **Workday** (`*.myworkdayjobs.com`, `*.myworkday.com`,
+`*.myworkdaysite.com`), and **Ashby** (`jobs.ashbyhq.com`). The eligibility badge
 runs on **every page** (so no job board is missed): it shows a bold YES / NO / MAYBE
 verdict when the page mentions sponsorship, citizenship, or clearance requirements, and a
 neutral gray "no eligibility info" card otherwise. It stays current on single-page boards
@@ -111,8 +111,8 @@ The options page opens automatically on install. Fill in:
 
 ## Verify end-to-end
 
-1. Open a real **Greenhouse** (`*.greenhouse.io`), **Lever** (`jobs.lever.co`), or
-   **Workday** (`*.myworkdayjobs.com`) job
+1. Open a real **Greenhouse** (`*.greenhouse.io`), **Lever** (`jobs.lever.co`),
+   **Workday** (`*.myworkdayjobs.com`), or **Ashby** (`jobs.ashbyhq.com`) job
    application. A **YES/NO eligibility badge** appears top-right automatically.
 2. Click the extension icon → the **side panel** opens (and stays open).
 3. **Fill this page** → standard fields populate.
@@ -150,8 +150,8 @@ A few choices I'd defend in a code review:
   Run proxy are interchangeable. This is what let "managed mode" ship later as a *new
   provider* with no changes to the call sites — and why adding Groq/OpenRouter is a small,
   isolated task.
-- **Per-site adapters instead of one generic form-filler.** Greenhouse, Lever, and Workday
-  have very different DOMs, so each gets its own adapter under `src/content/adapters/`. A
+- **Per-site adapters instead of one generic form-filler.** Greenhouse, Lever, Workday, and
+  Ashby have very different DOMs, so each gets its own adapter under `src/content/adapters/`. A
   generic heuristic filler would be flakier and harder to debug; isolated adapters mean a
   Workday breakage can't regress Greenhouse.
 - **Vertex AI behind a Cloud Run proxy, not the AI Studio API directly.** The GCP $300
