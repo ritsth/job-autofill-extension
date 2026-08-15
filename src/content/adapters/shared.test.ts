@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { normalize } from './shared';
+import { normalize, RULES } from './shared';
+import { DEFAULT_PROFILE, type Profile } from '../../lib/profile';
 
 describe('normalize — label text canonicalisation', () => {
   it('lowercases and otherwise leaves a whitespace-free string alone', () => {
@@ -78,4 +79,60 @@ describe('normalize — label text canonicalisation', () => {
     expect(/\bgithub\b/.test(normalize('GitHub​URL'))).toBe(true);
   });
 
+});
+
+describe('RULES — what a label resolves to', () => {
+  // getLabelText joins the <label> text with the field's aria-label,
+  // placeholder, name and id, then normalizes. So the string a rule is tested
+  // against is almost never the bare label — which is exactly what the old
+  // `^name$` (anchored at both ends) could not cope with.
+  //
+  // These drive the REAL RULES table rather than a copy of a regex, so a change
+  // to shared.ts actually breaks them. Identifying the winning rule by the value
+  // it produces also pins precedence: RULES is first-match-wins and ordered
+  // most-specific-first.
+  const P: Profile = {
+    ...DEFAULT_PROFILE,
+    personal: { ...DEFAULT_PROFILE.personal, firstName: 'Ada', lastName: 'Lovelace' },
+  };
+  const valueFor = (raw: string): string | undefined =>
+    RULES.find((r) => r.test.test(normalize(raw)))?.value(P);
+
+  it('resolves a single Name field once the id and name attrs are appended', () => {
+    // Ashby: <label for="_systemfield_name">Name</label> — confirmed on a live
+    // posting, where this was the only field that failed to autofill.
+    expect(valueFor('Name _systemfield_name')).toBe('Ada Lovelace');
+    // The far more common shape: <label>Name</label> + name="name" + id="name".
+    expect(valueFor('Name name name')).toBe('Ada Lovelace');
+    expect(valueFor('Name Your full name')).toBe('Ada Lovelace');
+  });
+
+  it('still resolves a bare label and an explicit "Full Name"', () => {
+    expect(valueFor('Name')).toBe('Ada Lovelace');
+    expect(valueFor('Full Name full_name')).toBe('Ada Lovelace');
+  });
+
+  it('lets the more specific first/last rules win over the full-name rule', () => {
+    expect(valueFor('First Name first_name')).toBe('Ada');
+    expect(valueFor('Last Name last_name')).toBe('Lovelace');
+  });
+
+  it('does not give the applicant name to fields that merely start with "name"', () => {
+    // These ask for someone/something else's name, not the applicant's.
+    for (const label of [
+      'Name of School school_name',
+      'Name of Current Employer',
+      'Name of Reference',
+      'Name Prefix',
+      'Name Suffix',
+    ]) {
+      expect(valueFor(label)).not.toBe('Ada Lovelace');
+    }
+  });
+
+  it('does not match when "name" is not the leading word, nor a plural', () => {
+    expect(valueFor('Names')).toBeUndefined();
+    // "Company Name" belongs to the employer rule further down RULES.
+    expect(valueFor('Company Name')).not.toBe('Ada Lovelace');
+  });
 });
