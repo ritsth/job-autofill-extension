@@ -1,5 +1,45 @@
-import { describe, it, expect } from 'vitest';
-import { titleCaseSlug } from './types';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { textOf, titleCaseSlug } from './types';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('textOf — visible text and image alternatives', () => {
+  it('reads the alt text from an image with no text content', () => {
+    vi.stubGlobal('document', {
+      querySelector: vi.fn().mockReturnValue({
+        textContent: '',
+        getAttribute: (name: string) => (name === 'alt' ? '  Acme Corp  ' : null),
+      }),
+    });
+
+    expect(textOf(['header img[alt]'])).toBe('Acme Corp');
+  });
+
+  it('keeps text content ahead of alt text', () => {
+    vi.stubGlobal('document', {
+      querySelector: vi.fn().mockReturnValue({
+        textContent: '  Visible Company  ',
+        getAttribute: (name: string) => (name === 'alt' ? 'Logo Company' : null),
+      }),
+    });
+
+    expect(textOf(["[class*='company']"])).toBe('Visible Company');
+  });
+
+  it('falls through when both text and alt are blank', () => {
+    vi.stubGlobal('document', {
+      querySelector: vi.fn((selector: string) =>
+        selector === 'img[alt]'
+          ? { textContent: '', getAttribute: () => '   ' }
+          : { textContent: 'Fallback Company', getAttribute: () => null },
+      ),
+    });
+
+    expect(textOf(['img[alt]', '.company-name'])).toBe('Fallback Company');
+  });
+});
 
 describe('titleCaseSlug — company-name fallback from URL segments', () => {
   it('replaces hyphens with spaces and title-cases each word', () => {
