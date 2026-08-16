@@ -16,7 +16,7 @@ function titleCaseSlug(slug: string): string {
 export function textOf(selectors: string[]): string {
   for (const sel of selectors) {
     const el = document.querySelector(sel);
-    const text = el?.textContent?.trim();
+    const text = el?.textContent?.trim() || el?.getAttribute('alt')?.trim();
     if (text) return text;
   }
   return '';
