@@ -116,10 +116,20 @@ interface Rule {
 }
 
 // Ordered: earlier, more specific rules win.
-const RULES: Rule[] = [
+// Exported for tests: matchRule() needs a real element, so the rule table is the
+// only way to exercise the regexes and their precedence under `environment: node`.
+export const RULES: Rule[] = [
   { test: /\b(first|given)\s*name\b/, value: (p) => p.personal.firstName },
   { test: /\b(last|family|sur)\s*name\b/, value: (p) => p.personal.lastName },
-  { test: /\bfull\s*name\b|^name$/, value: (p) => `${p.personal.firstName} ${p.personal.lastName}`.trim() },
+  // `^name$` never fired in practice: getLabelText CONCATENATES the label with
+  // the field's id/name/placeholder, so a plain "Name" field reads as
+  // "name name name" (or "name _systemfield_name" on Ashby), never bare "name".
+  // Anchor only the start, and exclude the qualifiers that make it a different
+  // field entirely — "Name of School/Employer/Reference", "Name Prefix/Suffix".
+  {
+    test: /\bfull\s*name\b|^name\b(?!\s+(?:of|prefix|suffix|title)\b)/,
+    value: (p) => `${p.personal.firstName} ${p.personal.lastName}`.trim(),
+  },
   { test: /\be-?mail\b/, value: (p) => p.personal.email },
   { test: /\b(phone|mobile|tel)\b/, value: (p) => p.personal.phone },
   { test: /\blinkedin\b/, value: (p) => p.personal.linkedin },
