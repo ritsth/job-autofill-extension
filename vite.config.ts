@@ -15,5 +15,15 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
+    // Vite emits <link rel="modulepreload" crossorigin> into the extension's
+    // HTML entry points. Chrome refuses to reuse those preloads inside an
+    // extension page — "a preload ... is not used because it is a cross-world
+    // extension resource mismatch" — so every chunk is fetched twice-over and
+    // each one logs an error on chrome://extensions.
+    //
+    // The hints buy nothing here: extension pages load their chunks off local
+    // disk, not the network. Turning them off removes the warnings without
+    // changing what actually gets loaded.
+    modulePreload: false,
   },
 });
