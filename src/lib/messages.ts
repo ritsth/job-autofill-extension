@@ -4,7 +4,7 @@
 
 export interface PageInfo {
   supported: boolean;
-  site: 'greenhouse' | 'lever' | 'workday' | null;
+  site: 'greenhouse' | 'lever' | 'workday' | 'ashby' | null;
   company: string;
   role: string;
   /** Scoped job-posting text, used to tailor AI answers + the cover letter. */

@@ -8,6 +8,7 @@ import { applyStandardFills, findOpenQuestions, fillInput, type OpenQuestion } f
 import { greenhouseAdapter } from './adapters/greenhouse';
 import { leverAdapter } from './adapters/lever';
 import { workdayAdapter } from './adapters/workday';
+import { ashbyAdapter } from './adapters/ashby';
 import type { SiteAdapter } from './adapters/types';
 import { CONTEXT_LOST_MESSAGE, isContextInvalidated, sendToBackground } from '../lib/messages';
 import type { AIResult, CapturedJob, ContentMessage, FillResult, PageInfo } from '../lib/messages';
@@ -21,7 +22,7 @@ import {
   captureJobWhenReady,
 } from './sponsorship';
 
-const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, workdayAdapter];
+const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, workdayAdapter, ashbyAdapter];
 const adapter = ADAPTERS.find((a) => a.matches(new URL(location.href))) ?? null;
 
 const BUTTON_CLASS = 'jaf-ai-btn';

@@ -14,11 +14,14 @@ const WORKDAY_MATCHES = [
   'https://*.myworkday.com/*',
   'https://*.myworkdaysite.com/*',
 ];
+// Only the candidate-facing job board. app.ashbyhq.com is Ashby's
+// recruiter-facing product and must never trigger autofill.
+const ASHBY_MATCHES = ['https://jobs.ashbyhq.com/*'];
 
 // The content script runs on every page so the eligibility scanner has no gaps.
-// It self-gates at runtime: autofill only activates on Greenhouse/Lever, and the
-// badge only appears when (a) the user has the scanner enabled and (b) the page
-// actually looks like a job posting.
+// It self-gates at runtime: autofill only activates where a site adapter matches
+// (Greenhouse/Lever/Workday/Ashby), and the badge only appears when (a) the user
+// has the scanner enabled and (b) the page actually looks like a job posting.
 const CONTENT_MATCHES = ['<all_urls>'];
 
 export default defineManifest({
@@ -70,6 +73,7 @@ export default defineManifest({
     ...GREENHOUSE_MATCHES,
     ...LEVER_MATCHES,
     ...WORKDAY_MATCHES,
+    ...ASHBY_MATCHES,
     'https://generativelanguage.googleapis.com/*',
     // Managed-proxy mode (Cloud Run). Lets the service worker call the proxy.
     'https://*.run.app/*',

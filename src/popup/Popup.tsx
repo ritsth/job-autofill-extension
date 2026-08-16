@@ -375,7 +375,9 @@ const copyTimer = useRef<number | null>(null);
           {page.role || 'job page'} {page.company && `· ${page.company}`}
         </p>
       ) : (
-        <p className="muted">Open a Greenhouse, Lever, or Workday application page to use autofill.</p>
+        <p className="muted">
+          Open a Greenhouse, Lever, Workday, or Ashby application page to use autofill.
+        </p>
       )}
 
       {geminiNeedsKey && (
