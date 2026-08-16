@@ -265,6 +265,20 @@ const QUESTION_MIN_WORDS = 4;
  * id/name/placeholder, which inflates the word count enough that "Pronouns"
  * ("pronouns pronouns type here") would pass on padding alone.
  */
+/**
+ * Whether a click on the AI-answer button should ask before replacing what is
+ * already in the field, instead of generating straight away.
+ *
+ * Writing into an empty field is harmless, so that stays a single click. Once
+ * the field holds anything — the applicant's own draft, or an AI answer they
+ * have since edited — generating would destroy it, and fillInput() assigns
+ * through the native value setter, so the browser's undo stack cannot bring it
+ * back. The second click is the only chance to notice.
+ */
+export function needsReplaceConfirm(currentValue: string, alreadyArmed: boolean): boolean {
+  return !alreadyArmed && currentValue.trim() !== '';
+}
+
 export function looksLikeQuestion(question: string): boolean {
   if (question.includes('?')) return true;
   return question.split(' ').filter(Boolean).length >= QUESTION_MIN_WORDS;
