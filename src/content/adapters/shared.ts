@@ -40,8 +40,13 @@ function humanizeId(s: string): string {
     .trim();
 }
 
-/** Best-effort human label for a form control. */
-export function getLabelText(el: FillableField): string {
+/**
+ * The label sources a human actually reads. Kept separate from the attribute
+ * noise below because two callers want different things: rule matching wants
+ * every scrap of text it can get, while the AI-answer feature wants the question
+ * as written — not the question with a UUID glued to the end.
+ */
+function visibleLabelParts(el: FillableField): string[] {
   const parts: string[] = [];
 
   if (el.id) {
@@ -59,8 +64,27 @@ export function getLabelText(el: FillableField): string {
     }
   }
 
+  const aria = el.getAttribute('aria-label');
+  if (aria) parts.push(aria);
+
+  return parts;
+}
+
+/**
+ * The question as the applicant sees it, with none of the id/name/placeholder
+ * text getLabelText folds in. That noise is fine for regex matching but ruins
+ * anything that reads the label as prose: on Ashby the field id is a UUID, so
+ * getLabelText yields "…do you most admire? b2a0a4af-ab88-43f6-…".
+ */
+export function getQuestionText(el: FillableField): string {
+  return normalize(visibleLabelParts(el).join(' '));
+}
+
+/** Best-effort human label for a form control. */
+export function getLabelText(el: FillableField): string {
+  const parts = visibleLabelParts(el);
+
   parts.push(
-    el.getAttribute('aria-label') ?? '',
     el.getAttribute('placeholder') ?? '',
     el.getAttribute('name') ?? '',
     el.id ?? '',
@@ -219,18 +243,58 @@ function isFillable(el: FillableField): boolean {
 }
 
 export interface OpenQuestion {
-  el: HTMLTextAreaElement;
+  el: HTMLTextAreaElement | HTMLInputElement;
   label: string;
 }
 
-/** Finds free-text (textarea) questions that aren't covered by a standard rule. */
+/**
+ * Input types that hold prose. Everything else an <input> can be (email, tel,
+ * url, number, date…) is a structured value the AI has no business drafting,
+ * even when the label reads like a question.
+ */
+const FREE_TEXT_INPUT_TYPES = new Set(['text', 'search']);
+
+/** Words a non-question label needs before it counts as an essay prompt. */
+const QUESTION_MIN_WORDS = 4;
+
+/**
+ * True when a label reads like a free-text question rather than a short data
+ * field. Only consulted for <input>: a <textarea> is a question by definition.
+ *
+ * Must be given getQuestionText(), NOT getLabelText() — the latter appends the
+ * id/name/placeholder, which inflates the word count enough that "Pronouns"
+ * ("pronouns pronouns type here") would pass on padding alone.
+ */
+export function looksLikeQuestion(question: string): boolean {
+  if (question.includes('?')) return true;
+  return question.split(' ').filter(Boolean).length >= QUESTION_MIN_WORDS;
+}
+
+/** Finds free-text questions that aren't covered by a standard rule. */
 export function findOpenQuestions(root: ParentNode = document): OpenQuestion[] {
   const out: OpenQuestion[] = [];
-  for (const el of Array.from(root.querySelectorAll<HTMLTextAreaElement>('textarea'))) {
+  const fields = root.querySelectorAll<HTMLTextAreaElement | HTMLInputElement>('textarea, input');
+
+  for (const el of Array.from(fields)) {
     if (!isFillable(el)) continue;
+
+    const isInput = el instanceof HTMLInputElement;
+    if (isInput && !FREE_TEXT_INPUT_TYPES.has((el.getAttribute('type') || 'text').toLowerCase())) {
+      continue;
+    }
+
     const label = getLabelText(el);
     if (matchRule(label, el)) continue; // a standard field, not an essay question
-    out.push({ el, label });
+
+    // A textarea is an essay box by definition. An input is only one when it
+    // reads like a question — otherwise every "Pronouns" or "Referral code" box
+    // would sprout a button.
+    const question = getQuestionText(el);
+    if (isInput && !looksLikeQuestion(question)) continue;
+
+    // Prefer the clean question for the AI prompt; fall back to the matching
+    // label on markup that exposes no real label at all.
+    out.push({ el, label: question || label });
   }
   return out;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalize, RULES } from './shared';
+import { looksLikeQuestion, normalize, RULES } from './shared';
 import { DEFAULT_PROFILE, type Profile } from '../../lib/profile';
 
 describe('normalize — label text canonicalisation', () => {
@@ -134,5 +134,44 @@ describe('RULES — what a label resolves to', () => {
     expect(valueFor('Names')).toBeUndefined();
     // "Company Name" belongs to the employer rule further down RULES.
     expect(valueFor('Company Name')).not.toBe('Ada Lovelace');
+  });
+});
+
+describe('looksLikeQuestion — which text inputs earn an AI-answer button', () => {
+  // Only <input> is filtered by this; a <textarea> is an essay box by
+  // definition. The point is to light up real questions without putting a
+  // button beside every short data field on the form.
+  const asks = (label: string) => looksLikeQuestion(normalize(label));
+
+  it('accepts anything phrased as a question', () => {
+    // Verified live on an Ashby posting — this is the field that had no button.
+    expect(asks('What piece of physical technology invented in the last 500 years do you most admire?')).toBe(true);
+    expect(asks('How did you hear about us?')).toBe(true);
+    expect(asks('Why us?')).toBe(true);
+  });
+
+  it('accepts an unpunctuated prompt that is long enough to be an essay', () => {
+    expect(asks('Tell us about yourself')).toBe(true);
+    expect(asks('Describe a project you are proud of')).toBe(true);
+  });
+
+  it('rejects the short data fields that would just be clutter', () => {
+    expect(asks('Pronouns')).toBe(false);
+    expect(asks('Referral code')).toBe(false);
+    expect(asks('Preferred name')).toBe(false);
+    expect(asks('Start date')).toBe(false);
+  });
+
+  it('is not fooled by the padding getLabelText would add', () => {
+    // getLabelText appends id/name/placeholder, so "Pronouns" becomes
+    // "pronouns pronouns type here" — 5 words, which would sail past the
+    // word-count gate. This is why the caller must pass getQuestionText().
+    expect(asks('Pronouns')).toBe(false);
+    expect(looksLikeQuestion(normalize('pronouns pronouns type here'))).toBe(true);
+  });
+
+  it('treats an empty label as not a question', () => {
+    expect(asks('')).toBe(false);
+    expect(asks('   ')).toBe(false);
   });
 });
