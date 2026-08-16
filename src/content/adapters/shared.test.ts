@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { looksLikeQuestion, normalize, RULES } from './shared';
+import { looksLikeQuestion, needsReplaceConfirm, normalize, RULES } from './shared';
 import { DEFAULT_PROFILE, type Profile } from '../../lib/profile';
 
 describe('normalize — label text canonicalisation', () => {
@@ -173,5 +173,25 @@ describe('looksLikeQuestion — which text inputs earn an AI-answer button', () 
   it('treats an empty label as not a question', () => {
     expect(asks('')).toBe(false);
     expect(asks('   ')).toBe(false);
+  });
+});
+
+describe('needsReplaceConfirm — guarding the applicant\'s own text', () => {
+  it('generates straight away when the field is empty', () => {
+    expect(needsReplaceConfirm('', false)).toBe(false);
+    expect(needsReplaceConfirm('   \n\t ', false)).toBe(false);
+  });
+
+  it('asks first when the field already holds something', () => {
+    // fillInput() writes through the native value setter, so a replaced draft
+    // is not recoverable via the browser's undo stack. The second click is the
+    // only chance to notice.
+    expect(needsReplaceConfirm('My own draft answer', false)).toBe(true);
+    expect(needsReplaceConfirm('a', false)).toBe(true);
+  });
+
+  it('does not ask twice — an armed button proceeds on the confirming click', () => {
+    // Otherwise the button could never regenerate at all.
+    expect(needsReplaceConfirm('My own draft answer', true)).toBe(false);
   });
 });

@@ -4,7 +4,13 @@
 import { getProfile, onProfileChanged } from '../lib/profile';
 import { getSavedJobs, onSavedJobsChanged } from '../lib/savedJobs';
 import { hostMatches } from '../lib/host';
-import { applyStandardFills, findOpenQuestions, fillInput, type OpenQuestion } from './adapters/shared';
+import {
+  applyStandardFills,
+  findOpenQuestions,
+  fillInput,
+  needsReplaceConfirm,
+  type OpenQuestion,
+} from './adapters/shared';
 import { greenhouseAdapter } from './adapters/greenhouse';
 import { leverAdapter } from './adapters/lever';
 import { workdayAdapter } from './adapters/workday';
@@ -26,6 +32,15 @@ const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, workdayAdapter
 const adapter = ADAPTERS.find((a) => a.matches(new URL(location.href))) ?? null;
 
 const BUTTON_CLASS = 'jaf-ai-btn';
+const BUTTON_LABEL = '✨ AI answer';
+const CONFIRM_LABEL = '↻ Replace your text?';
+const CONFIRM_WINDOW_MS = 4000;
+
+// Buttons awaiting a confirming second click → the timer that disarms them.
+// Keyed weakly so a button dropped by injectQuestionButtons' reconciliation
+// takes its armed state with it.
+const armedButtons = new WeakMap<HTMLButtonElement, number>();
+
 // Buttons WE created. Reconciliation and cleanup only ever touch members of this
 // set, so a host page element that happens to share our class can never mark a
 // question as handled or get deleted by us. A WeakSet (not a DOM attribute) means
@@ -133,7 +148,7 @@ function addButtonFor(q: OpenQuestion): void {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = BUTTON_CLASS;
-  btn.textContent = '✨ AI answer';
+  btn.textContent = BUTTON_LABEL;
   ownedButtons.add(btn);
   btn.addEventListener('click', () => generateAnswer(q, btn));
 
@@ -141,8 +156,32 @@ function addButtonFor(q: OpenQuestion): void {
   q.el.insertAdjacentElement('afterend', btn);
 }
 
+function disarm(btn: HTMLButtonElement): void {
+  const timer = armedButtons.get(btn);
+  if (timer !== undefined) window.clearTimeout(timer);
+  armedButtons.delete(btn);
+}
+
 async function generateAnswer(q: OpenQuestion, btn: HTMLButtonElement): Promise<void> {
-  const original = btn.textContent;
+  // Replacing text the applicant already has is destructive and unrecoverable,
+  // so it takes two clicks. Regeneration stays available — it just has to be
+  // deliberate.
+  if (needsReplaceConfirm(q.el.value, armedButtons.has(btn))) {
+    btn.textContent = CONFIRM_LABEL;
+    armedButtons.set(
+      btn,
+      window.setTimeout(() => {
+        armedButtons.delete(btn);
+        btn.textContent = BUTTON_LABEL;
+      }, CONFIRM_WINDOW_MS),
+    );
+    return;
+  }
+  disarm(btn);
+
+  // Revert to the constant, not to whatever the button happened to read on
+  // entry — that could be the confirm prompt or a leftover transient state.
+  const original = BUTTON_LABEL;
   btn.disabled = true;
   btn.textContent = '… thinking';
   try {
