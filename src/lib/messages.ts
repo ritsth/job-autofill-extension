@@ -82,9 +82,46 @@ export interface AIResult {
   error?: string;
 }
 
+/**
+ * Shown instead of Chrome's internal "Extension context invalidated."
+ *
+ * When the extension is reloaded or auto-updated, content scripts from the
+ * previous build keep running in already-open tabs but lose their connection to
+ * the runtime. Every chrome.* call from that orphaned script then throws, and
+ * the only cure is reloading the page so a fresh content script is injected.
+ *
+ * The action comes first because callers truncate this for display — the badge's
+ * AI check cuts at 32 characters — so "Refresh this page" survives the slice.
+ */
+export const CONTEXT_LOST_MESSAGE = 'Refresh this page — the extension was updated.';
+
+/**
+ * True for the failure an orphaned content script gets. Matched on the message
+ * because Chrome surfaces it as a plain Error with no code to test.
+ *
+ * Recognises BOTH Chrome's raw wording and the CONTEXT_LOST_MESSAGE that
+ * sendToBackground rewrites it to — callers downstream of that rewrite only ever
+ * see the friendly form, so matching the raw string alone would never fire.
+ */
+export function isContextInvalidated(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e ?? '');
+  return /extension context invalidated/i.test(msg) || msg === CONTEXT_LOST_MESSAGE;
+}
+
 /** Promise wrapper around chrome.runtime.sendMessage (to background). */
-export function sendToBackground<T = unknown>(msg: BackgroundMessage): Promise<T> {
-  return chrome.runtime.sendMessage(msg);
+export async function sendToBackground<T = unknown>(msg: BackgroundMessage): Promise<T> {
+  // chrome.runtime.id is undefined once the context is gone. Checking it first
+  // catches the case before Chrome throws, and doesn't depend on the wording of
+  // an internal error string.
+  if (!chrome.runtime?.id) throw new Error(CONTEXT_LOST_MESSAGE);
+  try {
+    return (await chrome.runtime.sendMessage(msg)) as T;
+  } catch (e) {
+    // Keep the original as `cause` — the friendly message replaces it in the UI,
+    // but the raw Chrome error is what you want in the console.
+    if (isContextInvalidated(e)) throw new Error(CONTEXT_LOST_MESSAGE, { cause: e });
+    throw e;
+  }
 }
 
 /** Promise wrapper around chrome.tabs.sendMessage (to a content script). */

@@ -9,7 +9,7 @@ import { greenhouseAdapter } from './adapters/greenhouse';
 import { leverAdapter } from './adapters/lever';
 import { workdayAdapter } from './adapters/workday';
 import type { SiteAdapter } from './adapters/types';
-import { sendToBackground } from '../lib/messages';
+import { CONTEXT_LOST_MESSAGE, isContextInvalidated, sendToBackground } from '../lib/messages';
 import type { AIResult, CapturedJob, ContentMessage, FillResult, PageInfo } from '../lib/messages';
 import {
   startSponsorshipWatch,
@@ -157,7 +157,11 @@ async function generateAnswer(q: OpenQuestion, btn: HTMLButtonElement): Promise<
       setTimeout(() => (btn.textContent = original), 2000);
     }
   } catch (e) {
-    btn.textContent = '⚠️ failed';
+    // A stale content script (extension reloaded/updated under an open tab) is
+    // recoverable by refreshing, so say that rather than a bare "failed".
+    btn.textContent = isContextInvalidated(e)
+      ? '⚠️ ' + CONTEXT_LOST_MESSAGE.slice(0, 40)
+      : '⚠️ failed';
     console.error('[JobAutofill] answer generation failed', e);
     setTimeout(() => (btn.textContent = original), 3000);
   } finally {
