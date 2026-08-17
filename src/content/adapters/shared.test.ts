@@ -195,3 +195,57 @@ describe('needsReplaceConfirm — guarding the applicant\'s own text', () => {
     expect(needsReplaceConfirm('My own draft answer', true)).toBe(false);
   });
 });
+
+describe('RULES — question prose must not be mistaken for a data field', () => {
+  // The employer/title rules read the applicant's CURRENT job. Inside a question
+  // their keywords mean the opposite — the job being applied FOR — so matching
+  // there suppressed the AI-answer button and typed the wrong value into an
+  // essay box. Reported live on a BambooHR form.
+  const P: Profile = {
+    ...DEFAULT_PROFILE,
+    workHistory: [
+      { company: 'Acme', title: 'Data Analyst', startDate: '2024', endDate: '', description: '' },
+    ],
+  };
+  const valueFor = (raw: string): string | undefined =>
+    RULES.find((r) => r.test.test(normalize(raw)))?.value(P);
+
+  it('leaves "why are you interested in this position?" to the AI', () => {
+    expect(valueFor('Why are you interested in this position?')).toBeUndefined();
+    expect(valueFor('Why are you interested in the position?')).toBeUndefined();
+    expect(valueFor('Why this position?')).toBeUndefined();
+    expect(valueFor('Why do you want this role?')).toBeUndefined();
+    expect(valueFor('How did you hear about this position?')).toBeUndefined();
+  });
+
+  it('leaves "why do you want to work at our company?" to the AI', () => {
+    expect(valueFor('Why do you want to work at our company?')).toBeUndefined();
+    expect(valueFor('Why our company?')).toBeUndefined();
+  });
+
+  it('is not fooled by "current" sitting between the determiner and the keyword', () => {
+    // Caught in review: a trailing lookbehind only inspects the text right
+    // before wherever the match attempt starts, and the regex engine retries
+    // starting AFTER "current" — so "this current position" matched with
+    // "current " as the immediate prefix instead of "this ", slipping past a
+    // lookbehind that only knew to reject "this ". Same failure for company.
+    expect(valueFor('Why are you interested in this current position?')).toBeUndefined();
+    expect(valueFor('Tell us why you want this current role?')).toBeUndefined();
+    expect(valueFor('What are you looking for in our current company?')).toBeUndefined();
+  });
+
+  it('still autofills genuine current-employer and current-title fields', () => {
+    expect(valueFor('Current Title')).toBe('Data Analyst');
+    expect(valueFor('Job Title')).toBe('Data Analyst');
+    expect(valueFor('Position')).toBe('Data Analyst');
+    expect(valueFor('Current Role')).toBe('Data Analyst');
+    expect(valueFor('Current Company')).toBe('Acme');
+    expect(valueFor('Employer name')).toBe('Acme');
+  });
+
+  it('still autofills a data field that happens to be phrased as a question', () => {
+    // The guard keys off the determiner, not the question mark, so this keeps
+    // working — a blunter "questions never autofill" rule would have broken it.
+    expect(valueFor('What is your current job title?')).toBe('Data Analyst');
+  });
+});

@@ -162,8 +162,27 @@ export const RULES: Rule[] = [
   { test: /\bcity\b/, value: (p) => p.personal.city },
   { test: /\b(state|province|region)\b/, value: (p) => p.personal.state, selectOk: true },
   { test: /\bcountry\b/, value: (p) => p.personal.country, selectOk: true },
-  { test: /\b(current\s*)?(company|employer)\b/, value: (p) => p.workHistory[0]?.company ?? '' },
-  { test: /\b(current\s*)?(title|role|position)\b/, value: (p) => p.workHistory[0]?.title ?? '' },
+  // These two read the applicant's CURRENT employer/title, but their keywords
+  // flip referent inside question prose: in "Why are you interested in this
+  // position?" the position is the *employer's* job, and in "Why do you want to
+  // work at our company?" the company is theirs too. Matching there both hid the
+  // AI-answer button and typed the applicant's current job into an essay box.
+  //
+  // A trailing lookbehind isn't enough on its own: the regex engine retries the
+  // whole pattern starting after the determiner, so "this current position"
+  // matches "position" with "current " (not "this ") as its immediate prefix —
+  // the very phrasing this rule exists to exclude. A leading negative lookahead
+  // over the WHOLE determiner-phrase, scanned across the entire label rather
+  // than anchored to one match attempt, closes that gap; "current" is optional
+  // inside it for the same reason.
+  {
+    test: /^(?!.*\b(?:this|the|that|our|a|an)\s+(?:current\s+)?(?:company|employer)\b).*?\b(current\s*)?(company|employer)\b/,
+    value: (p) => p.workHistory[0]?.company ?? '',
+  },
+  {
+    test: /^(?!.*\b(?:this|the|that|our|a|an)\s+(?:current\s+)?(?:title|role|position)\b).*?\b(current\s*)?(title|role|position)\b/,
+    value: (p) => p.workHistory[0]?.title ?? '',
+  },
   { test: /\b(salary|compensation|pay)\b/, value: (p) => p.preferences.salaryExpectation },
   {
     test: /\b(work\s*authoriz|authoriz.*work|legally.*work|eligible.*work)\b/,
