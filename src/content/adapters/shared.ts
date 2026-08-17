@@ -162,8 +162,21 @@ export const RULES: Rule[] = [
   { test: /\bcity\b/, value: (p) => p.personal.city },
   { test: /\b(state|province|region)\b/, value: (p) => p.personal.state, selectOk: true },
   { test: /\bcountry\b/, value: (p) => p.personal.country, selectOk: true },
-  { test: /\b(current\s*)?(company|employer)\b/, value: (p) => p.workHistory[0]?.company ?? '' },
-  { test: /\b(current\s*)?(title|role|position)\b/, value: (p) => p.workHistory[0]?.title ?? '' },
+  // These two read the applicant's CURRENT employer/title, but their keywords
+  // flip referent inside question prose: in "Why are you interested in this
+  // position?" the position is the *employer's* job, and in "Why do you want to
+  // work at our company?" the company is theirs too. Matching there both hid the
+  // AI-answer button and typed the applicant's current job into an essay box.
+  // The lookbehind drops exactly that reading while leaving real data fields
+  // ("Current Title", "Job Title", even "What is your current job title?") alone.
+  {
+    test: /(?<!\b(?:this|the|that|our|a|an)\s)\b(current\s*)?(company|employer)\b/,
+    value: (p) => p.workHistory[0]?.company ?? '',
+  },
+  {
+    test: /(?<!\b(?:this|the|that|our|a|an)\s)\b(current\s*)?(title|role|position)\b/,
+    value: (p) => p.workHistory[0]?.title ?? '',
+  },
   { test: /\b(salary|compensation|pay)\b/, value: (p) => p.preferences.salaryExpectation },
   {
     test: /\b(work\s*authoriz|authoriz.*work|legally.*work|eligible.*work)\b/,
