@@ -167,14 +167,20 @@ export const RULES: Rule[] = [
   // position?" the position is the *employer's* job, and in "Why do you want to
   // work at our company?" the company is theirs too. Matching there both hid the
   // AI-answer button and typed the applicant's current job into an essay box.
-  // The lookbehind drops exactly that reading while leaving real data fields
-  // ("Current Title", "Job Title", even "What is your current job title?") alone.
+  //
+  // A trailing lookbehind isn't enough on its own: the regex engine retries the
+  // whole pattern starting after the determiner, so "this current position"
+  // matches "position" with "current " (not "this ") as its immediate prefix —
+  // the very phrasing this rule exists to exclude. A leading negative lookahead
+  // over the WHOLE determiner-phrase, scanned across the entire label rather
+  // than anchored to one match attempt, closes that gap; "current" is optional
+  // inside it for the same reason.
   {
-    test: /(?<!\b(?:this|the|that|our|a|an)\s)\b(current\s*)?(company|employer)\b/,
+    test: /^(?!.*\b(?:this|the|that|our|a|an)\s+(?:current\s+)?(?:company|employer)\b).*?\b(current\s*)?(company|employer)\b/,
     value: (p) => p.workHistory[0]?.company ?? '',
   },
   {
-    test: /(?<!\b(?:this|the|that|our|a|an)\s)\b(current\s*)?(title|role|position)\b/,
+    test: /^(?!.*\b(?:this|the|that|our|a|an)\s+(?:current\s+)?(?:title|role|position)\b).*?\b(current\s*)?(title|role|position)\b/,
     value: (p) => p.workHistory[0]?.title ?? '',
   },
   { test: /\b(salary|compensation|pay)\b/, value: (p) => p.preferences.salaryExpectation },

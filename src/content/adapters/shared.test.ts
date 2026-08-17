@@ -223,6 +223,17 @@ describe('RULES — question prose must not be mistaken for a data field', () =>
     expect(valueFor('Why our company?')).toBeUndefined();
   });
 
+  it('is not fooled by "current" sitting between the determiner and the keyword', () => {
+    // Caught in review: a trailing lookbehind only inspects the text right
+    // before wherever the match attempt starts, and the regex engine retries
+    // starting AFTER "current" — so "this current position" matched with
+    // "current " as the immediate prefix instead of "this ", slipping past a
+    // lookbehind that only knew to reject "this ". Same failure for company.
+    expect(valueFor('Why are you interested in this current position?')).toBeUndefined();
+    expect(valueFor('Tell us why you want this current role?')).toBeUndefined();
+    expect(valueFor('What are you looking for in our current company?')).toBeUndefined();
+  });
+
   it('still autofills genuine current-employer and current-title fields', () => {
     expect(valueFor('Current Title')).toBe('Data Analyst');
     expect(valueFor('Job Title')).toBe('Data Analyst');
