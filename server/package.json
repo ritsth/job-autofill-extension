@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.7.1",
-    "@google-cloud/vertexai": "^1.9.3"
+    "@google-cloud/vertexai": "^1.9.3",
+    "protobufjs": "^7.6.5"
   }
 }
