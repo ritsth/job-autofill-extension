@@ -277,6 +277,44 @@ const FREE_TEXT_INPUT_TYPES = new Set(['text', 'search']);
 const QUESTION_MIN_WORDS = 4;
 
 /**
+ * Attributes that mark an <input> as the text box of a dropdown widget rather
+ * than a free-text field. A native <select> is never a candidate (it isn't in
+ * findOpenQuestions' selector), but React combobox libraries render a real
+ * <input type="text"> with a styled option list — and its label is usually a
+ * question, so it would otherwise pass looksLikeQuestion.
+ *
+ * `list` is the native pairing with <datalist>; the rest are the ARIA combobox
+ * pattern, which any of these widgets sets in order to be operable at all.
+ */
+const COMBOBOX_ATTRS = ['aria-haspopup', 'aria-autocomplete', 'aria-expanded', 'aria-controls', 'list'];
+
+/**
+ * Whether an input is really a dropdown in disguise. Pure so the rule is
+ * testable without a DOM; isCombobox() below feeds it from a live element.
+ *
+ * An AI-drafted sentence is never a valid answer to a fixed option list, and
+ * the button also lands on top of the control, so these get no button at all.
+ */
+export function isComboboxLike(el: {
+  role: string | null;
+  attributeNames: readonly string[];
+  hasComboboxAncestor: boolean;
+}): boolean {
+  if (el.role === 'combobox' || el.role === 'listbox') return true;
+  if (el.attributeNames.some((a) => COMBOBOX_ATTRS.includes(a.toLowerCase()))) return true;
+  return el.hasComboboxAncestor;
+}
+
+function isCombobox(el: HTMLInputElement): boolean {
+  return isComboboxLike({
+    role: el.getAttribute('role'),
+    attributeNames: el.getAttributeNames(),
+    // Widgets that put the role on a wrapper instead of the input itself.
+    hasComboboxAncestor: el.closest('[role="combobox"], [role="listbox"]') !== null,
+  });
+}
+
+/**
  * True when a label reads like a free-text question rather than a short data
  * field. Only consulted for <input>: a <textarea> is a question by definition.
  *
@@ -315,6 +353,8 @@ export function findOpenQuestions(root: ParentNode = document): OpenQuestion[] {
     if (isInput && !FREE_TEXT_INPUT_TYPES.has((el.getAttribute('type') || 'text').toLowerCase())) {
       continue;
     }
+    // A dropdown's answer comes from its option list, never from the AI.
+    if (isInput && isCombobox(el)) continue;
 
     const label = getLabelText(el);
     if (matchRule(label, el)) continue; // a standard field, not an essay question
