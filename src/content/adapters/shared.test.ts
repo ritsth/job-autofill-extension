@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { looksLikeQuestion, needsReplaceConfirm, normalize, RULES } from './shared';
+import {
+  isComboboxLike,
+  looksLikeQuestion,
+  needsReplaceConfirm,
+  normalize,
+  RULES,
+} from './shared';
 import { DEFAULT_PROFILE, type Profile } from '../../lib/profile';
 
 describe('normalize — label text canonicalisation', () => {
@@ -247,5 +253,42 @@ describe('RULES — question prose must not be mistaken for a data field', () =>
     // The guard keys off the determiner, not the question mark, so this keeps
     // working — a blunter "questions never autofill" rule would have broken it.
     expect(valueFor('What is your current job title?')).toBe('Data Analyst');
+  });
+});
+
+describe('isComboboxLike — dropdowns never get an AI-answer button', () => {
+  // Reported live: "Have you previously worked at NISC…?" and "How did you hear
+  // about this job?" are dropdowns, but the widget renders a real
+  // <input type="text">, so the question-shaped label let it through and the
+  // button landed on top of the control. An AI sentence is never a valid answer
+  // to a fixed option list.
+  const plain = { role: null, attributeNames: ['type', 'name', 'id'], hasComboboxAncestor: false };
+
+  it('leaves a genuine free-text input alone', () => {
+    expect(isComboboxLike(plain)).toBe(false);
+    expect(isComboboxLike({ ...plain, attributeNames: ['type', 'placeholder', 'required'] })).toBe(false);
+  });
+
+  it('detects the ARIA combobox role on the input itself', () => {
+    expect(isComboboxLike({ ...plain, role: 'combobox' })).toBe(true);
+    expect(isComboboxLike({ ...plain, role: 'listbox' })).toBe(true);
+  });
+
+  it('detects the ARIA combobox attributes', () => {
+    for (const attr of ['aria-haspopup', 'aria-autocomplete', 'aria-expanded', 'aria-controls']) {
+      expect(isComboboxLike({ ...plain, attributeNames: ['type', attr] })).toBe(true);
+    }
+  });
+
+  it('detects a native <datalist> pairing', () => {
+    expect(isComboboxLike({ ...plain, attributeNames: ['type', 'list'] })).toBe(true);
+  });
+
+  it('detects widgets that put the role on a wrapper instead of the input', () => {
+    expect(isComboboxLike({ ...plain, hasComboboxAncestor: true })).toBe(true);
+  });
+
+  it('is case-insensitive about attribute names', () => {
+    expect(isComboboxLike({ ...plain, attributeNames: ['ARIA-EXPANDED'] })).toBe(true);
   });
 });
