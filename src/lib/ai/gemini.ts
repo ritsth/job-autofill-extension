@@ -74,14 +74,46 @@ export class GeminiProvider implements AIProvider {
     }
 
     const data = (await res.json()) as GeminiResponse;
-    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') ?? '';
-    if (!text.trim()) {
+    const candidate = data.candidates?.[0];
+    const text = (candidate?.content?.parts?.map((p) => p.text).join('') ?? '').trim();
+    const finishReason = candidate?.finishReason;
+
+    if (finishReason === 'SAFETY') {
+      throw new AIError('Gemini blocked this response for safety reasons. Try rephrasing.');
+    }
+    if (finishReason === 'RECITATION') {
+      throw new AIError(
+        'Gemini blocked this response because it matched existing content too closely. Try rephrasing.',
+      );
+    }
+    // MAX_TOKENS with a substantial answer already in hand is left alone —
+    // the codebase spends real effort tuning thinkingBudget to avoid exactly
+    // this (see above), and discarding a mostly-complete answer because the
+    // budget ran out right at the end would be worse than returning it. Only
+    // the case that matches what was actually observed in the wild — the
+    // budget being exhausted before any real answer formed, e.g. a single
+    // word ("Fellow") — gets its own message rather than the generic one.
+    if (finishReason === 'MAX_TOKENS' && text.length < MIN_VIABLE_ANSWER_LENGTH) {
+      throw new AIError(
+        "Gemini's response was cut off before it could really start (ran out of output budget). Try again.",
+      );
+    }
+    if (!text) {
       throw new AIError('Gemini returned an empty response. Try rephrasing or retry.');
     }
-    return text.trim();
+    return text;
   }
 }
 
+// Below this, a MAX_TOKENS cutoff reads as "the budget ran out almost
+// immediately" rather than "a real answer got clipped near the end" — chosen
+// well under the shortest legitimate reply this codebase asks for (the
+// free-text answer prompt's own floor is "about 4-6 sentences").
+const MIN_VIABLE_ANSWER_LENGTH = 40;
+
 interface GeminiResponse {
-  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+    finishReason?: string;
+  }>;
 }
