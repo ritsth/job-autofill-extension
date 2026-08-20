@@ -22,29 +22,45 @@ const INFRA_LABEL = /^(www|jobs|impl(-\w+)?|wd\d+)$/;
  *   `recruiting`, e.g. `wd5.myworkdaysite.com/recruiting/aaregional/…` →
  *   "Aaregional", `wd1.myworkdaysite.com/en-US/recruiting/abinbev/…` →
  *   "Abinbev". This is why a single "always use path segment 0" rule doesn't
- *   work across all three domains.
+ *   work across all three domains — the function below dispatches on which
+ *   domain matched before applying any rule, rather than applying one rule's
+ *   path shape to another domain's URLs.
  */
 export function companyFromWorkdayUrl(hostname: string, pathname: string): string {
   const segs = pathname.split('/').filter(Boolean);
 
-  // Once "recruiting" appears anywhere in the path, commit to reading the
-  // tenant relative to it — this is unambiguously a myworkdaysite.com-style
-  // URL. Falling through to the segment-0 fallback below when there's nothing
-  // after "recruiting" would grab the literal word "recruiting" itself (or a
-  // locale prefix like "en-US"), not a tenant, so a bare listing page
-  // correctly yields '' instead of a fake company name.
-  const recruitingIdx = segs.findIndex((s) => s.toLowerCase() === 'recruiting');
-  if (recruitingIdx !== -1) {
-    return segs[recruitingIdx + 1] ? titleCaseSlug(segs[recruitingIdx + 1]) : '';
+  // Dispatch on domain FIRST. The three rules above are domain-specific
+  // contracts, not universal heuristics — applying the /recruiting/ path rule
+  // regardless of domain, as an earlier version of this function did, let a
+  // myworkdayjobs.com URL whose site name happened to contain "recruiting"
+  // hijack a perfectly good subdomain-derived tenant (caught in review).
+  if (hostMatches(hostname, 'myworkdaysite.com')) {
+    // The tenant follows "recruiting" in the path; there is no subdomain
+    // fallback on this domain; a page with no "recruiting" segment (or
+    // nothing after it) has no tenant to report.
+    const recruitingIdx = segs.findIndex((s) => s.toLowerCase() === 'recruiting');
+    return recruitingIdx !== -1 && segs[recruitingIdx + 1]
+      ? titleCaseSlug(segs[recruitingIdx + 1])
+      : '';
   }
 
+  if (hostMatches(hostname, 'myworkdayjobs.com')) {
+    // The tenant IS the subdomain — but only when there IS one. A bare
+    // `myworkdayjobs.com` (also caught in review) has `labels.length === 2`,
+    // so `sub` would be the domain's own first label ("myworkdayjobs"), not a
+    // tenant.
+    const labels = hostname.split('.');
+    const sub = labels[0] ?? '';
+    return labels.length > 2 && sub && !INFRA_LABEL.test(sub) ? titleCaseSlug(sub) : '';
+  }
+
+  // myworkday.com: the subdomain is Workday's own pod id (wd5, wd12, …), not
+  // the tenant. The tenant is the first path segment instead. An empty result
+  // here (no path, or the pod id has no path to fall back to) is the correct
+  // outcome: it surfaces the "enter a company" prompt instead of shipping a
+  // wrong one.
   const sub = hostname.split('.')[0] ?? '';
   if (sub && !INFRA_LABEL.test(sub)) return titleCaseSlug(sub);
-
-  // Subdomain is an infra/pod label rather than the tenant — myworkday.com
-  // puts the tenant as the first path segment instead. An empty result here
-  // (no path, or the whole subdomain+path is infra) is the correct outcome:
-  // it surfaces the "enter a company" prompt instead of shipping a wrong one.
   return segs.length ? titleCaseSlug(segs[0]) : '';
 }
 

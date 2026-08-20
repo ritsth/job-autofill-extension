@@ -14,6 +14,22 @@ describe('companyFromWorkdayUrl — tenant extraction across all three Workday d
       expect(companyFromWorkdayUrl('workday.wd5.myworkdayjobs.com', '/Workday')).toBe('Workday');
       expect(companyFromWorkdayUrl('path.wd1.myworkdayjobs.com', '/External')).toBe('Path');
     });
+
+    it('caught in review: a path that happens to contain "recruiting" must not steal the tenant from another domain\'s rule', () => {
+      // Before the fix, the /recruiting/ rule ran unconditionally regardless
+      // of domain, so this returned "Acme" (myworkdaysite.com's rule) instead
+      // of "Nvidia" (myworkdayjobs.com's own, correct rule).
+      expect(companyFromWorkdayUrl('nvidia.wd5.myworkdayjobs.com', '/recruiting/acme')).toBe(
+        'Nvidia',
+      );
+    });
+
+    it('caught in review: a bare apex with no tenant subdomain reports no company', () => {
+      // hostMatches('myworkdayjobs.com', 'myworkdayjobs.com') is true (exact
+      // match), but there's no subdomain to read a tenant from. Before the
+      // fix this returned "Myworkdayjobs" — the domain's own label.
+      expect(companyFromWorkdayUrl('myworkdayjobs.com', '/something')).toBe('');
+    });
   });
 
   describe('*.myworkday.com — the subdomain is an infra pod, the tenant is path segment 0', () => {
