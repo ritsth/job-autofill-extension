@@ -38,7 +38,7 @@
     "eslint": "^10.8.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.7.0",
-    "mammoth": "^1.8.0",
+    "mammoth": "^1.12.1",
     "pdfjs-dist": "^6.2.108",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0",
