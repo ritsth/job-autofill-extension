@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Field } from './Field';
 import type { EducationEntry, Profile, WorkEntry } from '../lib/profile';
 import { useProfile } from '../ui/useProfile';
-import { extractText } from '../lib/documents';
+import { extractText, extractTextBatch } from '../lib/documents';
 import { sendToBackground } from '../lib/messages';
 import type { AIResult } from '../lib/messages';
 import { parseResumeJson } from '../lib/resumeImport';
@@ -659,32 +659,45 @@ function ResumeUpload({
 }
 
 function DocUpload({ onText }: { onText: (name: string, text: string) => void }) {
-  const [busy, setBusy] = useState(false);
-  const [warn, setWarn] = useState('');
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  // One entry per file that had a problem, so a bad file in a batch of good
+  // ones is identifiable rather than a single anonymous "could not read file".
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   async function handle(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!file) return;
-    setBusy(true);
-    setWarn('');
-    try {
-      const { text, warning } = await extractText(file);
-      if (warning) setWarn(warning);
-      if (text) onText(file.name, text);
-    } catch (err) {
-      setWarn(`Could not read file: ${(err as Error).message}`);
-    } finally {
-      setBusy(false);
+    if (!files.length) return;
+
+    setWarnings([]);
+    setProgress({ done: 0, total: files.length });
+
+    const results = await extractTextBatch(files, (done, total) => setProgress({ done, total }));
+
+    for (const r of results) {
+      if (r.text) onText(r.name, r.text);
     }
+    setProgress(null);
+    setWarnings(results.filter((r) => r.warning).map((r) => `${r.name}: ${r.warning}`));
   }
 
+  const busy = progress !== null;
   return (
     <div className="field">
-      <label>Upload PDF / DOCX / TXT</label>
-      <input type="file" accept=".pdf,.docx,.txt,.md" onChange={handle} disabled={busy} />
-      {busy && <div className="help">Extracting text…</div>}
-      {warn && <div className="warn">{warn}</div>}
+      <label>Upload PDF / DOCX / TXT — you can pick several at once</label>
+      <input type="file" accept=".pdf,.docx,.txt,.md" multiple onChange={handle} disabled={busy} />
+      {progress && (
+        <div className="help">
+          {progress.total === 1
+            ? 'Extracting text…'
+            : `Extracting text… ${progress.done} of ${progress.total}`}
+        </div>
+      )}
+      {warnings.map((w) => (
+        <div className="warn" key={w}>
+          {w}
+        </div>
+      ))}
     </div>
   );
 }

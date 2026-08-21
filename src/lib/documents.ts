@@ -13,6 +13,45 @@ export interface ExtractResult {
   warning?: string;
 }
 
+/** One file's outcome from extractTextBatch, tagged with which file it was. */
+export interface BatchExtractResult extends ExtractResult {
+  name: string;
+}
+
+/**
+ * Extracts text from several files, one after another.
+ *
+ * A failure on one file must NOT abandon the rest: with multi-select a user can
+ * easily pick a scanned PDF alongside three good ones, and losing all four to
+ * the first thrown error would be worse than reporting the one that failed. So
+ * a throw is converted into that file's own `warning` and the loop continues.
+ *
+ * Sequential rather than Promise.all on purpose — PDF parsing is CPU-heavy, and
+ * running several at once would jam the options page and make the progress
+ * count meaningless.
+ */
+export async function extractTextBatch(
+  files: readonly File[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<BatchExtractResult[]> {
+  const out: BatchExtractResult[] = [];
+  for (const [i, file] of files.entries()) {
+    onProgress?.(i, files.length);
+    try {
+      const { text, warning } = await extractText(file);
+      out.push({ name: file.name, text, warning });
+    } catch (err) {
+      out.push({
+        name: file.name,
+        text: '',
+        warning: `Could not read file: ${(err as Error).message}`,
+      });
+    }
+  }
+  onProgress?.(files.length, files.length);
+  return out;
+}
+
 export async function extractText(file: File): Promise<ExtractResult> {
   const name = file.name.toLowerCase();
   let result: ExtractResult;
