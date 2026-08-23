@@ -88,6 +88,22 @@ export function timeAgo(ts: number): string {
   return `${years} yr ago`;
 }
 
+export function SavedJobTextMeta({ textLength }: { textLength: number }) {
+  const reachedCap = textLength >= MAX_TEXT;
+
+  return (
+    <span
+      title={
+        reachedCap
+          ? `Saved text reached the ${MAX_TEXT.toLocaleString()}-character cap and may have been trimmed.`
+          : undefined
+      }
+    >
+      {textLength.toLocaleString()} chars{reachedCap ? ' (trimmed)' : ''}
+    </span>
+  );
+}
+
 export function Popup() {
   const [tabId, setTabId] = useState<number | null>(null);
   const [page, setPage] = useState<PageInfo | null>(null);
@@ -510,16 +526,7 @@ const copyTimer = useRef<number | null>(null);
                   {expanded && (
                     <div className="jobpreview">
                       <div className="jobmeta">
-                        <span
-                          title={
-                            j.text.length >= MAX_TEXT
-                              ? `Saved text reached the ${MAX_TEXT.toLocaleString()}-character cap and may have been trimmed.`
-                              : undefined
-                          }
-                        >
-                          {j.text.length.toLocaleString()} chars
-                          {j.text.length >= MAX_TEXT ? ' (trimmed)' : ''}
-                        </span>
+                        <SavedJobTextMeta textLength={j.text.length} />
                         <time
                           dateTime={new Date(j.savedAt).toISOString()}
                           title={new Date(j.savedAt).toLocaleString()}
