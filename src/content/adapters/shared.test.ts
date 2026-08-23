@@ -292,3 +292,105 @@ describe('isComboboxLike — dropdowns never get an AI-answer button', () => {
     expect(isComboboxLike({ ...plain, attributeNames: ['ARIA-EXPANDED'] })).toBe(true);
   });
 });
+
+describe('RULES — the remaining field rules, against realistic concatenated labels', () => {
+  // getLabelText concatenates the visible label with the field's aria-label,
+  // placeholder, name and id. So the realistic input is never the bare word —
+  // "Email" isn't what a rule sees, "email email_address candidate[email]" is.
+  // That distinction is exactly what hid #220 for so long, so every label here
+  // is written in the concatenated shape a real form produces.
+  const P: Profile = {
+    ...DEFAULT_PROFILE,
+    personal: {
+      ...DEFAULT_PROFILE.personal,
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      email: 'ada@example.com',
+      phone: '555-0100',
+      linkedin: 'linkedin.com/in/ada',
+      github: 'github.com/ada',
+      portfolio: 'ada.dev',
+      city: 'Granville',
+      state: 'Ohio',
+      country: 'USA',
+    },
+    preferences: {
+      ...DEFAULT_PROFILE.preferences,
+      salaryExpectation: '100000',
+      workAuthorization: 'Yes',
+      requiresSponsorship: 'No',
+    },
+    workHistory: [
+      { company: 'Acme', title: 'Data Analyst', startDate: '2024', endDate: '', description: '' },
+    ],
+  };
+  const ruleFor = (raw: string) => RULES.find((r) => r.test.test(normalize(raw)));
+  const valueFor = (raw: string): string | undefined => ruleFor(raw)?.value(P);
+
+  it('resolves the contact-detail rules', () => {
+    expect(valueFor('Email email_address candidate[email]')).toBe('ada@example.com');
+    expect(valueFor('Phone Number phone candidate[phone]')).toBe('555-0100');
+    expect(valueFor('LinkedIn Profile linkedin_url')).toBe('linkedin.com/in/ada');
+    expect(valueFor('GitHub github_url')).toBe('github.com/ada');
+  });
+
+  it('resolves "Your Personal Website" to the portfolio', () => {
+    // Live-verified working on an Ashby posting, so this is a regression anchor
+    // rather than a guess about intended behaviour.
+    expect(valueFor('Your Personal Website website_url')).toBe('ada.dev');
+    expect(valueFor('Portfolio portfolio')).toBe('ada.dev');
+  });
+
+  it('resolves the location rules', () => {
+    expect(valueFor('City city candidate[city]')).toBe('Granville');
+    expect(valueFor('State state candidate[state]')).toBe('Ohio');
+    expect(valueFor('Country country')).toBe('USA');
+  });
+
+  it('resolves salary and the current-job rules', () => {
+    expect(valueFor('Salary Expectation salary')).toBe('100000');
+    expect(valueFor('Job Title job_title')).toBe('Data Analyst');
+    expect(valueFor('Current Employer employer_name')).toBe('Acme');
+  });
+
+  it('gives "Company Name" to the employer rule, not the applicant-name rule', () => {
+    // Both rules contain the word "name"; the full-name rule is earlier in the
+    // table, so this pins that it correctly declines rather than winning.
+    expect(valueFor('Company Name company_name')).toBe('Acme');
+    expect(valueFor('Company Name company_name')).not.toBe('Ada Lovelace');
+  });
+
+  it('only lets the four intended rules fill a <select>', () => {
+    // matchRule() skips a non-selectOk rule for a <select> element, so this
+    // flag decides whether a dropdown can be autofilled at all. Asserting it
+    // directly means it can't be dropped from a rule silently.
+    expect(ruleFor('State state')?.selectOk).toBe(true);
+    expect(ruleFor('Country country')?.selectOk).toBe(true);
+    expect(ruleFor('Are you legally authorized to work in the US?')?.selectOk).toBe(true);
+
+    expect(ruleFor('Email email')?.selectOk).toBeUndefined();
+    expect(ruleFor('City city')?.selectOk).toBeUndefined();
+    expect(ruleFor('Salary salary')?.selectOk).toBeUndefined();
+  });
+
+  it('does not let a rule claim a label that merely shares one of its words', () => {
+    expect(valueFor('Name of Current Employer')).not.toBe('Ada Lovelace');
+    expect(valueFor('Preferred Name preferred_name')).not.toBe('Ada Lovelace');
+    // "Emergency contact" is not an email/phone field for the applicant.
+    expect(valueFor('Emergency Contact Name')).not.toBe('Ada Lovelace');
+  });
+
+  it('documents two rules that currently match NOTHING — known bug, see #232', () => {
+    // NOT an endorsement. Both rules end a truncated stem with \b, which
+    // requires a non-word char next — but real labels continue the word
+    // ("authoriz" + "ation", "sponsor" + "ship"), so the boundary never occurs.
+    // These assertions exist so the fix in #232 visibly flips them.
+    expect(valueFor('Work Authorization work_authorization')).toBeUndefined();
+    expect(valueFor('Will you now or in the future require visa sponsorship?')).toBeUndefined();
+    expect(valueFor('Sponsorship sponsorship')).toBeUndefined();
+
+    // The work-auth rule DOES fire on this phrasing, but only via its
+    // `legally.*work` arm — which ends on a complete word.
+    expect(valueFor('Are you legally authorized to work in the United States?')).toBe('Yes');
+  });
+});
