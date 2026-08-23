@@ -510,7 +510,16 @@ const copyTimer = useRef<number | null>(null);
                   {expanded && (
                     <div className="jobpreview">
                       <div className="jobmeta">
-                        <span>{j.text.length.toLocaleString()} chars</span>
+                        <span
+                          title={
+                            j.text.length >= MAX_TEXT
+                              ? `Saved text reached the ${MAX_TEXT.toLocaleString()}-character cap and may have been trimmed.`
+                              : undefined
+                          }
+                        >
+                          {j.text.length.toLocaleString()} chars
+                          {j.text.length >= MAX_TEXT ? ' (trimmed)' : ''}
+                        </span>
                         <time
                           dateTime={new Date(j.savedAt).toISOString()}
                           title={new Date(j.savedAt).toLocaleString()}
