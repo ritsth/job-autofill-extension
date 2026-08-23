@@ -273,6 +273,30 @@ const copyTimer = useRef<number | null>(null);
     }
   }
 
+  async function onPickJob(id: string) {
+    setError('');
+    try {
+      await setActiveJob(id === activeJobId ? null : id);
+      if (id === activeJobId) {
+        flashFillMsg('Now using the current page for AI answers.');
+      } else {
+        flashFillMsg('Using saved job for AI answers.');
+      }
+    } catch {
+      setError('Could not update the active job. Try again.');
+    }
+  }
+
+  async function onDeleteJob(id: string) {
+    setError('');
+    try {
+      await deleteJob(id);
+      flashFillMsg('Job deleted.');
+    } catch {
+      setError('Could not delete the job. Try again.');
+    }
+  }
+
   async function onCoverLetter() {
     setBusy('letter');
     setError('');
@@ -452,7 +476,7 @@ const copyTimer = useRef<number | null>(null);
                     <button
                       className="jobpick"
                       title="Use this posting as the context for AI answers & documents"
-                      onClick={() => setActiveJob(j.id === activeJobId ? null : j.id)}
+                      onClick={() => onPickJob(j.id)}
                       aria-label={`${j.id === activeJobId ? 'Stop using' : 'Use'} ${j.role || 'saved job'}${j.company ? ` at ${j.company}` : ''} as AI context`}
                     >
                       <span className="dot" />
@@ -476,7 +500,7 @@ const copyTimer = useRef<number | null>(null);
   aria-label={`Delete ${j.role || 'saved job'}…`}
   onClick={() => {
     if (window.confirm(`Delete the saved job "${j.role || 'this job'}"? This can't be undone.`)) {
-      void deleteJob(j.id);
+      onDeleteJob(j.id);
     }
   }}
 >
