@@ -82,6 +82,39 @@ export interface AIResult {
   error?: string;
 }
 
+/** What a frame should do with a PAGE_INFO / PAGE_FILL message. */
+export type FrameRole = 'answer' | 'answer-late' | 'ignore';
+
+/**
+ * Decides which frame answers PAGE_INFO / PAGE_FILL.
+ *
+ * chrome.tabs.sendMessage delivers to EVERY frame and keeps only the first
+ * sendResponse, so the frame that actually holds the application form has to
+ * win that race. Normally that's the top frame, but a company careers site can
+ * embed the ATS in an iframe — then the top frame is the company's domain and
+ * matches no adapter, while the sub-frame does.
+ *
+ * - A frame an adapter matched answers straight away, top-level or not.
+ * - The top frame with no adapter answers LATE, so an adapter-matching
+ *   sub-frame beats it. It must still answer eventually: on a genuinely
+ *   unsupported page nobody else will, and the popup needs its "unsupported"
+ *   reply. This is the same deliberate-delay technique the CAPTURE_JOB handler
+ *   already relies on.
+ * - A sub-frame with no adapter stays quiet — an ad or tracker iframe has
+ *   nothing to say about the application form.
+ */
+export function pageMessageRole(hasAdapter: boolean, isTopFrame: boolean): FrameRole {
+  if (hasAdapter) return 'answer';
+  return isTopFrame ? 'answer-late' : 'ignore';
+}
+
+/**
+ * How long the adapter-less top frame waits before conceding "unsupported".
+ * Long enough for an ATS iframe's content script to win the race, short enough
+ * that a genuinely unsupported page still feels instant.
+ */
+export const UNSUPPORTED_REPLY_DELAY_MS = 400;
+
 /**
  * Shown instead of Chrome's internal "Extension context invalidated."
  *

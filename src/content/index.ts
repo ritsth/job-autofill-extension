@@ -16,7 +16,13 @@ import { leverAdapter } from './adapters/lever';
 import { workdayAdapter } from './adapters/workday';
 import { ashbyAdapter } from './adapters/ashby';
 import type { SiteAdapter } from './adapters/types';
-import { CONTEXT_LOST_MESSAGE, isContextInvalidated, sendToBackground } from '../lib/messages';
+import {
+  CONTEXT_LOST_MESSAGE,
+  isContextInvalidated,
+  pageMessageRole,
+  sendToBackground,
+  UNSUPPORTED_REPLY_DELAY_MS,
+} from '../lib/messages';
 import type { AIResult, CapturedJob, ContentMessage, FillResult, PageInfo } from '../lib/messages';
 import {
   startSponsorshipWatch,
@@ -56,7 +62,8 @@ const isTopFrame = window.top === window.self;
 // answered by the top frame AND any job-board sub-frame: empty frames poll the full
 // timeout and reply last, so whichever frame really holds the posting wins the
 // sendMessage race. Ad / tracker sub-frames are excluded by host so they can't
-// answer with their own body text. PAGE_INFO / PAGE_FILL stay top-frame only.
+// answer with their own body text. PAGE_INFO / PAGE_FILL use a different rule —
+// see pageMessageRole.
 const JOB_HOSTS = [
   'linkedin.com', 'joinhandshake.com', 'greenhouse.io', 'lever.co',
   'myworkdayjobs.com', 'myworkday.com', 'myworkdaysite.com', 'ashbyhq.com', 'ycombinator.com',
@@ -73,15 +80,44 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse
     });
     return true;
   }
-  if (!isTopFrame) return false;
+  // PAGE_INFO / PAGE_FILL are answered by whichever frame an adapter matched —
+  // the top frame normally, or the ATS's own iframe when a company careers site
+  // embeds the application form. See pageMessageRole for the race it resolves.
+  const role = pageMessageRole(adapter !== null, isTopFrame);
+  if (role === 'ignore') return false;
+
   if (msg.type === 'PAGE_INFO') {
-    const info: PageInfo = adapter
-      ? { supported: true, site: adapter.id, ...adapter.getPageInfo(), jobText: getScanText() }
-      : { supported: false, site: null, company: '', role: '', jobText: '' };
-    sendResponse(info);
+    if (!adapter) {
+      // role === 'answer-late': concede "unsupported" only after giving an
+      // adapter-matching sub-frame time to answer first.
+      setTimeout(
+        () =>
+          sendResponse({
+            supported: false,
+            site: null,
+            company: '',
+            role: '',
+            jobText: '',
+          } satisfies PageInfo),
+        UNSUPPORTED_REPLY_DELAY_MS,
+      );
+      return true;
+    }
+    sendResponse({
+      supported: true,
+      site: adapter.id,
+      ...adapter.getPageInfo(),
+      jobText: getScanText(),
+    } satisfies PageInfo);
     return false;
   }
   if (msg.type === 'PAGE_FILL') {
+    // Only the adapter's own frame fills. The popup disables Fill unless some
+    // frame reported supported, so an adapter-less frame acting here could only
+    // ever be the wrong one — a careers page filling its own newsletter signup
+    // while the real form sits in the iframe. Restricting it to one frame also
+    // means there are no per-frame summaries to merge.
+    if (!adapter) return false;
     getProfile()
       .then((profile) => {
         const summary = applyStandardFills(profile);
