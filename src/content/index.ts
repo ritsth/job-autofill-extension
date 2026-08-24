@@ -16,6 +16,7 @@ import { leverAdapter } from './adapters/lever';
 import { workdayAdapter } from './adapters/workday';
 import { ashbyAdapter } from './adapters/ashby';
 import type { SiteAdapter } from './adapters/types';
+import { AI_BUTTON_CSS, BUTTON_CLASS } from './aiButtonStyles';
 import {
   CONTEXT_LOST_MESSAGE,
   isContextInvalidated,
@@ -37,7 +38,6 @@ import {
 const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, workdayAdapter, ashbyAdapter];
 const adapter = ADAPTERS.find((a) => a.matches(new URL(location.href))) ?? null;
 
-const BUTTON_CLASS = 'jaf-ai-btn';
 const BUTTON_LABEL = '✨ AI answer';
 const CONFIRM_LABEL = '↻ Replace your text?';
 const CONFIRM_WINDOW_MS = 4000;
@@ -254,16 +254,7 @@ const observer = new MutationObserver(() => {
 
 function injectStyles(): void {
   const style = document.createElement('style');
-  style.textContent = `
-    .${BUTTON_CLASS} {
-      display: inline-flex; align-items: center; gap: 4px;
-      margin: 6px 0; padding: 5px 10px; font-size: 12px; font-weight: 600;
-      color: #fff; background: #44506b; border: none; border-radius: 6px;
-      cursor: pointer; line-height: 1.2;
-    }
-    .${BUTTON_CLASS}:hover { background: #333c52; }
-    .${BUTTON_CLASS}:disabled { opacity: .7; cursor: default; }
-  `;
+  style.textContent = AI_BUTTON_CSS;
   document.documentElement.appendChild(style);
 }
 
