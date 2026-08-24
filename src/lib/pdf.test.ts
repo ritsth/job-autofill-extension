@@ -99,11 +99,15 @@ describe('PDF Helpers', () => {
       expect(wrapLine('Hello World', 12, 50)).toEqual(['Hello', 'World']);
     });
 
-    it('handles a single word that is wider than the maximum width without breaking it', () => {
+    it('breaks a single word that is wider than the maximum width across lines', () => {
       // "Supercalifragilisticexpialidocious" is very long.
-      // Even if maxW is small, the single word should not be split internally, but subsequent words should wrap.
-      expect(wrapLine('Supercalifragilisticexpialidocious abc', 12, 50)).toEqual([
-        'Supercalifragilisticexpialidocious',
+      // Since maxW is small (50), the single word must be split internally so no line exceeds maxW.
+      const result = wrapLine('Supercalifragilisticexpialidocious abc', 12, 50);
+      expect(result).toEqual([
+        'Supercal',
+        'ifragilistic',
+        'expialido',
+        'cious',
         'abc'
       ]);
     });
