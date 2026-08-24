@@ -82,9 +82,11 @@ export async function signOut(): Promise<void> {
     const token = await getToken(false);
     // Revoke at Google — revoking the access token also revokes its refresh
     // token, killing the grant so a silent getAuthToken can't mint a new one.
-    await fetch('https://oauth2.googleapis.com/revoke?token=' + encodeURIComponent(token)).catch(
-      () => {},
-    );
+    await fetch('https://oauth2.googleapis.com/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `token=${encodeURIComponent(token)}`,
+    }).catch(() => {});
     await new Promise<void>((resolve) =>
       chrome.identity.removeCachedAuthToken({ token }, () => resolve()),
     );

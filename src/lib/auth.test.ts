@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { onAuthChanged, type AuthUser } from './auth';
+import { onAuthChanged, signOut, type AuthUser } from './auth';
 
 const AUTH_KEY = 'auth';
 
@@ -87,5 +87,38 @@ describe('onAuthChanged', () => {
 
     expect(callback).not.toHaveBeenCalled();
     expect(chrome.storage.onChanged.removeListener).toHaveBeenCalledOnce();
+  });
+});
+
+describe('signOut', () => {
+  it('sends the encoded OAuth token in a POST body, not the URL', async () => {
+    const token = 'token+with/slash?&= ü';
+    const fetchMock = vi.fn().mockResolvedValue({});
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('chrome', {
+      runtime: { lastError: undefined },
+      identity: {
+        getAuthToken: vi.fn((_options: unknown, callback: (result: string) => void) =>
+          callback(token),
+        ),
+        removeCachedAuthToken: vi.fn((_details: unknown, callback: () => void) => callback()),
+        clearAllCachedAuthTokens: vi.fn((callback: () => void) => callback()),
+      },
+      storage: {
+        local: {
+          set: vi.fn().mockResolvedValue(undefined),
+          remove: vi.fn().mockResolvedValue(undefined),
+        },
+      },
+    });
+
+    await signOut();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith('https://oauth2.googleapis.com/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'token=token%2Bwith%2Fslash%3F%26%3D%20%C3%BC',
+    });
   });
 });
