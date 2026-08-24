@@ -206,20 +206,18 @@ export function profileToContext(p: Profile): string {
   if (p.workHistory.length) {
     lines.push('\nWork history:');
     for (const w of p.workHistory) {
-      lines.push(
-        `- ${w.title} at ${w.company} (${w.startDate || '?'}–${w.endDate || 'present'})` +
-          (w.description ? `: ${w.description}` : ''),
-      );
+      const header = [w.title, w.company].filter(Boolean).join(' at ');
+      const range = w.startDate ? ` (${w.startDate}–${w.endDate || 'present'})` : '';
+      lines.push(`- ${header}${range}${w.description ? `: ${w.description}` : ''}`);
     }
   }
 
   if (p.education.length) {
     lines.push('\nEducation:');
     for (const e of p.education) {
-      lines.push(
-        `- ${e.degree} ${e.field ? `in ${e.field}` : ''} from ${e.school}` +
-          (e.graduationYear ? ` (${e.graduationYear})` : ''),
-      );
+      const degreeTitle = [e.degree, e.field].filter(Boolean).join(' in ');
+      const header = [degreeTitle, e.school].filter(Boolean).join(' from ');
+      lines.push(`- ${header}${e.graduationYear ? ` (${e.graduationYear})` : ''}`);
     }
   }
 

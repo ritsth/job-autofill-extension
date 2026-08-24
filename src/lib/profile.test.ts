@@ -149,6 +149,28 @@ describe('profileToContext', () => {
     expect(profileToContext(p)).toBe('Name: Smith');
   });
 
+  it('renders work entries without dangling "at" or "from" when fields are missing', () => {
+    const p: Profile = {
+      ...DEFAULT_PROFILE,
+      workHistory: [
+        { title: 'Engineer', company: '', startDate: '', endDate: '', description: '' },
+        { title: '', company: 'Google', startDate: '2023', endDate: '', description: '' },
+      ],
+      education: [
+        { degree: 'BS', field: '', school: '', graduationYear: '' },
+        { degree: '', field: '', school: 'MIT', graduationYear: '2025' },
+      ],
+    };
+    const result = profileToContext(p);
+    expect(result).toContain('- Engineer');
+    expect(result).toContain('- Google (2023–present)');
+    expect(result).toContain('- BS');
+    expect(result).toContain('- MIT (2025)');
+    expect(result).not.toContain('  '); // no double space
+    expect(result).not.toContain(' at ');
+    expect(result).not.toContain(' from ');
+  });
+
   it('still includes the other sections for a populated profile', () => {
     const p: Profile = {
       ...DEFAULT_PROFILE,
