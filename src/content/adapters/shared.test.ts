@@ -471,6 +471,25 @@ describe('chooseOption — which dropdown option answers the question', () => {
   });
 
   describe('refusing to guess', () => {
+    it('refuses when two options both fuzzily match', () => {
+      // The same failure this whole function guards against, one pass later: a
+      // work-authorization dropdown where both options begin "Yes" would other-
+      // wise have its sponsorship answer decided by DOM order.
+      expect(
+        pick('Yes', ['Yes, I am authorized to work in the US', 'Yes, but I require sponsorship']),
+      ).toBeNull();
+      expect(
+        pick('United States', ['United States Citizen', 'United States Permanent Resident']),
+      ).toBeNull();
+    });
+
+    it('still answers when an exact match sits alongside fuzzy ones', () => {
+      // Ambiguity in the fuzzy pass must not suppress a definite exact answer.
+      expect(
+        pick('Yes', ['Yes, I am authorized', 'Yes', 'Yes, with sponsorship']),
+      ).toBe('Yes');
+    });
+
     it('does not expand an abbreviation into a longer word', () => {
       // "CA" inside "California" is also "CA" inside "Canada" — the old code
       // picked whichever came first, which is a coin flip, not a match.

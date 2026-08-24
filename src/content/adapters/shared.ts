@@ -180,12 +180,22 @@ export function chooseOption(rawTarget: string, options: readonly OptionText[]):
     if (norm[i].text === target || norm[i].value === target) return i;
   }
 
+  // A fuzzy match only counts when it is the ONLY one. Two options can both
+  // contain the target — a work-authorization dropdown offering "Yes, I am
+  // authorized to work in the US" and "Yes, but I require sponsorship" is
+  // matched twice by a profile value of "Yes" — and picking the earlier one
+  // would decide a sponsorship answer by DOM order, which is the whole failure
+  // this function exists to prevent. Ambiguous means unanswered.
+  let candidate = -1;
   for (let i = 0; i < norm.length; i++) {
     const { text } = norm[i];
-    if (containsPhrase(text, target) || containsPhrase(target, text)) return i;
+    if (containsPhrase(text, target) || containsPhrase(target, text)) {
+      if (candidate !== -1) return -1;
+      candidate = i;
+    }
   }
 
-  return -1;
+  return candidate;
 }
 
 /** Selects the option whose text/value best matches `value`. */
@@ -196,7 +206,10 @@ export function fillSelect(el: HTMLSelectElement, value: string): boolean {
     opts.map((o) => ({ text: o.textContent ?? '', value: o.value })),
   );
   if (i === -1) return false;
-  el.value = opts[i].value;
+  // selectedIndex, not `el.value = …`: the value setter selects the FIRST option
+  // carrying that value, so a form listing two options with the same value would
+  // have the wrong one selected.
+  el.selectedIndex = i;
   el.dispatchEvent(new Event('change', { bubbles: true }));
   return true;
 }
