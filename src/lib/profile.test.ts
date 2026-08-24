@@ -149,6 +149,14 @@ describe('profileToContext', () => {
     expect(profileToContext(p)).toBe('Name: Smith');
   });
 
+  it('includes the Phone line when phone is set', () => {
+    const p: Profile = {
+      ...DEFAULT_PROFILE,
+      personal: { ...DEFAULT_PROFILE.personal, phone: '555-1234' },
+    };
+    expect(profileToContext(p)).toBe('Phone: 555-1234');
+  });
+
   it('still includes the other sections for a populated profile', () => {
     const p: Profile = {
       ...DEFAULT_PROFILE,

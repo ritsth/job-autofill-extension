@@ -195,6 +195,7 @@ export function profileToContext(p: Profile): string {
   const fullName = [pi.firstName, pi.lastName].filter(Boolean).join(' ');
   if (fullName) lines.push(`Name: ${fullName}`);
   if (pi.email) lines.push(`Email: ${pi.email}`);
+  if (pi.phone) lines.push(`Phone: ${pi.phone}`);
   if (pi.city || pi.state || pi.country)
     lines.push(`Location: ${[pi.city, pi.state, pi.country].filter(Boolean).join(', ')}`);
   if (pi.linkedin) lines.push(`LinkedIn: ${pi.linkedin}`);
