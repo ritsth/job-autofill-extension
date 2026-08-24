@@ -40,20 +40,30 @@ function measure(s: string, fontSize: number): number {
   return (w / 1000) * fontSize;
 }
 
-/** Greedy word-wrap a single logical line to a max width (in points). */
 export function wrapLine(line: string, fontSize: number, maxW: number): string[] {
   if (line.trim() === '') return [''];
   const out: string[] = [];
   let cur = '';
-  for (const word of line.split(' ')) {
-    const trial = cur === '' ? word : `${cur} ${word}`;
-    if (cur === '' || measure(trial, fontSize) <= maxW) {
-      cur = trial;
+
+  for (let word of line.split(' ')) {
+    if (cur !== '' && measure(`${cur} ${word}`, fontSize) <= maxW) {
+      cur = `${cur} ${word}`;
     } else {
-      out.push(cur);
+      if (cur !== '') {
+        out.push(cur);
+      }
+      while (measure(word, fontSize) > maxW) {
+        let len = 1;
+        while (len < word.length && measure(word.slice(0, len + 1), fontSize) <= maxW) {
+          len++;
+        }
+        out.push(word.slice(0, len));
+        word = word.slice(len);
+      }
       cur = word;
     }
   }
+
   if (cur !== '') out.push(cur);
   return out.length ? out : [''];
 }
