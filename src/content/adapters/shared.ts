@@ -112,21 +112,91 @@ export function fillInput(el: HTMLInputElement | HTMLTextAreaElement, value: str
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+/** One `<option>` reduced to the two strings the matcher reads. */
+export interface OptionText {
+  text: string;
+  value: string;
+}
+
+/**
+ * True when `needle` occurs inside `haystack` as a self-contained phrase.
+ *
+ * Plain `includes` is what let a dropdown be answered with the OPPOSITE of the
+ * profile value: "no" is a substring of "not at this time", and "us citizen" is
+ * a substring of "non-us citizen". A bare `\b` boundary doesn't help with the
+ * second one — the hyphen in "non-us" IS a word boundary, so `\bus citizen\b`
+ * still matches the negated option.
+ *
+ * So a neighbouring character disqualifies a match when it's alphanumeric OR a
+ * hyphen: alphanumeric catches "no" inside "not", and the hyphen catches a
+ * negating prefix. Other punctuation stays allowed, which is what keeps the
+ * common elaborated option working — "Yes, I require sponsorship" is still
+ * matched by "Yes", because the comma is a legitimate phrase end.
+ */
+function containsPhrase(haystack: string, needle: string): boolean {
+  // An empty needle is never a match. This is what keeps a blank placeholder row
+  // ("<option value=''></option>") from being selected: the old loop tested
+  // `target.includes(text)`, which is unconditionally true for empty option
+  // text, so a select opening with one had its placeholder chosen outright and
+  // the field still counted as filled.
+  if (!needle) return false;
+  const blocks = (c: string) => c !== '' && /[a-z0-9-]/.test(c);
+  for (let from = 0; from <= haystack.length; ) {
+    const i = haystack.indexOf(needle, from);
+    if (i === -1) return false;
+    const before = i === 0 ? '' : haystack[i - 1];
+    const after = haystack[i + needle.length] ?? '';
+    if (!blocks(before) && !blocks(after)) return true;
+    // Overlapping occurrences matter: "no" appears twice in "no-nonsense".
+    from = i + 1;
+  }
+  return false;
+}
+
+/**
+ * Index of the option best matching `rawTarget`, or -1 when none matches
+ * confidently.
+ *
+ * Exact matches are resolved across EVERY option before any fuzzy match is
+ * considered. The old single pass took the first option satisfying either test
+ * in DOM order, so an exact "No" sitting below "Not at this time" never won —
+ * correctness depended purely on the order the site happened to list options in.
+ *
+ * Returning -1 rather than guessing is deliberate: these dropdowns include work
+ * authorization and sponsorship, where a wrong answer is a false statement on an
+ * application. An unanswered select is visible to the applicant; a confidently
+ * wrong one is not.
+ *
+ * Split out of fillSelect so it can be unit-tested — the test env is `node` with
+ * no DOM, so anything touching real <option> elements is untestable.
+ */
+export function chooseOption(rawTarget: string, options: readonly OptionText[]): number {
+  const target = normalize(rawTarget);
+  if (!target) return -1;
+
+  const norm = options.map((o) => ({ text: normalize(o.text), value: normalize(o.value) }));
+
+  for (let i = 0; i < norm.length; i++) {
+    if (norm[i].text === target || norm[i].value === target) return i;
+  }
+
+  for (let i = 0; i < norm.length; i++) {
+    const { text } = norm[i];
+    if (containsPhrase(text, target) || containsPhrase(target, text)) return i;
+  }
+
+  return -1;
+}
+
 /** Selects the option whose text/value best matches `value`. */
 export function fillSelect(el: HTMLSelectElement, value: string): boolean {
-  const target = normalize(value);
-  if (!target) return false;
-  let chosen: HTMLOptionElement | undefined;
-  for (const opt of Array.from(el.options)) {
-    const text = normalize(opt.textContent ?? '');
-    const val = normalize(opt.value);
-    if (text === target || val === target || text.includes(target) || target.includes(text)) {
-      chosen = opt;
-      break;
-    }
-  }
-  if (!chosen) return false;
-  el.value = chosen.value;
+  const opts = Array.from(el.options);
+  const i = chooseOption(
+    value,
+    opts.map((o) => ({ text: o.textContent ?? '', value: o.value })),
+  );
+  if (i === -1) return false;
+  el.value = opts[i].value;
   el.dispatchEvent(new Event('change', { bubbles: true }));
   return true;
 }

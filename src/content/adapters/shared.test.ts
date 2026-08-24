@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  chooseOption,
   isComboboxLike,
   looksLikeQuestion,
   needsReplaceConfirm,
@@ -392,5 +393,96 @@ describe('RULES — the remaining field rules, against realistic concatenated la
     // The work-auth rule DOES fire on this phrasing, but only via its
     // `legally.*work` arm — which ends on a complete word.
     expect(valueFor('Are you legally authorized to work in the United States?')).toBe('Yes');
+  });
+});
+
+describe('chooseOption — which dropdown option answers the question', () => {
+  /** Options as a plain list of labels, the shape most real selects have. */
+  const opts = (...labels: string[]) => labels.map((text) => ({ text, value: text }));
+  const pick = (target: string, labels: string[]) => {
+    const i = chooseOption(target, opts(...labels));
+    return i === -1 ? null : labels[i];
+  };
+
+  describe('the opposite-answer bug (#223)', () => {
+    it('prefers an exact "No" over an earlier option merely containing it', () => {
+      // "no" is a substring of "not". The old single pass took DOM order, so the
+      // first option won and the applicant was marked unauthorised to work.
+      expect(pick('No', ['I am not authorized to work in the US', 'No', 'Yes'])).toBe('No');
+      expect(pick('No', ['Not at this time', 'No'])).toBe('No');
+    });
+
+    it('never answers "US Citizen" with "Non-US Citizen"', () => {
+      // The worst case: a materially false statement on an application.
+      expect(pick('US Citizen', ['Non-US Citizen', 'US Citizen'])).toBe('US Citizen');
+    });
+
+    it('refuses the negated option even when it is the only candidate', () => {
+      // Nothing correct to choose, so leaving the select alone beats guessing —
+      // an unanswered dropdown is visible to the applicant, a wrong one is not.
+      expect(pick('US Citizen', ['Non-US Citizen', 'Other'])).toBeNull();
+    });
+
+    it('does not treat a hyphen as a phrase boundary', () => {
+      // A bare \b boundary passes here — the hyphen IS a word boundary — which
+      // is why the fix disqualifies a hyphen neighbour specifically.
+      expect(pick('authorized', ['non-authorized'])).toBeNull();
+    });
+  });
+
+  describe('blank placeholder rows', () => {
+    it('skips the empty first option instead of selecting it', () => {
+      // `target.includes('')` is always true, so the old loop chose this row
+      // outright and still reported the field as filled.
+      const options = [
+        { text: '', value: '' },
+        { text: 'United States', value: 'US' },
+      ];
+      expect(chooseOption('United States', options)).toBe(1);
+    });
+
+    it('still reports no match when only a blank row is available', () => {
+      expect(chooseOption('United States', [{ text: '', value: '' }])).toBe(-1);
+    });
+  });
+
+  describe('matches that must keep working', () => {
+    it('accepts an option that elaborates on the answer', () => {
+      // The comma ends the phrase legitimately, unlike the letter in "not".
+      expect(pick('Yes', ['Yes, I require sponsorship', 'No'])).toBe('Yes, I require sponsorship');
+    });
+
+    it('accepts an option narrower than the profile value', () => {
+      // The reverse direction, kept for exactly this case.
+      expect(pick('United States of America', ['United States', 'Canada'])).toBe('United States');
+    });
+
+    it('accepts the answer embedded mid-phrase', () => {
+      expect(pick('US Citizen', ['Other', 'I am a US Citizen'])).toBe('I am a US Citizen');
+    });
+
+    it('matches on an option value when the label differs', () => {
+      expect(chooseOption('US', [{ text: 'United States', value: 'US' }])).toBe(0);
+    });
+
+    it('is case- and whitespace-insensitive, like every other label match', () => {
+      expect(pick('california', ['  CALIFORNIA  '])).toBe('  CALIFORNIA  ');
+    });
+  });
+
+  describe('refusing to guess', () => {
+    it('does not expand an abbreviation into a longer word', () => {
+      // "CA" inside "California" is also "CA" inside "Canada" — the old code
+      // picked whichever came first, which is a coin flip, not a match.
+      expect(pick('CA', ['Canada', 'California'])).toBeNull();
+    });
+
+    it('returns -1 for an empty profile value', () => {
+      expect(chooseOption('', ['Yes', 'No'].map((t) => ({ text: t, value: t })))).toBe(-1);
+    });
+
+    it('returns -1 when nothing resembles the value', () => {
+      expect(pick('Germany', ['United States', 'Canada'])).toBeNull();
+    });
   });
 });
