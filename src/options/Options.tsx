@@ -481,10 +481,19 @@ function OptionsView({
         <h2>Additional documents (extra AI context)</h2>
         <DocUpload
           onText={(name, text) =>
-            update((prev) => ({
-              ...prev,
-              documents: [...prev.documents, { id: crypto.randomUUID(), name, text, addedAt: Date.now() }],
-            }))
+            update((prev) => {
+              const norm = name.trim().toLowerCase();
+              const without = prev.documents.filter(
+                (d) => d.name.trim().toLowerCase() !== norm,
+              );
+              return {
+                ...prev,
+                documents: [
+                  ...without,
+                  { id: crypto.randomUUID(), name, text, addedAt: Date.now() },
+                ],
+              };
+            })
           }
         />
         {p.documents.length > 0 && (
