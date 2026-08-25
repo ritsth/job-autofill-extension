@@ -241,10 +241,33 @@ export const RULES: Rule[] = [
   { test: /\b(phone|mobile|tel)\b/, value: (p) => p.personal.phone },
   { test: /\blinkedin\b/, value: (p) => p.personal.linkedin },
   { test: /\bgithub\b/, value: (p) => p.personal.github },
-  { test: /\b(portfolio|website|personal site)\b/, value: (p) => p.personal.portfolio },
-  { test: /\bcity\b/, value: (p) => p.personal.city },
+  // "Describe A website... you admire" is asking about someone ELSE's site, not
+  // requesting the applicant's own — the referent-flip failure #230 fixed for
+  // company/title, recurring here under a different trigger word. "Do you have
+  // a website?" must still fill: the indefinite article alone isn't the signal,
+  // the opinion verb is.
+  {
+    test: /^(?!.*\b(?:admire|inspir\w*|like (?:the )?most)\b).*\b(portfolio|website|personal site)\b/,
+    value: (p) => p.personal.portfolio,
+  },
+  // "Which city are you most excited to explore?" and "What city is our office
+  // located in?" both ask about a city that ISN'T the applicant's own — a travel
+  // wish or the employer's address. Two independent cues, since they don't share
+  // a determiner the way #230's company/title pair did: a nearby travel verb, or
+  // a possessive naming the employer's site rather than "your".
+  {
+    test: /^(?!.*\bcity\b[^.!?]{0,30}\b(?:explore|visit|travel)\b)(?!.*\b(?:our|the company.?s)\s+(?:office|headquarters|location)\b).*\bcity\b/,
+    value: (p) => p.personal.city,
+  },
   { test: /\b(state|province|region)\b/, value: (p) => p.personal.state, selectOk: true },
-  { test: /\bcountry\b/, value: (p) => p.personal.country, selectOk: true },
+  // "What is your favorite country to visit and why?" asks for a travel wish,
+  // not a residence. "favorite" is the sole trigger — a plain "What is your
+  // country?" carries none of it and must still fill.
+  {
+    test: /^(?!.*\bfavorite\b[^.!?]{0,15}\bcountry\b).*\bcountry\b/,
+    value: (p) => p.personal.country,
+    selectOk: true,
+  },
   // These two read the applicant's CURRENT employer/title, but their keywords
   // flip referent inside question prose: in "Why are you interested in this
   // position?" the position is the *employer's* job, and in "Why do you want to
@@ -266,7 +289,15 @@ export const RULES: Rule[] = [
     test: /^(?!.*\b(?:this|the|that|our|a|an)\s+(?:current\s+)?(?:title|role|position)\b).*?\b(current\s*)?(title|role|position)\b/,
     value: (p) => p.workHistory[0]?.title ?? '',
   },
-  { test: /\b(salary|compensation|pay)\b/, value: (p) => p.preferences.salaryExpectation },
+  // "If pay wasn't a factor, what would you do?" is a hypothetical about career
+  // motivation, not a request for a number. Anchored to the START of the label:
+  // the leading conditional is the specific cue, so "What is your expected
+  // salary if hired?" — "if" appears, but not as the opening clause — must
+  // still fill.
+  {
+    test: /^(?!\s*if\b[^.!?]{0,20}\b(?:pay|salary|compensation)\b[^.!?]{0,10}\b(?:wasn.?t|weren.?t|isn.?t|was not|were not)\b).*\b(salary|compensation|pay)\b/,
+    value: (p) => p.preferences.salaryExpectation,
+  },
   {
     test: /\b(work\s*authoriz|authoriz.*work|legally.*work|eligible.*work)\b/,
     value: (p) => p.preferences.workAuthorization,

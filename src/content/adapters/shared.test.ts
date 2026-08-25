@@ -210,9 +210,16 @@ describe('RULES — question prose must not be mistaken for a data field', () =>
   // essay box. Reported live on a BambooHR form.
   const P: Profile = {
     ...DEFAULT_PROFILE,
+    personal: {
+      ...DEFAULT_PROFILE.personal,
+      city: 'Austin',
+      country: 'USA',
+      portfolio: 'jane.dev',
+    },
     workHistory: [
       { company: 'Acme', title: 'Data Analyst', startDate: '2024', endDate: '', description: '' },
     ],
+    preferences: { ...DEFAULT_PROFILE.preferences, salaryExpectation: '$140,000' },
   };
   const valueFor = (raw: string): string | undefined =>
     RULES.find((r) => r.test.test(normalize(raw)))?.value(P);
@@ -254,6 +261,73 @@ describe('RULES — question prose must not be mistaken for a data field', () =>
     // The guard keys off the determiner, not the question mark, so this keeps
     // working — a blunter "questions never autofill" rule would have broken it.
     expect(valueFor('What is your current job title?')).toBe('Data Analyst');
+  });
+
+  // #231 — the same referent-flip bug, found live in four more rules. Each has
+  // its own trigger word rather than reusing the company/title regex verbatim:
+  // these rules don't share a "current X" framing, so the sentences that trip
+  // them don't share one determiner pattern either.
+
+  it('leaves a travel/opinion question about a city or country to the AI', () => {
+    expect(valueFor('Which city are you most excited to explore?')).toBeUndefined();
+    expect(valueFor('What city is our office located in?')).toBeUndefined();
+    expect(valueFor('What is your favorite country to visit and why?')).toBeUndefined();
+  });
+
+  it('still autofills a genuine city or country field', () => {
+    expect(valueFor('City')).toBe('Austin');
+    expect(valueFor('Home City')).toBe('Austin');
+    expect(valueFor('Current City')).toBe('Austin');
+    // A real screening question, not a travel wish — no "explore/visit/travel"
+    // and no reference to the employer's own office.
+    expect(valueFor('What city do you currently reside in?')).toBe('Austin');
+    // Pins the proximity window itself: a plausible compound label pairs a
+    // relocation question with an UNRELATED travel question far enough away
+    // that "travel" must not disqualify "city" — an unbounded exclusion would
+    // wrongly swallow this.
+    expect(
+      valueFor(
+        'Which state or city are you willing to relocate to, and are you open to travel for this role?',
+      ),
+    ).toBe('Austin');
+    expect(valueFor('Country')).toBe('USA');
+    expect(valueFor('Country of Residence')).toBe('USA');
+    expect(valueFor('What is your country?')).toBe('USA');
+  });
+
+  it('leaves "describe a website you admire" to the AI', () => {
+    // The indefinite article alone isn't the signal — "Do you have a website?"
+    // below is phrased identically and must still fill — the opinion verb is.
+    expect(valueFor('Describe a website or app you admire and why.')).toBeUndefined();
+    expect(valueFor('What website inspires you the most?')).toBeUndefined();
+  });
+
+  it('still autofills a genuine portfolio/website field', () => {
+    expect(valueFor('Portfolio URL')).toBe('jane.dev');
+    expect(valueFor('Website')).toBe('jane.dev');
+    expect(valueFor('Personal Site')).toBe('jane.dev');
+    expect(valueFor('Link to your portfolio')).toBe('jane.dev');
+    expect(valueFor('Do you have a website? If so, please share.')).toBe('jane.dev');
+    expect(valueFor('Do you have a personal website?')).toBe('jane.dev');
+    // Pins the exclusion to the specific preference phrase "like most", not
+    // bare "like" — this is a request, not an opinion about someone else's site.
+    expect(valueFor('What website would you like to link for your application?')).toBe(
+      'jane.dev',
+    );
+  });
+
+  it('leaves the "if pay wasn\'t a factor" hypothetical to the AI', () => {
+    expect(valueFor("If pay wasn't a factor, what would you do?")).toBeUndefined();
+    expect(valueFor("If salary weren't a consideration, what would you do?")).toBeUndefined();
+  });
+
+  it('still autofills a genuine salary field', () => {
+    expect(valueFor('Salary Expectation')).toBe('$140,000');
+    expect(valueFor('Desired Salary')).toBe('$140,000');
+    expect(valueFor('What is your expected salary?')).toBe('$140,000');
+    // "if" appears, but not as the label's opening clause — the leading-
+    // conditional guard must not over-fire on every sentence containing "if".
+    expect(valueFor('What is your expected salary if hired?')).toBe('$140,000');
   });
 });
 
