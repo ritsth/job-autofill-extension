@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Field } from './Field';
+import { DisabledSites } from './DisabledSites';
 import type { EducationEntry, Profile, WorkEntry } from '../lib/profile';
+import { removeDisabledHost } from '../lib/host';
 import { useProfile } from '../ui/useProfile';
 import { extractText, extractTextBatch } from '../lib/documents';
 import { sendToBackground } from '../lib/messages';
@@ -550,6 +552,14 @@ function OptionsView({
           On a job page, the popup substitutes the company/role/date placeholders.
         </div>
       </section>
+
+      <DisabledSites
+        hosts={p.disabledHosts}
+        onEnable={(host) =>
+          update((prev) => ({ ...prev, disabledHosts: removeDisabledHost(prev.disabledHosts, host) }))
+        }
+      />
+
       <footer className="help" style={{ marginTop: 16, textAlign: 'center' }}>
         Little AI Helper v{chrome.runtime.getManifest().version}
       </footer>

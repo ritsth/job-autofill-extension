@@ -105,6 +105,23 @@ describe('onProfileChanged', () => {
     });
   });
 
+  it('falls back to an empty disabledHosts list for a profile stored before the field existed', () => {
+    // Migration guard: every existing user's stored profile predates this
+    // field entirely. Without the explicit fallback in withDefaults, this
+    // would resolve to `undefined` and crash the `.some()` in isHostDisabled.
+    const callback = vi.fn();
+    onProfileChanged(callback);
+
+    emitStorageChange(
+      { [STORAGE_KEY]: { newValue: { personal: { firstName: 'Jane' } } } },
+      'local',
+    );
+
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({ disabledHosts: [] }),
+    );
+  });
+
   it.each([
     ['unknown', 'gemini-2.0-flash', DEFAULT_MODEL],
     ['known', GEMINI_MODELS[0].id, GEMINI_MODELS[0].id],

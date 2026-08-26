@@ -80,6 +80,13 @@ export interface Profile {
   ai: AISettings;
   /** Master on/off for the eligibility scanner (runs on every page when on). */
   scanEnabled: boolean;
+  /**
+   * Hostnames the eligibility badge is switched off on ("turn off on this site
+   * only"), matched via hostMatches (exact-or-subdomain) in src/lib/host.ts.
+   * Independent of scanEnabled — this narrows where the scanner runs while
+   * scanEnabled is the global master switch.
+   */
+  disabledHosts: string[];
   /** Show the tailored-resume generator in the side panel. */
   tailoredResumeEnabled: boolean;
   /** Show the tailored cover-letter generator in the side panel. */
@@ -130,6 +137,7 @@ export const DEFAULT_PROFILE: Profile = {
     proxyToken: '',
   },
   scanEnabled: true,
+  disabledHosts: [],
   tailoredResumeEnabled: true,
   coverLetterEnabled: true,
 };
@@ -155,6 +163,7 @@ function withDefaults(stored: Partial<Profile> | undefined): Profile {
     skills: stored.skills ?? DEFAULT_PROFILE.skills,
     documents: stored.documents ?? DEFAULT_PROFILE.documents,
     scanEnabled: stored.scanEnabled ?? DEFAULT_PROFILE.scanEnabled,
+    disabledHosts: stored.disabledHosts ?? DEFAULT_PROFILE.disabledHosts,
     tailoredResumeEnabled: stored.tailoredResumeEnabled ?? DEFAULT_PROFILE.tailoredResumeEnabled,
     coverLetterEnabled: stored.coverLetterEnabled ?? DEFAULT_PROFILE.coverLetterEnabled,
   };

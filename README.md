@@ -58,8 +58,11 @@ runs on **every page** (so no job board is missed): it shows a bold YES / NO / M
 verdict when the page mentions sponsorship, citizenship, or clearance requirements, and a
 neutral gray "no eligibility info" card otherwise. It stays current on single-page boards
 as you click between postings. Toggle it on/off any time from the side panel ("Scan every
-page for visa/eligibility") or via the badge's own "Turn off on all sites" link. Because
-it runs everywhere, Chrome shows the "read and change your data on all websites"
+page for visa/eligibility"), via the badge's own "Turn off on all sites" link, or — if it's
+just one site you'd rather not see it on — "Turn off on this site only" right below it,
+which remembers your choice for that site (and its subdomains) across reloads. Turn a site
+back on from the extension's Options page, under "Sites where the badge is turned off".
+Because it runs everywhere, Chrome shows the "read and change your data on all websites"
 permission.
 
 All your data stays on your machine (`chrome.storage.local`). The AI layer is
