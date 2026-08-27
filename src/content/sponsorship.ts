@@ -10,7 +10,7 @@ import { parseEligibilityJson } from '../lib/jobEligibility';
 import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
 import { getProfile, saveProfile } from '../lib/profile';
-import { hostMatches } from '../lib/host';
+import { addDisabledHost, hostMatches } from '../lib/host';
 
 export type Verdict = 'yes' | 'no' | 'caution' | 'unknown';
 
@@ -603,6 +603,18 @@ async function disableScannerEverywhere(): Promise<void> {
   await saveProfile({ ...p, scanEnabled: false });
 }
 
+/**
+ * Turns the badge off for this host only ("⚙ Turn off on this site only").
+ * Same propagation as the global off-switch above: write storage and let
+ * index.ts's profile listener recompute the gate, so every open tab on this
+ * host updates in lockstep and the choice survives a reload. Undone from the
+ * Options page's "Sites where the badge is turned off" list.
+ */
+async function disableScannerForThisHost(): Promise<void> {
+  const p = await getProfile();
+  await saveProfile({ ...p, disabledHosts: addDisabledHost(p.disabledHosts, location.hostname) });
+}
+
 /** Which generators the badge shows (driven by the user's settings). */
 export function setBadgeFeatures(opts: { coverLetter: boolean; resume: boolean }): void {
   showCoverLetterInBadge = opts.coverLetter;
@@ -1128,8 +1140,10 @@ function renderBadge(a: SponsorAnalysis, meta: JobMeta): HTMLElement {
     .ai:disabled { opacity: .7; cursor: default; }
     .aitag { font-size: 11px; color: #44506b; font-weight: 700; }
     .tag { margin-top: 8px; font-size: 11px; color: #94a3b8;
-           display: flex; justify-content: space-between; align-items: center; gap: 8px;
+           display: flex; flex-direction: column; gap: 6px;
            border-top: 1px solid #eef2f7; padding-top: 7px; }
+    .tag-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .tag-row--end { justify-content: flex-end; }
     .off { appearance: none; border: 0; background: transparent; padding: 0; font: inherit;
            color: #44506b; font-weight: 600; cursor: pointer; white-space: nowrap; }
     .off:hover { text-decoration: underline; }
@@ -1273,16 +1287,39 @@ function renderBadge(a: SponsorAnalysis, meta: JobMeta): HTMLElement {
 
   // Footer: brand tag + an always-available "turn the scanner off everywhere"
   // link, so the global off-switch is reachable from the badge itself (not only
-  // the side-panel toggle a new user may never open).
+  // the side-panel toggle a new user may never open) — plus a narrower "this
+  // site only" switch on its own row below, so the 230px card never has to fit
+  // two off-switch labels on one line.
   const foot = document.createElement('div');
   foot.className = 'tag';
-  foot.appendChild(el('span', '', 'Little AI Helper'));
+
+  const footTop = document.createElement('div');
+  footTop.className = 'tag-row';
+  footTop.appendChild(el('span', '', 'Little AI Helper'));
   const off = el('button', 'off', '⚙ Turn off on all sites');
   off.setAttribute('type', 'button');
   off.title = 'Stop showing this badge on every page';
   off.setAttribute('aria-label', 'Turn off the eligibility badge on all sites');
   off.addEventListener('click', () => void disableScannerEverywhere());
-  foot.appendChild(off);
+  footTop.appendChild(off);
+  foot.appendChild(footTop);
+
+  // Omitted when there's no host to key the opt-out on — file:// and about:
+  // pages report location.hostname === '' (addDisabledHost already no-ops on a
+  // blank hostname), so a visible button there would silently do nothing.
+  const siteHost = location.hostname;
+  if (siteHost) {
+    const footBottom = document.createElement('div');
+    footBottom.className = 'tag-row tag-row--end';
+    const offSite = el('button', 'off', '⚙ Turn off on this site only');
+    offSite.setAttribute('type', 'button');
+    offSite.title = `Stop showing this badge on ${siteHost}. Turn it back on from the extension's Settings page.`;
+    offSite.setAttribute('aria-label', `Turn off the eligibility badge on ${siteHost} only`);
+    offSite.addEventListener('click', () => void disableScannerForThisHost());
+    footBottom.appendChild(offSite);
+    foot.appendChild(footBottom);
+  }
+
   card.appendChild(foot);
 
   // Stack the card and (optionally) the coachmark in a fixed column anchored to

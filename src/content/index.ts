@@ -3,7 +3,7 @@
 
 import { getProfile, onProfileChanged } from '../lib/profile';
 import { getSavedJobs, onSavedJobsChanged } from '../lib/savedJobs';
-import { hostMatches } from '../lib/host';
+import { hostMatches, isHostDisabled } from '../lib/host';
 import {
   applyStandardFills,
   findOpenQuestions,
@@ -308,12 +308,17 @@ if (window.top === window.self && !scannerGlobal.__jafScannerStarted) {
       setBadgeIntroSeen(Boolean(badgeIntroSeen));
       setBadgeCorner(badgeCorner);
       setBadgeFeatures({ coverLetter: profile.coverLetterEnabled, resume: profile.tailoredResumeEnabled });
-      setScannerEnabled(profile.scanEnabled);
+      // Gate on both the global switch and this host's per-site opt-out
+      // ("⚙ Turn off on this site only" on the badge itself). Top frame only
+      // (see the guard above), so this is always the URL-bar host the user
+      // sees, even on a page whose posting text comes from a same-origin iframe.
+      setScannerEnabled(profile.scanEnabled && !isHostDisabled(location.hostname, profile.disabledHosts));
     } catch (e) {
       // A failed storage read (e.g. an extension-update limbo) must not silently
-      // kill the scanner — fall back to defaults. scanEnabled defaults ON in
-      // withDefaults, so this matches a fresh profile; force the coachmark to
-      // "seen" so a fallback never flashes the intro bubble.
+      // kill the scanner — fall back to defaults, including for the per-site
+      // opt-out: scanEnabled defaults ON in withDefaults, so this matches a
+      // fresh profile with no disabled hosts. Force the coachmark to "seen" so
+      // a fallback never flashes the intro bubble.
       console.warn('[Little AI Helper] scanner init failed; starting with defaults', e);
       setBadgeIntroSeen(true);
       setScannerEnabled(true);
@@ -322,6 +327,6 @@ if (window.top === window.self && !scannerGlobal.__jafScannerStarted) {
   })();
   onProfileChanged((profile) => {
     setBadgeFeatures({ coverLetter: profile.coverLetterEnabled, resume: profile.tailoredResumeEnabled });
-    setScannerEnabled(profile.scanEnabled);
+    setScannerEnabled(profile.scanEnabled && !isHostDisabled(location.hostname, profile.disabledHosts));
   });
 }
