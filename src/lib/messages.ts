@@ -9,6 +9,16 @@ export interface PageInfo {
   role: string;
   /** Scoped job-posting text, used to tailor AI answers + the cover letter. */
   jobText: string;
+  /**
+   * The TOP FRAME's hostname, so the popup can tell the user whether the
+   * eligibility badge (which only ever runs top-frame) is turned off for this
+   * site — see isHostDisabled in lib/host.ts. Empty when the reply came from an
+   * adapter-matching SUB-frame (a company careers page embedding an ATS in an
+   * iframe): that frame's own hostname is not the badge's hostname, and
+   * reporting it would tell the popup the wrong site is disabled. Empty is
+   * always safe here — isHostDisabled('', …) is unconditionally false.
+   */
+  hostname: string;
 }
 
 export interface FillResult {

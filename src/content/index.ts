@@ -98,6 +98,9 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse
             company: '',
             role: '',
             jobText: '',
+            // role === 'answer-late' only happens when isTopFrame (see
+            // pageMessageRole), so this is always the real page hostname.
+            hostname: location.hostname,
           } satisfies PageInfo),
         UNSUPPORTED_REPLY_DELAY_MS,
       );
@@ -108,6 +111,10 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse
       site: adapter.id,
       ...adapter.getPageInfo(),
       jobText: getScanText(),
+      // Unlike the branch above, an adapter can match in a SUB-frame (embedded
+      // ATS) — see the PageInfo docblock for why that frame's own hostname must
+      // not be reported as the page's.
+      hostname: isTopFrame ? location.hostname : '',
     } satisfies PageInfo);
     return false;
   }

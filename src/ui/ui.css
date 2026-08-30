@@ -54,6 +54,14 @@ button.primary:hover { background: var(--primary-hover); }
 button.ghost { background: transparent; color: var(--primary); padding: 6px 8px; }
 button.danger { background: transparent; color: var(--danger); padding: 6px 8px; }
 button:disabled { opacity: .6; cursor: default; }
+/* A button that reads as a link inline with surrounding text (e.g. "Turned off
+   for x.com. Turn back on") — the base button rule's padding/radius/size would
+   otherwise look like a standalone control glued mid-sentence. */
+button.linklike {
+  appearance: none; background: transparent; border: none; padding: 0;
+  font: inherit; font-weight: 700; color: inherit; text-decoration: underline;
+  cursor: pointer; border-radius: 0;
+}
 
 .list-item { border: 1px dashed var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
 .help { font-size: 12px; color: var(--muted); margin-top: 4px; }

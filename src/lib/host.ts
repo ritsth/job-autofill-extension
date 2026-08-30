@@ -6,14 +6,21 @@ export function hostMatches(hostname: string, domain: string): boolean {
 }
 
 /**
- * True when the eligibility badge is switched off for this hostname — i.e. it
- * exactly matches, or is a subdomain of, an entry the user disabled it on.
- * A sibling subdomain (jobs.example.com when boards.example.com is disabled)
- * is deliberately NOT covered: the control this drives is scoped to "this site
- * only", so silently spreading to sites the user hasn't visited would be
- * surprising.
+ * The stored entry that switches the eligibility badge off for this hostname —
+ * an exact match, or a broader domain `hostname` is a subdomain of — or
+ * undefined when nothing covers it. Note the entry returned may differ from
+ * `hostname` itself: visiting sub.example.com when "example.com" was the entry
+ * disabled returns "example.com", not "sub.example.com" — there is nothing to
+ * remove BY "sub.example.com" in that case, only by the entry that actually
+ * matched. A sibling subdomain (jobs.example.com when boards.example.com is
+ * disabled) is deliberately NOT covered: the control this drives is scoped to
+ * "this site only", so silently spreading to sites the user hasn't visited
+ * would be surprising.
  */
-export function isHostDisabled(hostname: string, disabledHosts: readonly string[]): boolean {
+export function disabledHostFor(
+  hostname: string,
+  disabledHosts: readonly string[],
+): string | undefined {
   // The `d !== ''` guard is what actually matters, not a blank-hostname check on
   // `hostname` itself: hostMatches(h, '') degrades to h.endsWith('.'), true for
   // ANY trailing-dot FQDN ("example.com." is legal and Chrome preserves the
@@ -23,7 +30,12 @@ export function isHostDisabled(hostname: string, disabledHosts: readonly string[
   // future bug). Excluding d === '' also makes a blank `hostname` argument safe
   // for free: hostMatches('', d) is only ever true when d === '', which this
   // already filters out — so no separate `if (!hostname)` check is needed.
-  return disabledHosts.some((d) => d !== '' && hostMatches(hostname, d));
+  return disabledHosts.find((d) => d !== '' && hostMatches(hostname, d));
+}
+
+/** True when the eligibility badge is switched off for this hostname. */
+export function isHostDisabled(hostname: string, disabledHosts: readonly string[]): boolean {
+  return disabledHostFor(hostname, disabledHosts) !== undefined;
 }
 
 /**
