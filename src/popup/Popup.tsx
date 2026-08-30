@@ -698,7 +698,11 @@ const copyTimer = useRef<number | null>(null);
           />
           Scan every page for visa/eligibility (YES/NO badge)
         </label>
-        {siteDisabledEntry && (
+        {/* Gated on scanEnabled too: with the global switch already off, this
+            would be redundant noise on top of the unchecked box above, and
+            "Turn back on" would misleadingly imply it alone restores the
+            badge when the global toggle would still need re-checking. */}
+        {scanEnabled && siteDisabledEntry && (
           <p className="warn" style={{ marginTop: 6 }}>
             Badge turned off for <strong>{siteDisabledEntry}</strong>.{' '}
             <button className="linklike" onClick={() => enableSite(siteDisabledEntry)}>
