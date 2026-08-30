@@ -6,7 +6,7 @@ import { ProxyProvider } from './proxy';
 
 export { AIError } from './provider';
 export type { AIProvider, GenerateInput } from './provider';
-export { isOnDeviceAvailable } from './onDevice';
+export { isOnDeviceAvailable, onDeviceAvailabilityMessage } from './onDevice';
 
 /** Selects the concrete provider from the user's settings. */
 export function getProvider(settings: AISettings): AIProvider {

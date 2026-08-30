@@ -46,6 +46,12 @@ export async function isOnDeviceAvailable(): Promise<boolean> {
   return false;
 }
 
+export function onDeviceAvailabilityMessage(available: boolean): string {
+  return available
+    ? 'Supported — Chrome may download the model on first use.'
+    : "Chrome's built-in AI isn't available here. Switch to Gemini in options, or enable the on-device model in a supported Chrome build.";
+}
+
 export class OnDeviceProvider implements AIProvider {
   readonly id = 'onDevice';
 
@@ -53,8 +59,7 @@ export class OnDeviceProvider implements AIProvider {
     const lm = getLanguageModel();
     if (!lm) {
       throw new AIError(
-        "Chrome's built-in AI isn't available here. Switch to Gemini in options, or " +
-          'enable the on-device model in a supported Chrome build.',
+        onDeviceAvailabilityMessage(false),
       );
     }
 
