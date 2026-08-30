@@ -41,9 +41,12 @@ export class ProxyProvider implements AIProvider {
     if (!res.ok) {
       const detail = await res.json().catch(() => ({}));
       const msg = (detail as { error?: string }).error || `${res.status}`;
-      // The proxy already returns clear messages for sign-in (401) and the daily
-      // quota / rate limit (429), so surface those verbatim.
-      if (res.status === 401 || res.status === 429) throw new AIError(msg);
+      // The proxy already returns clear, complete messages for sign-in (401),
+      // the daily quota / rate limit (429), and a blocked/truncated/empty AI
+      // response (502 — see #239, classifyFinishReason in server/index.js,
+      // mirroring the SAFETY/RECITATION/short-MAX_TOKENS handling below) — so
+      // surface those verbatim instead of double-wrapping with "Proxy error:".
+      if (res.status === 401 || res.status === 429 || res.status === 502) throw new AIError(msg);
       throw new AIError(`Proxy error: ${msg}`);
     }
 
