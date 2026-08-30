@@ -10,7 +10,7 @@ import type { AIResult } from '../lib/messages';
 import { parseResumeJson } from '../lib/resumeImport';
 import { ProxyProvider } from '../lib/ai/proxy';
 import { GEMINI_MODELS } from '../lib/ai/models';
-import { AIError } from '../lib/ai';
+import { AIError, isOnDeviceAvailable, onDeviceAvailabilityMessage } from '../lib/ai';
 import { signIn, signOut, reconcileAuthUser, onAuthChanged, getCachedToken, type AuthUser } from '../lib/auth';
 
 export function Options() {
@@ -67,6 +67,20 @@ function OptionsView({
   });
   const [showApiKey, setShowApiKey] = useState(false);
   const [showProxyToken, setShowProxyToken] = useState(false);
+  const [onDeviceAvailable, setOnDeviceAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setOnDeviceAvailable(null);
+    if (p.ai.provider === 'onDevice') {
+      isOnDeviceAvailable().then((available) => {
+        if (!cancelled) setOnDeviceAvailable(available);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [p.ai.provider]);
 
   // Google sign-in state for the managed proxy.
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -208,6 +222,11 @@ function OptionsView({
             </Field>
           )}
         </div>
+        {p.ai.provider === 'onDevice' && onDeviceAvailable !== null && (
+          <div className={onDeviceAvailable ? 'saved' : 'warn'}>
+            {onDeviceAvailabilityMessage(onDeviceAvailable)}
+          </div>
+        )}
         {p.ai.provider === 'gemini' && (
           <Field label="Gemini API key">
             <div style={{ display: 'flex', gap: 8 }}>

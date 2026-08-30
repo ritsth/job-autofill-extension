@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isOnDeviceAvailable, OnDeviceProvider } from './onDevice';
+import {
+  isOnDeviceAvailable,
+  onDeviceAvailabilityMessage,
+  OnDeviceProvider,
+} from './onDevice';
 
 function installLanguageModel(response = '{"ok":true}') {
   const prompt = vi.fn().mockResolvedValue(response);
@@ -116,5 +120,17 @@ describe('isOnDeviceAvailable', () => {
   it('is false, not a rejected promise, when capabilities() throws', async () => {
     installAvailability({ capabilities: vi.fn().mockRejectedValue(new Error('boom')) });
     await expect(isOnDeviceAvailable()).resolves.toBe(false);
+  });
+});
+
+describe('onDeviceAvailabilityMessage', () => {
+  it('explains that supported models may still need a download', () => {
+    expect(onDeviceAvailabilityMessage(true)).toBe(
+      'Supported — Chrome may download the model on first use.',
+    );
+  });
+
+  it('gives a recovery path when the model is unavailable', () => {
+    expect(onDeviceAvailabilityMessage(false)).toContain('Switch to Gemini in options');
   });
 });
