@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getProfile, saveProfile, onProfileChanged, type Profile } from '../lib/profile';
+import { disabledHostFor, removeDisabledHost } from '../lib/host';
 import {
   getSavedJobs,
   addJob,
@@ -119,6 +120,7 @@ export function Popup() {
   const [busy, setBusy] = useState<'' | 'fill' | 'letter' | 'resume' | 'save'>('');
   const [error, setError] = useState('');
   const [scanEnabled, setScanEnabled] = useState(true);
+  const [disabledHosts, setDisabledHosts] = useState<string[]>([]);
   const [coverLetterEnabled, setCoverLetterEnabled] = useState(true);
   const [resumeEnabled, setResumeEnabled] = useState(true);
   const [jobs, setJobs] = useState<SavedJob[]>([]);
@@ -144,6 +146,13 @@ const copyTimer = useRef<number | null>(null);
     setLocal(value);
     const profile = await getProfile();
     await saveProfile({ ...profile, [key]: value });
+  }
+
+  /** "Turn back on" for the current site's per-site badge opt-out (see #272/#273). */
+  async function enableSite(host: string) {
+    setDisabledHosts((prev) => removeDisabledHost(prev, host));
+    const profile = await getProfile();
+    await saveProfile({ ...profile, disabledHosts: removeDisabledHost(profile.disabledHosts, host) });
   }
 
   async function copyToClipboard(text: string, target: 'letter' | 'resume') {
@@ -196,11 +205,11 @@ const copyTimer = useRef<number | null>(null);
         if (info.company) setCompany((c) => c || info.company);
         if (info.role) setRole((r) => r || info.role);
       } catch {
-        setPage({ supported: false, site: null, company: '', role: '', jobText: '' });
+        setPage({ supported: false, site: null, company: '', role: '', jobText: '', hostname: '' });
       }
     } else {
       setTabId(null);
-      setPage({ supported: false, site: null, company: '', role: '', jobText: '' });
+      setPage({ supported: false, site: null, company: '', role: '', jobText: '', hostname: '' });
     }
   }
 
@@ -210,6 +219,7 @@ const copyTimer = useRef<number | null>(null);
   useEffect(() => {
     const apply = (p: Profile) => {
       setScanEnabled(p.scanEnabled);
+      setDisabledHosts(p.disabledHosts);
       setCoverLetterEnabled(p.coverLetterEnabled);
       setResumeEnabled(p.tailoredResumeEnabled);
       setAiProvider(p.ai.provider);
@@ -384,6 +394,13 @@ const copyTimer = useRef<number | null>(null);
 
   const activeJob = jobs.find((j) => j.id === activeJobId) ?? null;
   const canGenerate = canGenerateDocuments(company, role);
+  // page.hostname is '' when unknown or when an embedded ATS sub-frame answered
+  // PAGE_INFO instead of the top frame (see the PageInfo docblock) — disabledHostFor
+  // is unconditionally undefined for '', so this never shows a wrong-site notice.
+  // The matched ENTRY (not necessarily page.hostname itself — e.g. visiting
+  // sub.example.com when "example.com" is what's disabled) is what "Turn back
+  // on" has to remove; removing page.hostname there would silently no-op.
+  const siteDisabledEntry = disabledHostFor(page?.hostname ?? '', disabledHosts);
   const openOptions = () => chrome.runtime.openOptionsPage();
   const geminiNeedsKey = aiProvider === 'gemini' && !apiKeySet;
   // Proxy mode needs a signed-in account (unless the owner set an admin token).
@@ -681,6 +698,18 @@ const copyTimer = useRef<number | null>(null);
           />
           Scan every page for visa/eligibility (YES/NO badge)
         </label>
+        {/* Gated on scanEnabled too: with the global switch already off, this
+            would be redundant noise on top of the unchecked box above, and
+            "Turn back on" would misleadingly imply it alone restores the
+            badge when the global toggle would still need re-checking. */}
+        {scanEnabled && siteDisabledEntry && (
+          <p className="warn" style={{ marginTop: 6 }}>
+            Badge turned off for <strong>{siteDisabledEntry}</strong>.{' '}
+            <button className="linklike" onClick={() => enableSite(siteDisabledEntry)}>
+              Turn back on
+            </button>
+          </p>
+        )}
       </div>
 
       <div className="block" style={{ textAlign: 'center' }}>

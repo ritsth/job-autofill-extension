@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addDisabledHost, hostMatches, isHostDisabled, removeDisabledHost } from './host';
+import { addDisabledHost, disabledHostFor, hostMatches, isHostDisabled, removeDisabledHost } from './host';
 
 describe('hostMatches', () => {
   it('matches the exact domain', () => {
@@ -57,6 +57,44 @@ describe('isHostDisabled — per-site eligibility badge off-switch', () => {
     // a stray blank entry must not become "everything with a trailing dot".
     expect(isHostDisabled('', ['boards.greenhouse.io'])).toBe(false);
     expect(isHostDisabled('example.com.', [''])).toBe(false);
+  });
+});
+
+describe('disabledHostFor — which stored entry actually covers this hostname (#273)', () => {
+  it('returns the exact entry when it is the hostname itself', () => {
+    expect(disabledHostFor('boards.greenhouse.io', ['boards.greenhouse.io'])).toBe(
+      'boards.greenhouse.io',
+    );
+  });
+
+  it('returns the broader PARENT entry, not the subdomain visited', () => {
+    // The case removeDisabledHost alone gets wrong: the popup shows "Turned off
+    // for X" and its "Turn back on" button must remove X — but if the user
+    // disabled the parent while ON a subdomain of it, X is the parent, not
+    // whatever subdomain they're standing on right now.
+    expect(disabledHostFor('sub.boards.greenhouse.io', ['boards.greenhouse.io'])).toBe(
+      'boards.greenhouse.io',
+    );
+  });
+
+  it('is undefined for a sibling subdomain, a look-alike, or an empty hostname', () => {
+    expect(disabledHostFor('jobs.greenhouse.io', ['boards.greenhouse.io'])).toBeUndefined();
+    expect(disabledHostFor('evilboards.greenhouse.io', ['boards.greenhouse.io'])).toBeUndefined();
+    expect(disabledHostFor('', ['boards.greenhouse.io'])).toBeUndefined();
+  });
+
+  it('agrees with isHostDisabled on every case above', () => {
+    // isHostDisabled is defined in terms of this function; pin that relationship
+    // directly so the two can never silently drift apart.
+    const cases: [string, string[]][] = [
+      ['boards.greenhouse.io', ['boards.greenhouse.io']],
+      ['sub.boards.greenhouse.io', ['boards.greenhouse.io']],
+      ['jobs.greenhouse.io', ['boards.greenhouse.io']],
+      ['', ['boards.greenhouse.io']],
+    ];
+    for (const [hostname, hosts] of cases) {
+      expect(isHostDisabled(hostname, hosts)).toBe(disabledHostFor(hostname, hosts) !== undefined);
+    }
   });
 });
 
