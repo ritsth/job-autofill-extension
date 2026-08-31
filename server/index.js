@@ -208,8 +208,38 @@ async function generate({ system, prompt, maxOutputTokens, json, thinking, model
     },
   });
   const result = await model.generateContent(prompt);
-  const parts = result?.response?.candidates?.[0]?.content?.parts ?? [];
-  return parts.map((p) => p.text || '').join('').trim();
+  const candidate = result?.response?.candidates?.[0];
+  const parts = candidate?.content?.parts ?? [];
+  return { text: parts.map((p) => p.text || '').join('').trim(), finishReason: candidate?.finishReason };
+}
+
+// Mirrors src/lib/ai/gemini.ts's finishReason handling, so a safety block or a
+// truncated response reads the same to the user whether they're on the BYO-key
+// Gemini path or this managed proxy (#239 — the proxy used to discard
+// finishReason entirely and could only ever say "empty response"). Duplicated
+// rather than imported: server/ is a standalone Cloud Run deployable with its
+// own package.json, not built alongside the extension, so there is no shared
+// module to import from — keep the two in sync by hand if either changes.
+//
+// Wording deliberately does NOT say "Gemini" (unlike gemini.ts) — every other
+// message in this file speaks generically ("the managed AI", "the AI service")
+// since the proxy never discloses which model runs behind it.
+const MIN_VIABLE_ANSWER_LENGTH = 40;
+function classifyFinishReason(finishReason, text) {
+  if (finishReason === 'SAFETY') {
+    return 'This response was blocked for safety reasons. Try rephrasing.';
+  }
+  if (finishReason === 'RECITATION') {
+    return 'This response was blocked because it matched existing content too closely. Try rephrasing.';
+  }
+  // A short MAX_TOKENS answer means the output budget ran out almost
+  // immediately, not that a real answer got clipped near the end — same
+  // reasoning and threshold as gemini.ts. A substantial MAX_TOKENS answer is
+  // returned as-is; discarding a mostly-complete reply would be worse.
+  if (finishReason === 'MAX_TOKENS' && text.length < MIN_VIABLE_ANSWER_LENGTH) {
+    return 'The response was cut off before it could really start (ran out of output budget). Try again.';
+  }
+  return null;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -277,8 +307,17 @@ const server = http.createServer(async (req, res) => {
     // transient hiccup). One retry almost always succeeds and saves the user a
     // manual re-run. The quota was already counted above, so the retry is free
     // to the user and doesn't double-count.
-    let text = await generate(args);
-    if (!text) text = await generate(args);
+    //
+    // A SAFETY/RECITATION block is different: it's deterministic for the same
+    // prompt, so retrying would almost certainly repeat it and just cost a
+    // second Vertex call for nothing. Only the plain-empty case (no finishReason
+    // classification below applies) gets the retry.
+    let { text, finishReason } = await generate(args);
+    if (!text && finishReason !== 'SAFETY' && finishReason !== 'RECITATION') {
+      ({ text, finishReason } = await generate(args));
+    }
+    const blocked = classifyFinishReason(finishReason, text);
+    if (blocked) return send(res, 502, { error: blocked });
     if (!text) return send(res, 502, { error: 'Empty response from Vertex AI' });
     return send(res, 200, { text });
   } catch (err) {
