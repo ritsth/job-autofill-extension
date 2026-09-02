@@ -8,6 +8,7 @@ import {
   isDocumentTrimmed,
   onProfileChanged,
   profileToContext,
+  upsertDocument,
   type Profile,
   type UploadedDoc,
 } from './profile';
@@ -350,5 +351,54 @@ describe('isDocumentTrimmed', () => {
 
   it('is false for a short document', () => {
     expect(isDocumentTrimmed(doc(100))).toBe(false);
+  });
+});
+
+describe('upsertDocument', () => {
+  // Regression test for #267 via #271: this logic used to live inline in
+  // Options.tsx JSX, which can't be imported under vitest's DOM-less test env
+  // (`DOMMatrix is not defined`, via the transitive pdfjs-dist import), so it
+  // shipped with no test. Extracted here so it finally has one.
+  function docs(names: string[]): UploadedDoc[] {
+    return names.map((name, i) => ({ id: `id-${i}`, name, text: `text ${i}`, addedAt: i }));
+  }
+
+  it('appends a document with a new filename', () => {
+    const result = upsertDocument(docs(['resume.pdf']), 'cover.pdf', 'cover text');
+    expect(result.map((d) => d.name)).toEqual(['resume.pdf', 'cover.pdf']);
+    expect(result[1].text).toBe('cover text');
+  });
+
+  it('replaces an existing document with the same filename, moving it to the end', () => {
+    // Pins the current (pre-extraction) behavior: filter-then-append means a
+    // re-upload moves to the end of the list, changing both the Options display
+    // order and where it appears in the AI context — #271 flagged this as
+    // accidental rather than chosen; this test makes it deliberate.
+    const result = upsertDocument(docs(['a.pdf', 'b.pdf', 'c.pdf']), 'a.pdf', 'new a text');
+    expect(result.map((d) => d.name)).toEqual(['b.pdf', 'c.pdf', 'a.pdf']);
+    expect(result[2].text).toBe('new a text');
+  });
+
+  it('matches an existing filename case- and whitespace-insensitively', () => {
+    // Pins the case-insensitivity as intentional (#271) — filesystems are
+    // case-insensitive on macOS/Windows, so "Resume.PDF" and "resume.pdf" are
+    // the same file to a user re-uploading it.
+    const result = upsertDocument(docs(['resume.pdf']), '  Resume.PDF  ', 'updated text');
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('  Resume.PDF  ');
+    expect(result[0].text).toBe('updated text');
+  });
+
+  it('accumulates correctly across a sequence of calls (multi-file upload)', () => {
+    // DocUpload calls onText once per file in a loop for a multi-file upload
+    // (extractTextBatch), so a sequence of calls is a real path, not synthetic.
+    let result: UploadedDoc[] = [];
+    result = upsertDocument(result, 'a.pdf', 'a1');
+    result = upsertDocument(result, 'b.pdf', 'b1');
+    result = upsertDocument(result, 'a.pdf', 'a2');
+    expect(result.map((d) => [d.name, d.text])).toEqual([
+      ['b.pdf', 'b1'],
+      ['a.pdf', 'a2'],
+    ]);
   });
 });

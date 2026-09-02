@@ -4,6 +4,7 @@ import { DisabledSites } from './DisabledSites';
 import {
   DOCUMENT_TEXT_BUDGET,
   isDocumentTrimmed,
+  upsertDocument,
   type EducationEntry,
   type Profile,
   type WorkEntry,
@@ -508,19 +509,7 @@ function OptionsView({
         <h2>Additional documents (extra AI context)</h2>
         <DocUpload
           onText={(name, text) =>
-            update((prev) => {
-              const norm = name.trim().toLowerCase();
-              const without = prev.documents.filter(
-                (d) => d.name.trim().toLowerCase() !== norm,
-              );
-              return {
-                ...prev,
-                documents: [
-                  ...without,
-                  { id: crypto.randomUUID(), name, text, addedAt: Date.now() },
-                ],
-              };
-            })
+            update((prev) => ({ ...prev, documents: upsertDocument(prev.documents, name, text) }))
           }
         />
         {p.documents.length > 0 && (
