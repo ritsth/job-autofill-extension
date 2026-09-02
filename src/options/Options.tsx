@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Field } from './Field';
 import { DisabledSites } from './DisabledSites';
-import type { EducationEntry, Profile, WorkEntry } from '../lib/profile';
+import {
+  DOCUMENT_TEXT_BUDGET,
+  isDocumentTrimmed,
+  type EducationEntry,
+  type Profile,
+  type WorkEntry,
+} from '../lib/profile';
 import { removeDisabledHost } from '../lib/host';
 import { useProfile } from '../ui/useProfile';
 import { extractText, extractTextBatch } from '../lib/documents';
@@ -523,6 +529,15 @@ function OptionsView({
               <div key={d.id} className="list-item" style={{ display: 'flex', alignItems: 'center' }}>
                 <span style={{ flex: 1 }}>
                   📄 {d.name} <span className="help">({d.text.length.toLocaleString()} chars)</span>
+                  {isDocumentTrimmed(d) && (
+                    <span
+                      className="warn"
+                      title={`Only the first ${DOCUMENT_TEXT_BUDGET.toLocaleString()} characters are sent to the AI.`}
+                    >
+                      {' '}
+                      — trimmed for AI context
+                    </span>
+                  )}
                 </span>
                 <button
                   className="danger"
