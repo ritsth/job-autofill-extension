@@ -211,6 +211,40 @@ export function onProfileChanged(cb: (profile: Profile) => void): () => void {
 }
 
 /**
+ * Character budget for resume + uploaded documents COMBINED in the AI context
+ * (see #251). The proxy hard-rejects any prompt over MAX_PROMPT_CHARS = 200_000
+ * (server/index.js), and every prompt builder also adds capped job text
+ * (MAX_TEXT = 12_000, savedJobs.ts) plus a system prompt on top — this stays
+ * comfortably under that ceiling with room to spare for future growth.
+ */
+export const CONTEXT_TEXT_BUDGET = 60_000;
+
+/**
+ * The resume is the highest-value context for tailoring, so it gets a generous
+ * budget of its own — taken from CONTEXT_TEXT_BUDGET first, ahead of documents,
+ * so it's the last thing to get trimmed.
+ */
+export const RESUME_TEXT_BUDGET = 20_000;
+
+/**
+ * Per-document cap. Applied before the shared remaining budget so one oversized
+ * upload can't crowd out the others — every document degrades a little instead
+ * of a tail-truncate silently dropping whichever documents sort last.
+ */
+export const DOCUMENT_TEXT_BUDGET = 8_000;
+
+/**
+ * True when this document's own text is long enough that profileToContext will
+ * trim it. Options.tsx shows this next to the document instead of trimming
+ * silently — see #251. (A document under this cap can still end up dropped
+ * entirely if enough earlier resume/document text has already used up
+ * CONTEXT_TEXT_BUDGET; this only flags the common, per-document case.)
+ */
+export function isDocumentTrimmed(doc: UploadedDoc): boolean {
+  return doc.text.trim().length > DOCUMENT_TEXT_BUDGET;
+}
+
+/**
  * Flattens the profile into a single context string the AI can read when
  * answering open-ended questions or tailoring a cover letter.
  */
@@ -247,12 +281,23 @@ export function profileToContext(p: Profile): string {
     }
   }
 
-  if (p.resumeText.trim()) {
-    lines.push('\nResume:\n' + p.resumeText.trim());
+  const resume = p.resumeText.trim();
+  if (resume) {
+    lines.push('\nResume:\n' + resume.slice(0, RESUME_TEXT_BUDGET));
   }
 
+  // Remaining shared budget after the resume's priority slice. Each document is
+  // further capped at DOCUMENT_TEXT_BUDGET so a single huge upload can't eat the
+  // whole thing; once the shared budget itself runs out, later documents (in
+  // list order) are dropped entirely rather than appended as a useless sliver.
+  let remaining = CONTEXT_TEXT_BUDGET - Math.min(resume.length, RESUME_TEXT_BUDGET);
   for (const doc of p.documents) {
-    if (doc.text.trim()) lines.push(`\nDocument "${doc.name}":\n${doc.text.trim()}`);
+    if (remaining <= 0) break;
+    const text = doc.text.trim();
+    if (!text) continue;
+    const cap = Math.min(DOCUMENT_TEXT_BUDGET, remaining);
+    lines.push(`\nDocument "${doc.name}":\n${text.slice(0, cap)}`);
+    remaining -= Math.min(text.length, cap);
   }
 
   return lines.join('\n');
