@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Field } from './Field';
 import { DisabledSites } from './DisabledSites';
-import type { EducationEntry, Profile, WorkEntry } from '../lib/profile';
+import { upsertDocument, type EducationEntry, type Profile, type WorkEntry } from '../lib/profile';
 import { removeDisabledHost } from '../lib/host';
 import { useProfile } from '../ui/useProfile';
 import { extractText, extractTextBatch } from '../lib/documents';
@@ -502,19 +502,7 @@ function OptionsView({
         <h2>Additional documents (extra AI context)</h2>
         <DocUpload
           onText={(name, text) =>
-            update((prev) => {
-              const norm = name.trim().toLowerCase();
-              const without = prev.documents.filter(
-                (d) => d.name.trim().toLowerCase() !== norm,
-              );
-              return {
-                ...prev,
-                documents: [
-                  ...without,
-                  { id: crypto.randomUUID(), name, text, addedAt: Date.now() },
-                ],
-              };
-            })
+            update((prev) => ({ ...prev, documents: upsertDocument(prev.documents, name, text) }))
           }
         />
         {p.documents.length > 0 && (

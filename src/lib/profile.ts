@@ -40,6 +40,22 @@ export interface UploadedDoc {
   addedAt: number;
 }
 
+/**
+ * Adds a document, replacing any existing one with the same filename
+ * (case- and whitespace-insensitive, so "Resume.PDF" replaces "resume.pdf" —
+ * filesystems are case-insensitive on macOS/Windows, so this matches user
+ * expectations for "the same file, re-uploaded"). A re-uploaded document moves
+ * to the end of the list — most-recently-uploaded last — which also changes
+ * where it appears in the AI context; that's the behavior this already had
+ * before being extracted here, now pinned as intentional rather than
+ * accidental. A distinct filename is appended, never merged (see #267/#271).
+ */
+export function upsertDocument(docs: UploadedDoc[], name: string, text: string): UploadedDoc[] {
+  const norm = name.trim().toLowerCase();
+  const without = docs.filter((d) => d.name.trim().toLowerCase() !== norm);
+  return [...without, { id: crypto.randomUUID(), name, text, addedAt: Date.now() }];
+}
+
 export interface Preferences {
   workAuthorization: string;
   requiresSponsorship: string;
