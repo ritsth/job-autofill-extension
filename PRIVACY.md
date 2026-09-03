@@ -1,6 +1,6 @@
 # Privacy Policy — Little AI Helper
 
-_Last updated: June 18, 2026_
+_Last updated: September 3, 2026_
 
 Little AI Helper ("the extension") is a Chrome extension that fills out
 job applications and drafts answers and cover letters from a profile **you** enter.
@@ -23,6 +23,21 @@ All of the following is saved **locally on your computer** using Chrome's
   and entirely under your control.
 - **Cover-letter template** and **saved job postings.**
 - **Your Google account email**, cached after you choose to sign in (see below).
+- **Your AI provider settings** — if you bring your own Gemini key, or paste an admin
+  token for the managed proxy, that credential is stored locally and sent only to the
+  provider you chose, in a request header, never in a URL or a log.
+- **Sites you've turned the eligibility badge off on** — just the hostnames you chose
+  via "Turn off on this site only" on the badge, so the setting survives a reload. This
+  is a short, user-initiated list, not a browsing history: it only ever contains a site
+  once you've explicitly clicked to disable the badge there, and it's never transmitted
+  anywhere.
+- **Extension settings** — which features are turned on (autofill scanning, cover
+  letter, tailored resume), whether you've dismissed the badge's first-run intro, and
+  which corner of the screen you've dragged the badge to.
+
+This list is kept in step with the `Profile` type in
+[src/lib/profile.ts](https://github.com/ritsth/job-autofill-extension/blob/main/src/lib/profile.ts) —
+any new field stored there should be added here too.
 
 We do **not** use analytics, tracking, advertising, or crash reporting. There is no
 telemetry of any kind.

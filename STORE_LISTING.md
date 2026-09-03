@@ -97,10 +97,17 @@ the package.
   location (city/state/country) the user enters for their profile, plus optional
   self-reported demographic fields.
 - **Authentication information** — Google account email/token used for optional managed-
-  proxy sign-in.
+  proxy sign-in, plus the user's own Gemini API key or an admin proxy token, if they
+  choose to enter one.
+- **Website content** — resume text, uploaded documents (PDF/DOCX converted to plain
+  text), work history, education, skills, cover-letter template, and saved job-posting
+  text — all entered or captured by the user for use as AI context.
 
 (We do not collect: health info, financial/payment info, web-browsing history, user
-activity/analytics, or personal communications.)
+activity/analytics, or personal communications. The list of hostnames where the user has
+turned the eligibility badge off — see PRIVACY.md — is a short, user-initiated settings
+list, not browsing history: it only ever contains a site the user explicitly chose to
+disable, it's never transmitted, and it does not log page visits.)
 
 **Required certifications** (all true):
 - ✅ I do not sell or transfer user data to third parties outside of approved use cases.
