@@ -19,6 +19,7 @@ import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { VertexAI } from '@google-cloud/vertexai';
 import { Firestore, FieldValue } from '@google-cloud/firestore';
+import { classifyFinishReason } from './classify.js';
 
 const PORT = process.env.PORT || 8080;
 const PROJECT = process.env.GOOGLE_CLOUD_PROJECT;
@@ -213,34 +214,10 @@ async function generate({ system, prompt, maxOutputTokens, json, thinking, model
   return { text: parts.map((p) => p.text || '').join('').trim(), finishReason: candidate?.finishReason };
 }
 
-// Mirrors src/lib/ai/gemini.ts's finishReason handling, so a safety block or a
-// truncated response reads the same to the user whether they're on the BYO-key
-// Gemini path or this managed proxy (#239 — the proxy used to discard
-// finishReason entirely and could only ever say "empty response"). Duplicated
-// rather than imported: server/ is a standalone Cloud Run deployable with its
-// own package.json, not built alongside the extension, so there is no shared
-// module to import from — keep the two in sync by hand if either changes.
-//
-// Wording deliberately does NOT say "Gemini" (unlike gemini.ts) — every other
-// message in this file speaks generically ("the managed AI", "the AI service")
-// since the proxy never discloses which model runs behind it.
-const MIN_VIABLE_ANSWER_LENGTH = 40;
-function classifyFinishReason(finishReason, text) {
-  if (finishReason === 'SAFETY') {
-    return 'This response was blocked for safety reasons. Try rephrasing.';
-  }
-  if (finishReason === 'RECITATION') {
-    return 'This response was blocked because it matched existing content too closely. Try rephrasing.';
-  }
-  // A short MAX_TOKENS answer means the output budget ran out almost
-  // immediately, not that a real answer got clipped near the end — same
-  // reasoning and threshold as gemini.ts. A substantial MAX_TOKENS answer is
-  // returned as-is; discarding a mostly-complete reply would be worse.
-  if (finishReason === 'MAX_TOKENS' && text.length < MIN_VIABLE_ANSWER_LENGTH) {
-    return 'The response was cut off before it could really start (ran out of output budget). Try again.';
-  }
-  return null;
-}
+// classifyFinishReason / MIN_VIABLE_ANSWER_LENGTH now live in ./classify.js —
+// pulled out so they can be imported by a real test (see #285). This file has
+// unconditional top-level side effects (VertexAI/Firestore clients, server
+// .listen below), so it can never itself be imported for testing.
 
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
