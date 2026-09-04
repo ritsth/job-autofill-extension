@@ -133,8 +133,8 @@ export const UNSUPPORTED_REPLY_DELAY_MS = 400;
  * the runtime. Every chrome.* call from that orphaned script then throws, and
  * the only cure is reloading the page so a fresh content script is injected.
  *
- * The action comes first because callers truncate this for display — the badge's
- * AI check cuts at 32 characters — so "Refresh this page" survives the slice.
+ * The action comes first so "Refresh this page" survives compact button labels.
+ * Their tooltips retain the full message, including why a refresh is needed.
  */
 export const CONTEXT_LOST_MESSAGE = 'Refresh this page — the extension was updated.';
 
