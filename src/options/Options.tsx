@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Field } from './Field';
 import { DisabledSites } from './DisabledSites';
 import {
-  DOCUMENT_TEXT_BUDGET,
-  isDocumentTrimmed,
+  computeContextUsage,
   upsertDocument,
   type EducationEntry,
   type Profile,
@@ -78,6 +77,22 @@ function OptionsView({
   const [showApiKey, setShowApiKey] = useState(false);
   const [showProxyToken, setShowProxyToken] = useState(false);
   const [onDeviceAvailable, setOnDeviceAvailable] = useState<boolean | null>(null);
+
+  // Which uploaded documents have their "exact text sent to the AI" preview open.
+  const [expandedDocs, setExpandedDocs] = useState<Set<string>>(new Set());
+  function toggleDocExpanded(id: string): void {
+    setExpandedDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  const contextUsage = useMemo(() => computeContextUsage(p), [p]);
+  const docUsage = useMemo(
+    () => new Map(contextUsage.documents.map((u) => [u.id, u])),
+    [contextUsage],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -353,6 +368,13 @@ function OptionsView({
             onChange={(e) => update((prev) => ({ ...prev, resumeText: e.target.value }))}
           />
         </Field>
+        {contextUsage.resume.usedChars < contextUsage.resume.totalChars && (
+          <p className="warn">
+            Only {contextUsage.resume.usedChars.toLocaleString()} of{' '}
+            {contextUsage.resume.totalChars.toLocaleString()} chars are sent to the AI — shorten
+            the resume to use the rest.
+          </p>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button
             className="primary"
@@ -518,33 +540,61 @@ function OptionsView({
         />
         {p.documents.length > 0 && (
           <div style={{ margin: '10px 0' }}>
-            {p.documents.map((d) => (
-              <div key={d.id} className="list-item" style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ flex: 1 }}>
-                  📄 {d.name} <span className="help">({d.text.length.toLocaleString()} chars)</span>
-                  {isDocumentTrimmed(d) && (
-                    <span
-                      className="warn"
-                      title={`Only the first ${DOCUMENT_TEXT_BUDGET.toLocaleString()} characters are sent to the AI.`}
-                    >
-                      {' '}
-                      — trimmed for AI context
+            {p.documents.map((d) => {
+              const u = docUsage.get(d.id);
+              const trimmed = !!u && u.usedChars < u.totalChars;
+              const expanded = expandedDocs.has(d.id);
+              return (
+                <div key={d.id} className="list-item">
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <span style={{ flex: 1 }}>
+                      📄 {d.name} <span className="help">({d.text.length.toLocaleString()} chars)</span>
+                      {trimmed && (
+                        <span className="warn">
+                          {' — '}
+                          {u!.usedChars === 0
+                            ? 'not sent (AI context budget full)'
+                            : `${u!.usedChars.toLocaleString()} of ${u!.totalChars.toLocaleString()} chars used for AI`}
+                        </span>
+                      )}
                     </span>
+                    <button
+                      className="jobtoggle"
+                      title={expanded ? 'Hide what is sent to the AI' : 'Show what is sent to the AI'}
+                      aria-expanded={expanded}
+                      aria-label={`${expanded ? 'Hide' : 'Show'} the exact text sent to the AI for ${d.name}`}
+                      onClick={() => toggleDocExpanded(d.id)}
+                    >
+                      {expanded ? '▴' : '▾'}
+                    </button>
+                    <button
+                      className="danger"
+                      onClick={() =>
+                        update((prev) => ({
+                          ...prev,
+                          documents: prev.documents.filter((x) => x.id !== d.id),
+                        }))
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  {expanded && (
+                    <div className="jobpreview">
+                      <div className="jobmeta">
+                        <span>
+                          {(u?.usedChars ?? 0).toLocaleString()} of{' '}
+                          {(u?.totalChars ?? 0).toLocaleString()} chars sent to the AI
+                        </span>
+                      </div>
+                      <div className="jobsnippet">
+                        {u?.usedText || '(none of this document is sent to the AI)'}
+                      </div>
+                    </div>
                   )}
-                </span>
-                <button
-                  className="danger"
-                  onClick={() =>
-                    update((prev) => ({
-                      ...prev,
-                      documents: prev.documents.filter((x) => x.id !== d.id),
-                    }))
-                  }
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
