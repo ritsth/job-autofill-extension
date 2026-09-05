@@ -49,6 +49,17 @@ async function setSavedJobs(state: SavedJobsState): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY]: state });
 }
 
+// Serialize the complete read-modify-write, including additions, so a later
+// mutation always reads the result of the preceding one in this context.
+let pendingMutation: Promise<void> = Promise.resolve();
+
+function mutateSavedJobs<T>(mutation: () => Promise<T>): Promise<T> {
+  const result = pendingMutation.then(mutation);
+  // A failed write still rejects its caller, but must not poison the queue.
+  pendingMutation = result.then(() => {}, () => {});
+  return result;
+}
+
 /** The active saved job, or null when none is selected. */
 export async function getActiveJob(): Promise<SavedJob | null> {
   const { jobs, activeId } = await getSavedJobs();
@@ -67,58 +78,64 @@ export interface AddJobResult extends SavedJobsState {
 export async function addJob(
   partial: Omit<SavedJob, 'id' | 'savedAt'>,
 ): Promise<AddJobResult> {
-  const state = await getSavedJobs();
-  const existing = state.jobs.find((saved) => saved.url === partial.url);
-  let job: SavedJob;
-  let all: SavedJob[];
-  if (existing) {
-    job = {
-      ...existing,
-      ...partial,
-      id: existing.id,
-      // Re-saving from a later application step can capture form boilerplate.
-      // Keep the known-good posting text instead of silently degrading it.
-      text: existing.text,
-      company: partial.company || existing.company,
-      role: partial.role || existing.role,
-      savedAt: Date.now(),
-    };
-    // Also heal duplicates created by releases that always minted a new id.
-    all = [job, ...state.jobs.filter((saved) => saved.url !== partial.url)];
-  } else {
-    if (isJobTextTruncated(partial.text)) {
-      console.warn(
-        `[Little AI Helper] Saved posting trimmed from ${partial.text.length} to ${MAX_TEXT} chars for AI context.`,
-      );
+  return mutateSavedJobs(async () => {
+    const state = await getSavedJobs();
+    const existing = state.jobs.find((saved) => saved.url === partial.url);
+    let job: SavedJob;
+    let all: SavedJob[];
+    if (existing) {
+      job = {
+        ...existing,
+        ...partial,
+        id: existing.id,
+        // Re-saving from a later application step can capture form boilerplate.
+        // Keep the known-good posting text instead of silently degrading it.
+        text: existing.text,
+        company: partial.company || existing.company,
+        role: partial.role || existing.role,
+        savedAt: Date.now(),
+      };
+      // Also heal duplicates created by releases that always minted a new id.
+      all = [job, ...state.jobs.filter((saved) => saved.url !== partial.url)];
+    } else {
+      if (isJobTextTruncated(partial.text)) {
+        console.warn(
+          `[Little AI Helper] Saved posting trimmed from ${partial.text.length} to ${MAX_TEXT} chars for AI context.`,
+        );
+      }
+      job = {
+        ...partial,
+        text: partial.text.slice(0, MAX_TEXT),
+        id: crypto.randomUUID(),
+        savedAt: Date.now(),
+      };
+      all = [job, ...state.jobs];
     }
-    job = {
-      ...partial,
-      text: partial.text.slice(0, MAX_TEXT),
-      id: crypto.randomUUID(),
-      savedAt: Date.now(),
+    const next: SavedJobsState = {
+      jobs: all.slice(0, MAX_JOBS),
+      activeId: job.id,
     };
-    all = [job, ...state.jobs];
-  }
-  const next: SavedJobsState = {
-    jobs: all.slice(0, MAX_JOBS),
-    activeId: job.id,
-  };
-  await setSavedJobs(next);
-  // Computed here rather than by comparing counts in the caller, whose copy of
-  // the list can lag behind storage.
-  return { ...next, evicted: all.slice(MAX_JOBS) };
+    await setSavedJobs(next);
+    // Computed here rather than by comparing counts in the caller, whose copy of
+    // the list can lag behind storage.
+    return { ...next, evicted: all.slice(MAX_JOBS) };
+  });
 }
 
 export async function setActiveJob(id: string | null): Promise<void> {
-  const state = await getSavedJobs();
-  await setSavedJobs({ ...state, activeId: id });
+  return mutateSavedJobs(async () => {
+    const state = await getSavedJobs();
+    await setSavedJobs({ ...state, activeId: id });
+  });
 }
 
 export async function deleteJob(id: string): Promise<void> {
-  const state = await getSavedJobs();
-  await setSavedJobs({
-    jobs: state.jobs.filter((j) => j.id !== id),
-    activeId: state.activeId === id ? null : state.activeId,
+  return mutateSavedJobs(async () => {
+    const state = await getSavedJobs();
+    await setSavedJobs({
+      jobs: state.jobs.filter((j) => j.id !== id),
+      activeId: state.activeId === id ? null : state.activeId,
+    });
   });
 }
 

@@ -412,3 +412,77 @@ describe('deleteJob', () => {
     expect(persisted().activeId).toBe('a');
   });
 });
+
+describe('concurrent saved-job mutations', () => {
+  it('does not resurrect a job when two deletes overlap', async () => {
+    seed({ jobs: [job({ id: 'a' }), job({ id: 'b' })], activeId: 'a' });
+
+    await Promise.all([deleteJob('a'), deleteJob('b')]);
+
+    expect(persisted()).toEqual({ jobs: [], activeId: null });
+  });
+
+  it('keeps a deletion when an activation overlaps it', async () => {
+    seed({ jobs: [job({ id: 'a' }), job({ id: 'b' })], activeId: 'a' });
+
+    await Promise.all([deleteJob('a'), setActiveJob('b')]);
+
+    expect(persisted().jobs.map((saved) => saved.id)).toEqual(['b']);
+    expect(persisted().activeId).toBe('b');
+  });
+
+  it('keeps both concurrent additions in call order', async () => {
+    const [first, second] = await Promise.all([
+      addJob({ ...partial(), url: 'https://a' }),
+      addJob({ ...partial(), url: 'https://b' }),
+    ]);
+
+    expect(persisted().jobs.map((saved) => saved.url)).toEqual(['https://b', 'https://a']);
+    expect(persisted().activeId).toBe(second.activeId);
+    expect(persisted().jobs[1].id).toBe(first.activeId);
+  });
+
+  it('does not lose a deletion when a save overlaps it', async () => {
+    seed({ jobs: [job({ id: 'a', url: 'https://a' })], activeId: 'a' });
+
+    await Promise.all([deleteJob('a'), addJob(partial())]);
+
+    expect(persisted().jobs).toHaveLength(1);
+    expect(persisted().jobs[0].url).toBe('https://x');
+    expect(persisted().activeId).toBe(persisted().jobs[0].id);
+  });
+
+  it('rejects a failed mutation without blocking the next one', async () => {
+    seed({ jobs: [job({ id: 'a' }), job({ id: 'b' })], activeId: 'a' });
+    vi.mocked(chrome.storage.local.set).mockRejectedValueOnce(new Error('storage full'));
+
+    const results = await Promise.allSettled([deleteJob('a'), deleteJob('b')]);
+
+    expect(results[0]).toMatchObject({ status: 'rejected', reason: new Error('storage full') });
+    expect(results[1]).toEqual({ status: 'fulfilled', value: undefined });
+    expect(persisted().jobs.map((saved) => saved.id)).toEqual(['a']);
+    expect(persisted().activeId).toBe('a');
+  });
+
+  it('does not start the next read until the previous write completes', async () => {
+    seed({ jobs: [job({ id: 'a' }), job({ id: 'b' })], activeId: 'a' });
+    let releaseWrite!: () => void;
+    let started!: () => void;
+    const writeStarted = new Promise<void>((resolve) => { started = resolve; });
+    vi.mocked(chrome.storage.local.set).mockImplementationOnce(async (items) => {
+      started();
+      await new Promise<void>((resolve) => { releaseWrite = resolve; });
+      Object.assign(store, items);
+    });
+    const first = deleteJob('a');
+    const second = deleteJob('b');
+    await writeStarted;
+    try {
+      expect(chrome.storage.local.get).toHaveBeenCalledTimes(1);
+    } finally {
+      releaseWrite();
+      await Promise.all([first, second]);
+    }
+    expect(persisted()).toEqual({ jobs: [], activeId: null });
+  });
+});
