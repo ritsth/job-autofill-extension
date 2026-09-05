@@ -5,7 +5,7 @@ import {
   DEFAULT_PROFILE,
   DOCUMENT_TEXT_BUDGET,
   RESUME_TEXT_BUDGET,
-  isDocumentTrimmed,
+  computeContextUsage,
   onProfileChanged,
   profileToContext,
   upsertDocument,
@@ -336,21 +336,122 @@ describe('profileToContext', () => {
   });
 });
 
-describe('isDocumentTrimmed', () => {
-  function doc(length: number): UploadedDoc {
-    return { id: 'd', name: 'd.pdf', text: 'x'.repeat(length), addedAt: 0 };
+describe('computeContextUsage', () => {
+  // The follow-up to #251: isDocumentTrimmed (a per-document, context-free
+  // check) couldn't say how many characters of a document actually reach the
+  // AI, because that's order-dependent — an earlier document or a large resume
+  // can squeeze out a later one even though it's individually under
+  // DOCUMENT_TEXT_BUDGET. computeContextUsage answers that precisely, and
+  // profileToContext is now built from its result (not a second, parallel
+  // walk), so the two can never disagree.
+  function doc(name: string, length: number): UploadedDoc {
+    return { id: name, name, text: 'x'.repeat(length), addedAt: 0 };
   }
 
-  it('is false at exactly the budget', () => {
-    expect(isDocumentTrimmed(doc(DOCUMENT_TEXT_BUDGET))).toBe(false);
+  it('reports full usage for a normal profile — nothing trimmed', () => {
+    const p: Profile = {
+      ...DEFAULT_PROFILE,
+      resumeText: 'A modest resume.',
+      documents: [doc('a.pdf', 500), doc('b.pdf', 300)],
+    };
+    const usage = computeContextUsage(p);
+    expect(usage.resume).toEqual({ usedChars: 16, totalChars: 16, usedText: 'A modest resume.' });
+    expect(usage.documents).toEqual([
+      { id: 'a.pdf', usedChars: 500, totalChars: 500, usedText: 'x'.repeat(500) },
+      { id: 'b.pdf', usedChars: 300, totalChars: 300, usedText: 'x'.repeat(300) },
+    ]);
   });
 
-  it('is true one character over the budget', () => {
-    expect(isDocumentTrimmed(doc(DOCUMENT_TEXT_BUDGET + 1))).toBe(true);
+  it('caps a single oversized document at DOCUMENT_TEXT_BUDGET', () => {
+    const p: Profile = { ...DEFAULT_PROFILE, documents: [doc('big.pdf', DOCUMENT_TEXT_BUDGET + 10_000)] };
+    const usage = computeContextUsage(p);
+    expect(usage.documents[0].usedChars).toBe(DOCUMENT_TEXT_BUDGET);
+    expect(usage.documents[0].totalChars).toBe(DOCUMENT_TEXT_BUDGET + 10_000);
+    expect(usage.documents[0].usedText).toBe('x'.repeat(DOCUMENT_TEXT_BUDGET));
   });
 
-  it('is false for a short document', () => {
-    expect(isDocumentTrimmed(doc(100))).toBe(false);
+  it('caps the resume at RESUME_TEXT_BUDGET', () => {
+    const p: Profile = { ...DEFAULT_PROFILE, resumeText: 'x'.repeat(RESUME_TEXT_BUDGET + 5_000) };
+    const usage = computeContextUsage(p);
+    expect(usage.resume.usedChars).toBe(RESUME_TEXT_BUDGET);
+    expect(usage.resume.totalChars).toBe(RESUME_TEXT_BUDGET + 5_000);
+  });
+
+  it('caps a document at whatever budget remains, not the full per-document cap, when remaining is smaller', () => {
+    // Grind the shared budget down to a value strictly between 0 and
+    // DOCUMENT_TEXT_BUDGET (7 full-cap documents: 60,000 - 7*8,000 = 4,000
+    // left), then give the 8th document more real text than that — it should
+    // be capped at the actual 4,000 remaining, not the 8,000 per-document cap.
+    const p: Profile = {
+      ...DEFAULT_PROFILE,
+      documents: [
+        ...Array.from({ length: 7 }, (_, i) => doc(`full-${i}.pdf`, DOCUMENT_TEXT_BUDGET)),
+        doc('last.pdf', 6_000),
+      ],
+    };
+    const usage = computeContextUsage(p);
+    expect(usage.documents[7]).toEqual({
+      id: 'last.pdf',
+      usedChars: 4_000,
+      totalChars: 6_000,
+      usedText: 'x'.repeat(4_000),
+    });
+  });
+
+  it('reports zero usage — not a partial slice — for a document dropped by shared-budget exhaustion', () => {
+    // Same fixture as profileToContext's "drops documents entirely" test:
+    // resume uses its full 20k slice, five documents at the 8k cap use exactly
+    // the remaining 40k, and the sixth has nothing left.
+    const p: Profile = {
+      ...DEFAULT_PROFILE,
+      resumeText: 'x'.repeat(RESUME_TEXT_BUDGET),
+      documents: Array.from({ length: 6 }, (_, i) => doc(`doc-${i}.pdf`, DOCUMENT_TEXT_BUDGET)),
+    };
+    const usage = computeContextUsage(p);
+    for (let i = 0; i < 5; i++) expect(usage.documents[i].usedChars).toBe(DOCUMENT_TEXT_BUDGET);
+    expect(usage.documents[5]).toEqual({
+      id: 'doc-5.pdf',
+      usedChars: 0,
+      totalChars: DOCUMENT_TEXT_BUDGET,
+      usedText: '',
+    });
+  });
+
+  it('does not let an empty document consume any of the shared budget', () => {
+    const p: Profile = {
+      ...DEFAULT_PROFILE,
+      documents: [doc('empty.pdf', 0), doc('after.pdf', 500)],
+    };
+    const usage = computeContextUsage(p);
+    expect(usage.documents[0]).toEqual({ id: 'empty.pdf', usedChars: 0, totalChars: 0, usedText: '' });
+    // The document after the empty one is unaffected — nothing was spent on it.
+    expect(usage.documents[1].usedChars).toBe(500);
+  });
+
+  it('agrees with profileToContext: every used slice appears verbatim, every dropped document does not appear at all', () => {
+    const profiles: Profile[] = [
+      // normal
+      { ...DEFAULT_PROFILE, resumeText: 'A modest resume.', documents: [doc('a.pdf', 500)] },
+      // per-document cap
+      { ...DEFAULT_PROFILE, documents: [doc('a.pdf', DOCUMENT_TEXT_BUDGET + 10_000), doc('b.pdf', DOCUMENT_TEXT_BUDGET + 10_000)] },
+      // shared-budget exhaustion (drops the last document)
+      {
+        ...DEFAULT_PROFILE,
+        resumeText: 'x'.repeat(RESUME_TEXT_BUDGET),
+        documents: Array.from({ length: 6 }, (_, i) => doc(`doc-${i}.pdf`, DOCUMENT_TEXT_BUDGET)),
+      },
+    ];
+    for (const p of profiles) {
+      const usage = computeContextUsage(p);
+      const context = profileToContext(p);
+      for (const d of usage.documents) {
+        if (d.usedChars > 0) {
+          expect(context).toContain(d.usedText);
+        } else {
+          expect(context).not.toContain(`Document "${d.id}"`);
+        }
+      }
+    }
   });
 });
 

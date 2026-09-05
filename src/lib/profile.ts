@@ -233,15 +233,63 @@ export const RESUME_TEXT_BUDGET = 20_000;
  */
 export const DOCUMENT_TEXT_BUDGET = 8_000;
 
+/** How much of a piece of source text actually makes it into the AI context. */
+export interface TextUsage {
+  /** Characters actually included in the AI context. */
+  usedChars: number;
+  /** Trimmed length of the source text (before any budget is applied). */
+  totalChars: number;
+  /** The exact slice sent to the AI — may be '' when nothing fit. */
+  usedText: string;
+}
+
+export interface DocumentUsage extends TextUsage {
+  id: string;
+}
+
+export interface ContextUsage {
+  resume: TextUsage;
+  /** One entry per Profile.documents, same order. */
+  documents: DocumentUsage[];
+}
+
 /**
- * True when this document's own text is long enough that profileToContext will
- * trim it. Options.tsx shows this next to the document instead of trimming
- * silently — see #251. (A document under this cap can still end up dropped
- * entirely if enough earlier resume/document text has already used up
- * CONTEXT_TEXT_BUDGET; this only flags the common, per-document case.)
+ * Computes exactly how much of the resume and each document ends up in the AI
+ * context, given the shared, order-dependent budget below. profileToContext
+ * builds its output from this (not a second, parallel walk of the same
+ * budget), and Options.tsx uses it to show the real per-document usage instead
+ * of the coarser "is this document individually oversized" check that used to
+ * live here as isDocumentTrimmed — see #251's follow-up: a document under
+ * DOCUMENT_TEXT_BUDGET on its own can still be partially or fully squeezed out
+ * by an earlier document or a large resume, which a per-document-only check
+ * can't see.
  */
-export function isDocumentTrimmed(doc: UploadedDoc): boolean {
-  return doc.text.trim().length > DOCUMENT_TEXT_BUDGET;
+export function computeContextUsage(p: Profile): ContextUsage {
+  const resumeFull = p.resumeText.trim();
+  const resumeUsedText = resumeFull.slice(0, RESUME_TEXT_BUDGET);
+  const resume: TextUsage = {
+    usedChars: resumeUsedText.length,
+    totalChars: resumeFull.length,
+    usedText: resumeUsedText,
+  };
+
+  // Remaining shared budget after the resume's priority slice. Each document is
+  // further capped at DOCUMENT_TEXT_BUDGET so a single huge upload can't eat the
+  // whole thing; once the shared budget itself runs out, later documents (in
+  // list order) get nothing rather than a useless sliver.
+  let remaining = CONTEXT_TEXT_BUDGET - resume.usedChars;
+  const documents: DocumentUsage[] = p.documents.map((doc) => {
+    const text = doc.text.trim();
+    if (!text || remaining <= 0) {
+      return { id: doc.id, usedChars: 0, totalChars: text.length, usedText: '' };
+    }
+    const cap = Math.min(DOCUMENT_TEXT_BUDGET, remaining);
+    const usedText = text.slice(0, cap);
+    remaining -= usedText.length;
+    return { id: doc.id, usedChars: usedText.length, totalChars: text.length, usedText };
+  });
+
+  return { resume, documents };
 }
 
 /**
@@ -281,24 +329,17 @@ export function profileToContext(p: Profile): string {
     }
   }
 
-  const resume = p.resumeText.trim();
-  if (resume) {
-    lines.push('\nResume:\n' + resume.slice(0, RESUME_TEXT_BUDGET));
+  const usage = computeContextUsage(p);
+  if (usage.resume.usedChars > 0) {
+    lines.push('\nResume:\n' + usage.resume.usedText);
   }
 
-  // Remaining shared budget after the resume's priority slice. Each document is
-  // further capped at DOCUMENT_TEXT_BUDGET so a single huge upload can't eat the
-  // whole thing; once the shared budget itself runs out, later documents (in
-  // list order) are dropped entirely rather than appended as a useless sliver.
-  let remaining = CONTEXT_TEXT_BUDGET - Math.min(resume.length, RESUME_TEXT_BUDGET);
-  for (const doc of p.documents) {
-    if (remaining <= 0) break;
-    const text = doc.text.trim();
-    if (!text) continue;
-    const cap = Math.min(DOCUMENT_TEXT_BUDGET, remaining);
-    lines.push(`\nDocument "${doc.name}":\n${text.slice(0, cap)}`);
-    remaining -= Math.min(text.length, cap);
-  }
+  p.documents.forEach((doc, i) => {
+    const u = usage.documents[i];
+    if (u.usedChars > 0) {
+      lines.push(`\nDocument "${doc.name}":\n${u.usedText}`);
+    }
+  });
 
   return lines.join('\n');
 }
