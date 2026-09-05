@@ -17,6 +17,7 @@ import { workdayAdapter } from './adapters/workday';
 import { ashbyAdapter } from './adapters/ashby';
 import type { SiteAdapter } from './adapters/types';
 import { AI_BUTTON_CSS, BUTTON_CLASS } from './aiButtonStyles';
+import { clearButtonError, showButtonError } from './buttonError';
 import {
   CONTEXT_LOST_MESSAGE,
   isContextInvalidated,
@@ -206,6 +207,7 @@ function disarm(btn: HTMLButtonElement): void {
 }
 
 async function generateAnswer(q: OpenQuestion, btn: HTMLButtonElement): Promise<void> {
+  clearButtonError(btn);
   // Replacing text the applicant already has is destructive and unrecoverable,
   // so it takes two clicks. Regeneration stays available — it just has to be
   // deliberate.
@@ -232,8 +234,7 @@ async function generateAnswer(q: OpenQuestion, btn: HTMLButtonElement): Promise<
     const jobText = getScanText();
     const res = await sendToBackground<AIResult>({ type: 'AI_GENERATE_ANSWER', question, jobText });
     if (res.error) {
-      btn.textContent = '⚠️ ' + res.error.slice(0, 40);
-      setTimeout(() => (btn.textContent = original), 4000);
+      showButtonError(btn, res.error, original, 40);
     } else {
       fillInput(q.el, res.text);
       btn.textContent = '✓ filled';
@@ -242,11 +243,11 @@ async function generateAnswer(q: OpenQuestion, btn: HTMLButtonElement): Promise<
   } catch (e) {
     // A stale content script (extension reloaded/updated under an open tab) is
     // recoverable by refreshing, so say that rather than a bare "failed".
-    btn.textContent = isContextInvalidated(e)
-      ? '⚠️ ' + CONTEXT_LOST_MESSAGE.slice(0, 40)
-      : '⚠️ failed';
+    const message = isContextInvalidated(e)
+      ? CONTEXT_LOST_MESSAGE
+      : e instanceof Error ? e.message : String(e);
+    showButtonError(btn, message, original, 40, 3000);
     console.error('[JobAutofill] answer generation failed', e);
-    setTimeout(() => (btn.textContent = original), 3000);
   } finally {
     btn.disabled = false;
   }
