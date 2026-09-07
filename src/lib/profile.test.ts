@@ -3,7 +3,6 @@ import { DEFAULT_MODEL, GEMINI_MODELS } from './ai/models';
 import {
   CONTEXT_TEXT_BUDGET,
   DEFAULT_PROFILE,
-  DOCUMENT_TEXT_BUDGET,
   RESUME_TEXT_BUDGET,
   computeContextUsage,
   onProfileChanged,
@@ -219,7 +218,11 @@ describe('profileToContext', () => {
   // #251: profileToContext used to concatenate resumeText + every document's
   // full text with no limit, so a few uploaded documents could push the whole
   // prompt past the proxy's hard MAX_PROMPT_CHARS ceiling and fail every AI
-  // call. These pin the cap.
+  // call. These pin the cap. (Documents used to share the pool via a *fixed*
+  // 8,000-char-per-document cap; that's now a dynamic fair share instead —
+  // see the "dynamic per-document share" describe block below for the
+  // algorithm itself. These tests just confirm profileToContext still
+  // respects the overall ceiling regardless of how it's divided internally.)
   describe('context size budget (#251)', () => {
     function doc(name: string, length: number): UploadedDoc {
       return { id: name, name, text: 'x'.repeat(length), addedAt: 0 };
@@ -253,20 +256,20 @@ describe('profileToContext', () => {
       expect(xRuns(result)).toEqual([RESUME_TEXT_BUDGET]);
     });
 
-    it('caps each document at DOCUMENT_TEXT_BUDGET, degrading every document rather than dropping the tail', () => {
+    it('splits the shared budget evenly between two equally-oversized documents', () => {
       const p: Profile = {
         ...DEFAULT_PROFILE,
-        documents: [doc('a.pdf', DOCUMENT_TEXT_BUDGET + 10_000), doc('b.pdf', DOCUMENT_TEXT_BUDGET + 10_000)],
+        documents: [doc('a.pdf', 100_000), doc('b.pdf', 100_000)],
       };
       const result = profileToContext(p);
-      // Both documents are present (neither dropped) and each contributes at
-      // most the per-document cap.
+      // Both documents are present (neither dropped), each getting half of
+      // the full 60,000 pool (no resume here) — not a fixed per-document cap.
       expect(result).toContain('Document "a.pdf"');
       expect(result).toContain('Document "b.pdf"');
-      expect(xRuns(result)).toEqual([DOCUMENT_TEXT_BUDGET, DOCUMENT_TEXT_BUDGET]);
+      expect(xRuns(result)).toEqual([30_000, 30_000]);
     });
 
-    it('gives the resume priority: it is never trimmed to make room for documents', () => {
+    it('gives the resume priority, and a lone document the entire rest of the pool', () => {
       const p: Profile = {
         ...DEFAULT_PROFILE,
         resumeText: 'x'.repeat(RESUME_TEXT_BUDGET), // uses its full priority slice
@@ -274,18 +277,23 @@ describe('profileToContext', () => {
       };
       const result = profileToContext(p);
       // First run is the resume — full RESUME_TEXT_BUDGET, not shrunk to make
-      // room for the document (which still gets its own DOCUMENT_TEXT_BUDGET
-      // slice out of what's left, not zero).
+      // room for the document. With only one document, it gets the *entire*
+      // rest of CONTEXT_TEXT_BUDGET (40,000) — the whole point of the dynamic
+      // share replacing the old fixed 8,000-char cap.
       const runs = xRuns(result);
       expect(runs[0]).toBe(RESUME_TEXT_BUDGET);
-      expect(runs[1]).toBe(DOCUMENT_TEXT_BUDGET);
+      expect(runs[1]).toBe(CONTEXT_TEXT_BUDGET - RESUME_TEXT_BUDGET);
     });
 
     it('shrinks the real regression scenario from the issue well under the proxy limit', () => {
       // The exact numbers measured in #251: three real documents (~55k/~53k/~8k
-      // chars, ~116k combined) that — with the old resumeText + a modest resume
-      // — added up to ~133k characters of prompt, dangerously close to the
-      // proxy's 200k hard limit and one document away from tipping over it.
+      // chars, ~116k combined) that — with a modest resume — added up to
+      // ~133k characters of prompt, dangerously close to the proxy's 200k
+      // hard limit. Under the dynamic 3-way split (~18.3k each, the smallest
+      // document using less than its share since it doesn't need it), the
+      // total lands around 50k — still a large reduction from the original
+      // problem, comfortably under the proxy limit, while giving each
+      // document far more room than the old flat 8,000-char cap did.
       const p: Profile = {
         ...DEFAULT_PROFILE,
         resumeText: 'x'.repeat(5_000),
@@ -295,31 +303,31 @@ describe('profileToContext', () => {
       expect(result).toContain('Document "one.pdf"');
       expect(result).toContain('Document "two.pdf"');
       expect(result).toContain('Document "three.pdf"');
-      expect(result.length).toBeLessThan(35_000); // was ~133k before the cap
+      expect(result.length).toBeLessThan(52_000); // was ~133k before any cap
     });
 
-    it('drops documents entirely, in list order, once the shared budget is exhausted', () => {
-      // Resume uses its full RESUME_TEXT_BUDGET (20k), leaving exactly
-      // CONTEXT_TEXT_BUDGET - RESUME_TEXT_BUDGET = 40k shared budget for
-      // documents. Five documents at the 8k per-document cap use exactly that
-      // 40k; a sixth has nothing left and is dropped entirely rather than
-      // appended as a useless sliver.
+    it('no longer drops documents once there are "enough" of them — every document gets a fair, non-zero share', () => {
+      // Under the old fixed 8,000-char-per-document cap, 6 documents against
+      // a 40,000 shared budget (after the resume's full priority slice) used
+      // exactly 5 * 8,000 and dropped the 6th entirely. Under the dynamic
+      // share, the same 6 documents instead each get an equal ~6,666-char
+      // slice — nothing is dropped. This is the direct payoff of the
+      // dynamic-share change: budget is never wasted, so there's no cliff
+      // where "one document too many" starts silently losing documents.
       const p: Profile = {
         ...DEFAULT_PROFILE,
         resumeText: 'x'.repeat(RESUME_TEXT_BUDGET),
-        documents: Array.from({ length: 6 }, (_, i) => doc(`doc-${i}.pdf`, DOCUMENT_TEXT_BUDGET)),
+        documents: Array.from({ length: 6 }, (_, i) => doc(`doc-${i}.pdf`, 8_000)),
       };
       const result = profileToContext(p);
-      for (let i = 0; i < 5; i++) expect(result).toContain(`Document "doc-${i}.pdf"`);
-      expect(result).not.toContain('Document "doc-5.pdf"');
-      expect(xRuns(result)).toEqual([
-        RESUME_TEXT_BUDGET,
-        DOCUMENT_TEXT_BUDGET,
-        DOCUMENT_TEXT_BUDGET,
-        DOCUMENT_TEXT_BUDGET,
-        DOCUMENT_TEXT_BUDGET,
-        DOCUMENT_TEXT_BUDGET,
-      ]);
+      for (let i = 0; i < 6; i++) expect(result).toContain(`Document "doc-${i}.pdf"`);
+      const runs = xRuns(result);
+      expect(runs[0]).toBe(RESUME_TEXT_BUDGET);
+      // 40,000 shared among 6 documents that all want more than their share:
+      // integer division leaves a small remainder distributed across the
+      // last few documents (6,666 x2, 6,667 x4) — every one is comfortably
+      // non-zero, which is the property under test.
+      expect(runs.slice(1)).toEqual([6_666, 6_666, 6_667, 6_667, 6_667, 6_667]);
     });
 
     it('never produces a context longer than CONTEXT_TEXT_BUDGET plus a small, bounded label overhead', () => {
@@ -331,19 +339,26 @@ describe('profileToContext', () => {
       const result = profileToContext(p);
       // "\nResume:\n" + "\nDocument \"doc-N.pdf\":\n" per included document is the
       // only overhead beyond the raw character budget — generously bounded here.
+      // Holds regardless of how the dynamic split divides the pool internally,
+      // since no document can ever use more than what's left of the pool.
       expect(result.length).toBeLessThan(CONTEXT_TEXT_BUDGET + 2_000);
     });
   });
 });
 
 describe('computeContextUsage', () => {
-  // The follow-up to #251: isDocumentTrimmed (a per-document, context-free
-  // check) couldn't say how many characters of a document actually reach the
-  // AI, because that's order-dependent — an earlier document or a large resume
-  // can squeeze out a later one even though it's individually under
-  // DOCUMENT_TEXT_BUDGET. computeContextUsage answers that precisely, and
-  // profileToContext is now built from its result (not a second, parallel
-  // walk), so the two can never disagree.
+  // The follow-up to #251: a per-document check couldn't say how many
+  // characters of a document actually reach the AI, because that's
+  // order-dependent. computeContextUsage answers that precisely, and
+  // profileToContext is built from its result (not a second, parallel walk),
+  // so the two can never disagree.
+  //
+  // Documents share the pool via a dynamic fair split, not a fixed
+  // per-document cap: each document gets an equal claim on whatever's left
+  // among the documents not yet processed (itself included), in list order.
+  // One document alone gets the whole remaining pool; a document that needs
+  // less than its share leaves the rest for documents after it (but not
+  // documents before it — earlier documents keep some priority).
   function doc(name: string, length: number): UploadedDoc {
     return { id: name, name, text: 'x'.repeat(length), addedAt: 0 };
   }
@@ -362,12 +377,17 @@ describe('computeContextUsage', () => {
     ]);
   });
 
-  it('caps a single oversized document at DOCUMENT_TEXT_BUDGET', () => {
-    const p: Profile = { ...DEFAULT_PROFILE, documents: [doc('big.pdf', DOCUMENT_TEXT_BUDGET + 10_000)] };
+  it('gives a single document the entire remaining pool, not a fixed per-document cap', () => {
+    // The headline behavior this replaces the old fixed 8,000-char cap with:
+    // one document, no competition, gets everything that's left.
+    const p: Profile = { ...DEFAULT_PROFILE, documents: [doc('big.pdf', 100_000)] };
     const usage = computeContextUsage(p);
-    expect(usage.documents[0].usedChars).toBe(DOCUMENT_TEXT_BUDGET);
-    expect(usage.documents[0].totalChars).toBe(DOCUMENT_TEXT_BUDGET + 10_000);
-    expect(usage.documents[0].usedText).toBe('x'.repeat(DOCUMENT_TEXT_BUDGET));
+    expect(usage.documents[0]).toEqual({
+      id: 'big.pdf',
+      usedChars: CONTEXT_TEXT_BUDGET,
+      totalChars: 100_000,
+      usedText: 'x'.repeat(CONTEXT_TEXT_BUDGET),
+    });
   });
 
   it('caps the resume at RESUME_TEXT_BUDGET', () => {
@@ -377,69 +397,85 @@ describe('computeContextUsage', () => {
     expect(usage.resume.totalChars).toBe(RESUME_TEXT_BUDGET + 5_000);
   });
 
-  it('caps a document at whatever budget remains, not the full per-document cap, when remaining is smaller', () => {
-    // Grind the shared budget down to a value strictly between 0 and
-    // DOCUMENT_TEXT_BUDGET (7 full-cap documents: 60,000 - 7*8,000 = 4,000
-    // left), then give the 8th document more real text than that — it should
-    // be capped at the actual 4,000 remaining, not the 8,000 per-document cap.
+  it('redistributes a small document\'s unused share to a later, larger document', () => {
+    // 60,000 pool, 2 documents, no resume: a naive half-split would give each
+    // 30,000. The small document only needs 3,000, so it uses exactly that
+    // and leaves the rest (57,000) for the large document that follows.
     const p: Profile = {
       ...DEFAULT_PROFILE,
-      documents: [
-        ...Array.from({ length: 7 }, (_, i) => doc(`full-${i}.pdf`, DOCUMENT_TEXT_BUDGET)),
-        doc('last.pdf', 6_000),
-      ],
+      documents: [doc('small.pdf', 3_000), doc('large.pdf', 100_000)],
     };
     const usage = computeContextUsage(p);
-    expect(usage.documents[7]).toEqual({
-      id: 'last.pdf',
-      usedChars: 4_000,
-      totalChars: 6_000,
-      usedText: 'x'.repeat(4_000),
-    });
+    expect(usage.documents[0].usedChars).toBe(3_000);
+    expect(usage.documents[1].usedChars).toBe(57_000); // 60,000 - 3,000, not a flat 30,000
   });
 
-  it('reports zero usage — not a partial slice — for a document dropped by shared-budget exhaustion', () => {
-    // Same fixture as profileToContext's "drops documents entirely" test:
-    // resume uses its full 20k slice, five documents at the 8k cap use exactly
-    // the remaining 40k, and the sixth has nothing left.
+  it('does not redistribute backward — an earlier large document only gets its share, even if a later document turns out small', () => {
+    // Same two document sizes as above, order reversed. The large document is
+    // processed FIRST, before anyone knows the second document is small — so
+    // it's capped at the naive half-split (30,000), not boosted retroactively.
+    // This is the "some order priority" behavior chosen over full
+    // order-independence: budget the large document doesn't get here (a
+    // remainder of 27,000) simply goes unclaimed, rather than flowing
+    // backward to a document whose share was already decided.
     const p: Profile = {
       ...DEFAULT_PROFILE,
-      resumeText: 'x'.repeat(RESUME_TEXT_BUDGET),
-      documents: Array.from({ length: 6 }, (_, i) => doc(`doc-${i}.pdf`, DOCUMENT_TEXT_BUDGET)),
+      documents: [doc('large.pdf', 100_000), doc('small.pdf', 3_000)],
     };
     const usage = computeContextUsage(p);
-    for (let i = 0; i < 5; i++) expect(usage.documents[i].usedChars).toBe(DOCUMENT_TEXT_BUDGET);
-    expect(usage.documents[5]).toEqual({
-      id: 'doc-5.pdf',
-      usedChars: 0,
-      totalChars: DOCUMENT_TEXT_BUDGET,
-      usedText: '',
-    });
+    expect(usage.documents[0].usedChars).toBe(30_000); // vs. 57,000 in the forward-order case
+    expect(usage.documents[1].usedChars).toBe(3_000);
   });
 
-  it('does not let an empty document consume any of the shared budget', () => {
+  it('divides the pool evenly across several equally-oversized documents', () => {
+    // 5 documents, none of which fit within any share they'd be offered
+    // (60,000 / 5 = 12,000 exactly — chosen to divide evenly, so there's no
+    // integer-rounding remainder to account for).
+    const p: Profile = {
+      ...DEFAULT_PROFILE,
+      documents: Array.from({ length: 5 }, (_, i) => doc(`doc-${i}.pdf`, 50_000)),
+    };
+    const usage = computeContextUsage(p);
+    expect(usage.documents.map((d) => d.usedChars)).toEqual([12_000, 12_000, 12_000, 12_000, 12_000]);
+  });
+
+  it('never reduces a document to zero chars for any realistic document count — the old "dropped entirely" cliff is gone', () => {
+    // Stress case: 50 documents, all requesting far more than any possible
+    // share. Under the old fixed 8,000-char cap, the shared budget would run
+    // out partway through the list and every document after that point got
+    // nothing. Under the dynamic share, the pool divides evenly across all
+    // 50 (60,000 / 50 = 1,200 each) — smaller per document than with fewer
+    // files, but every single one gets a real, non-zero, usable slice.
+    const p: Profile = {
+      ...DEFAULT_PROFILE,
+      documents: Array.from({ length: 50 }, (_, i) => doc(`doc-${i}.pdf`, 10_000)),
+    };
+    const usage = computeContextUsage(p);
+    expect(usage.documents.every((d) => d.usedChars === 1_200)).toBe(true);
+  });
+
+  it('does not let an empty document consume any of the shared budget, or count toward the split', () => {
     const p: Profile = {
       ...DEFAULT_PROFILE,
       documents: [doc('empty.pdf', 0), doc('after.pdf', 500)],
     };
     const usage = computeContextUsage(p);
     expect(usage.documents[0]).toEqual({ id: 'empty.pdf', usedChars: 0, totalChars: 0, usedText: '' });
-    // The document after the empty one is unaffected — nothing was spent on it.
+    // The document after the empty one gets the WHOLE pool, not half of it —
+    // confirms the empty document doesn't count toward docsLeft either.
     expect(usage.documents[1].usedChars).toBe(500);
   });
 
-  it('agrees with profileToContext: every used slice appears verbatim, every dropped document does not appear at all', () => {
+  it('agrees with profileToContext: every used slice appears verbatim, and an empty document never appears at all', () => {
     const profiles: Profile[] = [
       // normal
       { ...DEFAULT_PROFILE, resumeText: 'A modest resume.', documents: [doc('a.pdf', 500)] },
-      // per-document cap
-      { ...DEFAULT_PROFILE, documents: [doc('a.pdf', DOCUMENT_TEXT_BUDGET + 10_000), doc('b.pdf', DOCUMENT_TEXT_BUDGET + 10_000)] },
-      // shared-budget exhaustion (drops the last document)
-      {
-        ...DEFAULT_PROFILE,
-        resumeText: 'x'.repeat(RESUME_TEXT_BUDGET),
-        documents: Array.from({ length: 6 }, (_, i) => doc(`doc-${i}.pdf`, DOCUMENT_TEXT_BUDGET)),
-      },
+      // single document takes the whole pool
+      { ...DEFAULT_PROFILE, documents: [doc('big.pdf', 100_000)] },
+      // forward redistribution between two documents
+      { ...DEFAULT_PROFILE, documents: [doc('small.pdf', 3_000), doc('large.pdf', 100_000)] },
+      // an empty document contributes nothing and must not appear in the output
+      { ...DEFAULT_PROFILE, documents: [doc('empty.pdf', 0), doc('after.pdf', 500)] },
     ];
     for (const p of profiles) {
       const usage = computeContextUsage(p);

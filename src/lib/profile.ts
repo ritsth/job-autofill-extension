@@ -226,13 +226,6 @@ export const CONTEXT_TEXT_BUDGET = 60_000;
  */
 export const RESUME_TEXT_BUDGET = 20_000;
 
-/**
- * Per-document cap. Applied before the shared remaining budget so one oversized
- * upload can't crowd out the others — every document degrades a little instead
- * of a tail-truncate silently dropping whichever documents sort last.
- */
-export const DOCUMENT_TEXT_BUDGET = 8_000;
-
 /** How much of a piece of source text actually makes it into the AI context. */
 export interface TextUsage {
   /** Characters actually included in the AI context. */
@@ -258,11 +251,10 @@ export interface ContextUsage {
  * context, given the shared, order-dependent budget below. profileToContext
  * builds its output from this (not a second, parallel walk of the same
  * budget), and Options.tsx uses it to show the real per-document usage instead
- * of the coarser "is this document individually oversized" check that used to
- * live here as isDocumentTrimmed — see #251's follow-up: a document under
- * DOCUMENT_TEXT_BUDGET on its own can still be partially or fully squeezed out
- * by an earlier document or a large resume, which a per-document-only check
- * can't see.
+ * of a fixed per-document cap, which either wastes budget (one document, way
+ * under a flat ceiling, with the rest of the pool sitting unused) or degrades
+ * unevenly (a fixed cap ignores how many documents are actually competing for
+ * the same pool).
  */
 export function computeContextUsage(p: Profile): ContextUsage {
   const resumeFull = p.resumeText.trim();
@@ -273,19 +265,25 @@ export function computeContextUsage(p: Profile): ContextUsage {
     usedText: resumeUsedText,
   };
 
-  // Remaining shared budget after the resume's priority slice. Each document is
-  // further capped at DOCUMENT_TEXT_BUDGET so a single huge upload can't eat the
-  // whole thing; once the shared budget itself runs out, later documents (in
-  // list order) get nothing rather than a useless sliver.
+  // Remaining shared budget after the resume's priority slice, divided
+  // dynamically among documents rather than a fixed per-document cap: each
+  // document gets an equal claim on whatever's left among the documents not
+  // yet processed (itself included), in list order. A document that needs
+  // less than its share leaves the rest for documents after it — one
+  // document alone gets the whole remaining pool, two documents split it,
+  // and so on — but a document already given its share can't be shrunk by a
+  // later one, so earlier documents keep some priority over later ones.
   let remaining = CONTEXT_TEXT_BUDGET - resume.usedChars;
+  let docsLeft = p.documents.filter((d) => d.text.trim().length > 0).length;
   const documents: DocumentUsage[] = p.documents.map((doc) => {
     const text = doc.text.trim();
-    if (!text || remaining <= 0) {
-      return { id: doc.id, usedChars: 0, totalChars: text.length, usedText: '' };
+    if (!text) {
+      return { id: doc.id, usedChars: 0, totalChars: 0, usedText: '' };
     }
-    const cap = Math.min(DOCUMENT_TEXT_BUDGET, remaining);
-    const usedText = text.slice(0, cap);
+    const fairShare = Math.floor(remaining / docsLeft);
+    const usedText = text.slice(0, fairShare);
     remaining -= usedText.length;
+    docsLeft -= 1;
     return { id: doc.id, usedChars: usedText.length, totalChars: text.length, usedText };
   });
 
