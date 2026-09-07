@@ -770,7 +770,7 @@ const AI_SCAN_BUDGET = 12_000;
  * context each side) so the key wording is never sliced off, then backfills the
  * remaining budget with the rest in original order. Short postings go as-is.
  */
-function focusEligibilityText(raw: string, budget = AI_SCAN_BUDGET): string {
+export function focusEligibilityText(raw: string, budget = AI_SCAN_BUDGET): string {
   const cleaned = stripQuestions(raw);
   if (cleaned.length <= budget) return cleaned;
 
