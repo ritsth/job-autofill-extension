@@ -11,6 +11,7 @@ import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
 import { getProfile, saveProfile } from '../lib/profile';
 import { addDisabledHost, hostMatches } from '../lib/host';
+import { clearButtonError, showButtonError } from './buttonError';
 
 export type Verdict = 'yes' | 'no' | 'caution' | 'unknown';
 
@@ -1059,7 +1060,7 @@ function buildGeneratorSection(cfg: {
       cfg.download(res.text, company.value.trim(), role.value.trim());
       status.textContent = '✓ Downloaded PDF';
     } catch (e) {
-      status.textContent = '⚠ ' + String((e as Error).message).slice(0, 60);
+      status.textContent = '⚠ ' + String((e as Error).message);
     } finally {
       gen.disabled = false;
       gen.textContent = orig;
@@ -1171,7 +1172,7 @@ function renderBadge(a: SponsorAnalysis, meta: JobMeta): HTMLElement {
     .clform { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
     .clform input { width: 100%; box-sizing: border-box; padding: 5px 7px; font-size: 12px;
                     border: 1px solid #cbd5e1; border-radius: 5px; font-family: inherit; color: #0f172a; }
-    .clstatus { font-size: 11px; color: #64748b; }
+    .clstatus { font-size: 11px; color: #64748b; overflow-wrap: anywhere; }
     .hidden { display: none; }
   `;
   root.appendChild(style);
@@ -1235,6 +1236,7 @@ function renderBadge(a: SponsorAnalysis, meta: JobMeta): HTMLElement {
     ai.textContent = 'AI check';
     ai.title = 'Re-read this posting with AI (more accurate on odd wording)';
     ai.addEventListener('click', async () => {
+      clearButtonError(ai);
       ai.textContent = 'Analyzing…';
       ai.disabled = true;
       // Snapshot what this click is FOR, before the await: on a split-view board
@@ -1266,11 +1268,8 @@ function renderBadge(a: SponsorAnalysis, meta: JobMeta): HTMLElement {
           document.body.appendChild(renderBadge(analysis, meta));
         }
       } catch (e) {
-        ai.textContent = `⚠ ${String((e as Error).message).slice(0, 32)}`;
+        showButtonError(ai, String((e as Error).message), 'AI check', 32);
         ai.disabled = false;
-        setTimeout(() => {
-          ai.textContent = 'AI check';
-        }, 4000);
       }
     });
     row.appendChild(ai);
