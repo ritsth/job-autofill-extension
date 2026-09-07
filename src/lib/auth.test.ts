@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { onAuthChanged, signOut, type AuthUser } from './auth';
+import { onAuthChanged, reconcileAuthUser, signOut, type AuthUser } from './auth';
 
 const AUTH_KEY = 'auth';
 
@@ -120,5 +120,97 @@ describe('signOut', () => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'token=token%2Bwith%2Fslash%3F%26%3D%20%C3%BC',
     });
+  });
+});
+
+describe('reconcileAuthUser', () => {
+  it('returns the stored user without requesting a token', async () => {
+    const stored: AuthUser = { email: 'stored@example.com' };
+    const getAuthToken = vi.fn();
+    const set = vi.fn();
+    vi.stubGlobal('chrome', {
+      identity: { getAuthToken },
+      storage: {
+        local: {
+          get: vi.fn().mockResolvedValue({ [AUTH_KEY]: stored }),
+          set,
+        },
+      },
+    });
+
+    await expect(reconcileAuthUser()).resolves.toEqual(stored);
+    expect(getAuthToken).not.toHaveBeenCalled();
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  it('persists and returns the user recovered from a silent token', async () => {
+    const user: AuthUser = { email: 'recovered@example.com' };
+    const set = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(user),
+    }));
+    vi.stubGlobal('chrome', {
+      runtime: { lastError: undefined },
+      identity: {
+        getAuthToken: vi.fn((_options: unknown, callback: (result: string) => void) =>
+          callback('cached-token'),
+        ),
+      },
+      storage: {
+        local: {
+          get: vi.fn().mockResolvedValue({}),
+          set,
+        },
+      },
+    });
+
+    await expect(reconcileAuthUser()).resolves.toEqual(user);
+    expect(set).toHaveBeenCalledOnce();
+    expect(set).toHaveBeenCalledWith({ [AUTH_KEY]: user });
+  });
+
+  it('returns null without persisting when no silent token exists', async () => {
+    const set = vi.fn();
+    vi.stubGlobal('chrome', {
+      runtime: { lastError: undefined },
+      identity: {
+        getAuthToken: vi.fn((_options: unknown, callback: (result?: string) => void) =>
+          callback(undefined),
+        ),
+      },
+      storage: {
+        local: {
+          get: vi.fn().mockResolvedValue({}),
+          set,
+        },
+      },
+    });
+
+    await expect(reconcileAuthUser()).resolves.toBeNull();
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  it('honors explicit sign-out without requesting a silent token', async () => {
+    const getAuthToken = vi.fn((_options: unknown, callback: (result: string) => void) =>
+      callback('cached-token'),
+    );
+    const set = vi.fn();
+    vi.stubGlobal('chrome', {
+      runtime: { lastError: undefined },
+      identity: { getAuthToken },
+      storage: {
+        local: {
+          get: vi.fn((key: string) =>
+            Promise.resolve(key === 'signedOut' ? { signedOut: true } : {}),
+          ),
+          set,
+        },
+      },
+    });
+
+    await expect(reconcileAuthUser()).resolves.toBeNull();
+    expect(getAuthToken).not.toHaveBeenCalled();
+    expect(set).not.toHaveBeenCalled();
   });
 });
