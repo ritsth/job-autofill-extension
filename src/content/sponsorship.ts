@@ -10,6 +10,7 @@ import { parseEligibilityJson } from '../lib/jobEligibility';
 import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
 import { getProfile, saveProfile } from '../lib/profile';
+import { MAX_TEXT } from '../lib/savedJobs';
 import { addDisabledHost, hostMatches } from '../lib/host';
 import { clearButtonError, showButtonError } from './buttonError';
 
@@ -760,7 +761,15 @@ function renderFrom(text: string): void {
 const ELIGIBILITY_CUE =
   /\b(sponsor|visa|h-?1b|citizen|nationalit|clearance|ts\/sci|secret|public trust|itar|export[- ]control|work auth|authoriz|eligib|permanent resident|green card|lawful permanent|right to work)\b/i;
 
-const AI_SCAN_BUDGET = 12_000;
+/**
+ * How much posting text the AI eligibility read may receive. Derived from
+ * MAX_TEXT rather than restated, because `buildJobEligibilityPrompt` slices the
+ * same text to MAX_TEXT again downstream: an independent number here would be
+ * silently clamped back down by that second cut, and raising it would appear to
+ * do nothing for a reason invisible at the edit site. Raising MAX_TEXT raises
+ * both. Guarded by a test in ./analyze.test.ts.
+ */
+export const AI_SCAN_BUDGET = MAX_TEXT;
 
 /**
  * Prepares page text for the AI eligibility read: strips screening questions
