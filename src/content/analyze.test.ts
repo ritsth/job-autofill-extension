@@ -4,10 +4,108 @@ import {
   analyze,
   badgeSignature,
   clampAxis,
+  focusEligibilityText,
   isBadgeDismissKey,
   nearestCorner,
   shouldDismissBadge,
 } from './sponsorship';
+
+describe('focusEligibilityText — what the AI actually reads on long postings', () => {
+  // Filler sized so a few sentences already blow a small test budget; the real
+  // budget is 12,000 chars, which is impractical to build by hand in a test.
+  const filler = (n: number) => `Filler sentence number ${n} about the team and the office.`;
+
+  it('passes a short posting through, minus the screening questions', () => {
+    // Under budget there is no selection to do — the only transform is the
+    // question strip the rules pass also uses.
+    const out = focusEligibilityText(
+      'We build developer tools. Are you authorized to work without sponsorship?',
+    );
+    expect(out).toContain('We build developer tools.');
+    expect(out.toLowerCase()).not.toContain('are you authorized');
+  });
+
+  it('leads with the cue sentence and one sentence of context each side', () => {
+    // The whole point of the function: on an oversized posting the eligibility
+    // wording must survive the cut, and a flat first-N-chars slice would drop it
+    // because it sits after the filler.
+    const text = [
+      filler(1),
+      filler(2),
+      filler(3),
+      'Context immediately before.',
+      'We do not provide visa sponsorship for this role.',
+      'Context immediately after.',
+      filler(4),
+    ].join(' ');
+    const budget = 160;
+
+    const out = focusEligibilityText(text, budget);
+    const head = out.slice(0, budget);
+    expect(head).toContain('We do not provide visa sponsorship for this role.');
+    expect(head).toContain('Context immediately before.');
+    expect(head).toContain('Context immediately after.');
+    // The kept window must lead, ahead of the filler that preceded it on the page.
+    expect(out.indexOf('We do not provide visa sponsorship')).toBeLessThan(
+      out.indexOf('Filler sentence number 1'),
+    );
+  });
+
+  it('never returns more than the budget, including after the backfill', () => {
+    // Two-stage path: the kept window is shorter than the budget, so the rest of
+    // the posting is appended — the append must not push the result over.
+    const text = [
+      'Sponsorship is available.',
+      ...Array.from({ length: 40 }, (_, i) => filler(i)),
+    ].join(' ');
+    for (const budget of [40, 200, 1_000]) {
+      expect(focusEligibilityText(text, budget).length).toBeLessThanOrEqual(budget);
+    }
+  });
+
+  it('handles a cue in the first or last sentence without an off-by-one', () => {
+    // keep.add(i - 1) at i === 0 adds -1, and keep.add(i + 1) at the end adds an
+    // index past the array: both must be harmless no-ops, not a wrapped or
+    // wrongly kept sentence.
+    const first = [
+      'Visa sponsorship is available.',
+      ...Array.from({ length: 20 }, (_, i) => filler(i)),
+    ].join(' ');
+    const firstOut = focusEligibilityText(first, 120);
+    expect(firstOut.startsWith('Visa sponsorship is available.')).toBe(true);
+    expect(firstOut.length).toBeLessThanOrEqual(120);
+
+    const last = [
+      ...Array.from({ length: 20 }, (_, i) => filler(i)),
+      'Applicants must hold an active security clearance.',
+    ].join(' ');
+    const lastOut = focusEligibilityText(last, 160);
+    expect(lastOut.slice(0, 160)).toContain('Applicants must hold an active security clearance.');
+    expect(lastOut.length).toBeLessThanOrEqual(160);
+  });
+
+  it('degrades to plain ordered truncation when the posting has no cue', () => {
+    // No cue means nothing is kept, so the result is the ordinary posting in its
+    // original order — the same thing a naive cut would produce.
+    const text = Array.from({ length: 30 }, (_, i) => filler(i)).join(' ');
+    const out = focusEligibilityText(text, 100);
+    expect(out.length).toBeLessThanOrEqual(100);
+    expect(out.trimStart().startsWith('Filler sentence number 0')).toBe(true);
+  });
+
+  it('matches the cue case-insensitively', () => {
+    // ELIGIBILITY_CUE carries the `i` flag; postings shout these words in
+    // headings, so dropping the flag would silently stop focusing them.
+    for (const cue of ['VISA status is discussed below.', 'A SECRET clearance is required.']) {
+      const text = [
+        ...Array.from({ length: 20 }, (_, i) => filler(i)),
+        cue,
+        ...Array.from({ length: 20 }, (_, i) => filler(100 + i)),
+      ].join(' ');
+      expect(focusEligibilityText(text, 300).slice(0, 300)).toContain(cue);
+    }
+  });
+});
 
 describe('badgeSignature — what forces a badge rebuild', () => {
   // Two postings that analyse identically. Very common: any two postings with no
