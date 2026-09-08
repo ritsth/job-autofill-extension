@@ -11,7 +11,7 @@ import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
 import { getProfile, saveProfile } from '../lib/profile';
 import { addDisabledHost, hostMatches } from '../lib/host';
-import { clearButtonError, showButtonError } from './buttonError';
+import { BADGE_AI_CHECK_ERROR_MAX, clearButtonError, showButtonError } from './buttonError';
 
 export type Verdict = 'yes' | 'no' | 'caution' | 'unknown';
 
@@ -1268,7 +1268,7 @@ function renderBadge(a: SponsorAnalysis, meta: JobMeta): HTMLElement {
           document.body.appendChild(renderBadge(analysis, meta));
         }
       } catch (e) {
-        showButtonError(ai, String((e as Error).message), 'AI check', 32);
+        showButtonError(ai, String((e as Error).message), 'AI check', BADGE_AI_CHECK_ERROR_MAX);
         ai.disabled = false;
       }
     });

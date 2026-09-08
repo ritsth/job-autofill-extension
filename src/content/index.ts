@@ -17,7 +17,7 @@ import { workdayAdapter } from './adapters/workday';
 import { ashbyAdapter } from './adapters/ashby';
 import type { SiteAdapter } from './adapters/types';
 import { AI_BUTTON_CSS, BUTTON_CLASS } from './aiButtonStyles';
-import { clearButtonError, showButtonError } from './buttonError';
+import { INLINE_ANSWER_ERROR_MAX, clearButtonError, showButtonError } from './buttonError';
 import {
   CONTEXT_LOST_MESSAGE,
   isContextInvalidated,
@@ -234,7 +234,7 @@ async function generateAnswer(q: OpenQuestion, btn: HTMLButtonElement): Promise<
     const jobText = getScanText();
     const res = await sendToBackground<AIResult>({ type: 'AI_GENERATE_ANSWER', question, jobText });
     if (res.error) {
-      showButtonError(btn, res.error, original, 40);
+      showButtonError(btn, res.error, original, INLINE_ANSWER_ERROR_MAX);
     } else {
       fillInput(q.el, res.text);
       btn.textContent = '✓ filled';
@@ -246,7 +246,7 @@ async function generateAnswer(q: OpenQuestion, btn: HTMLButtonElement): Promise<
     const message = isContextInvalidated(e)
       ? CONTEXT_LOST_MESSAGE
       : e instanceof Error ? e.message : String(e);
-    showButtonError(btn, message, original, 40, 3000);
+    showButtonError(btn, message, original, INLINE_ANSWER_ERROR_MAX, 3000);
     console.error('[JobAutofill] answer generation failed', e);
   } finally {
     btn.disabled = false;
