@@ -455,18 +455,21 @@ describe('RULES — the remaining field rules, against realistic concatenated la
     expect(valueFor('Emergency Contact Name')).not.toBe('Ada Lovelace');
   });
 
-  it('documents two rules that currently match NOTHING — known bug, see #232', () => {
-    // NOT an endorsement. Both rules end a truncated stem with \b, which
-    // requires a non-word char next — but real labels continue the word
-    // ("authoriz" + "ation", "sponsor" + "ship"), so the boundary never occurs.
-    // These assertions exist so the fix in #232 visibly flips them.
-    expect(valueFor('Work Authorization work_authorization')).toBeUndefined();
-    expect(valueFor('Will you now or in the future require visa sponsorship?')).toBeUndefined();
-    expect(valueFor('Sponsorship sponsorship')).toBeUndefined();
-
-    // The work-auth rule DOES fire on this phrasing, but only via its
-    // `legally.*work` arm — which ends on a complete word.
+  it('resolves realistic work-authorization and sponsorship labels', () => {
+    expect(valueFor('Work Authorization work_authorization')).toBe('Yes');
+    expect(valueFor('US work authorization required')).toBe('Yes');
     expect(valueFor('Are you legally authorized to work in the United States?')).toBe('Yes');
+
+    expect(valueFor('Will you now or in the future require visa sponsorship?')).toBe('No');
+    expect(valueFor('Do you require sponsorship?')).toBe('No');
+    expect(valueFor('Visa sponsorship required?')).toBe('No');
+    expect(valueFor('Sponsorship sponsorship')).toBe('No');
+  });
+
+  it('keeps the work-eligibility stems bounded to complete words', () => {
+    expect(valueFor('Who sponsored your last visa?')).toBeUndefined();
+    expect(valueFor('Sponsorial essay')).toBeUndefined();
+    expect(valueFor('Authorizationism')).toBeUndefined();
   });
 });
 

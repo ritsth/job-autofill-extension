@@ -299,12 +299,18 @@ export const RULES: Rule[] = [
     value: (p) => p.preferences.salaryExpectation,
   },
   {
-    test: /\b(work\s*authoriz|authoriz.*work|legally.*work|eligible.*work)\b/,
+    // The authorization arms must consume the suffix before applying the final
+    // boundary. A boundary immediately after the truncated `authoriz` stem can
+    // never match "authorization" or "authorized" because the next character
+    // is still a word character.
+    test: /\b(work\s*authoriz(?:ation|ed)|authoriz(?:ation|ed).*work|legally.*work|eligible.*work)\b/,
     value: (p) => p.preferences.workAuthorization,
     selectOk: true,
   },
   {
-    test: /\b(sponsor|visa\s*sponsor|require.*sponsor)\b/,
+    // Likewise, consume the common sponsorship suffix instead of asking for a
+    // word boundary in the middle of the word.
+    test: /\b(sponsor(?:ship)?|visa\s*sponsor(?:ship)?|require.*sponsor(?:ship)?)\b/,
     value: (p) => p.preferences.requiresSponsorship,
     selectOk: true,
   },
