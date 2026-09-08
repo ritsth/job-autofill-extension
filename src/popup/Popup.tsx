@@ -125,6 +125,8 @@ export function Popup() {
   const [resumeEnabled, setResumeEnabled] = useState(true);
   const [jobs, setJobs] = useState<SavedJob[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [jobMutationPending, setJobMutationPending] = useState(false);
+  const savedJobPending = jobMutationPending || busy === 'save';
   // Which saved-job rows show their capture preview. Collapsed by default; the
   // user expands a row (chevron) to verify what text was captured for the AI.
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
@@ -290,16 +292,22 @@ const copyTimer = useRef<number | null>(null);
   }
 
   async function onUseCurrentPage() {
+    if (savedJobPending) return;
+    setJobMutationPending(true);
     setError('');
     try {
       await setActiveJob(null);
       flashFillMsg('Now using the current page for AI answers.');
     } catch {
       setError('Could not update the active job. Try again.');
+    } finally {
+      setJobMutationPending(false);
     }
   }
 
   async function onPickJob(id: string) {
+    if (savedJobPending) return;
+    setJobMutationPending(true);
     setError('');
     try {
       await setActiveJob(id === activeJobId ? null : id);
@@ -310,16 +318,22 @@ const copyTimer = useRef<number | null>(null);
       }
     } catch {
       setError('Could not update the active job. Try again.');
+    } finally {
+      setJobMutationPending(false);
     }
   }
 
   async function onDeleteJob(id: string) {
+    if (savedJobPending) return;
+    setJobMutationPending(true);
     setError('');
     try {
       await deleteJob(id);
       flashFillMsg('Job deleted.');
     } catch {
       setError('Could not delete the job. Try again.');
+    } finally {
+      setJobMutationPending(false);
     }
   }
 
@@ -364,7 +378,7 @@ const copyTimer = useRef<number | null>(null);
   }
 
   async function onSaveJob() {
-    if (!tabId) return;
+    if (!tabId || savedJobPending) return;
     setError('');
     setBusy('save');
     try {
@@ -476,11 +490,11 @@ const copyTimer = useRef<number | null>(null);
         {fillMsg && <div className="status">{fillMsg}</div>}
       </div>
 
-      <div className="block savedjob">
+      <div className="block savedjob" aria-busy={savedJobPending}>
         <button
           className="full"
           onClick={onSaveJob}
-          disabled={busy !== '' || !tabId}
+          disabled={busy !== '' || jobMutationPending || !tabId}
           aria-label={busy === 'save' ? 'Saving job details' : 'Save this job'}
         >
           {busy === 'save' ? 'Saving…' : '💾 Save this job'}
@@ -488,7 +502,7 @@ const copyTimer = useRef<number | null>(null);
         {activeJob ? (
             <div className="jobusing">
               Using a saved job for AI answers &amp; documents.{' '}
-              <button className="ghost jobclear" onClick={onUseCurrentPage}>
+              <button className="ghost jobclear" disabled={savedJobPending} onClick={onUseCurrentPage}>
                 use current page
               </button>
             </div>
@@ -508,6 +522,7 @@ const copyTimer = useRef<number | null>(null);
                   <div className="jobrow">
                     <button
                       className="jobpick"
+                      disabled={savedJobPending}
                       title="Use this posting as the context for AI answers & documents"
                       onClick={() => onPickJob(j.id)}
                       aria-label={`${j.id === activeJobId ? 'Stop using' : 'Use'} ${j.role || 'saved job'}${j.company ? ` at ${j.company}` : ''} as AI context`}
@@ -529,6 +544,7 @@ const copyTimer = useRef<number | null>(null);
                     </button>
                     <button
     className="jobdel"
+    disabled={savedJobPending}
     title="Delete"
   aria-label={`Delete ${j.role || 'saved job'}…`}
   onClick={() => {
