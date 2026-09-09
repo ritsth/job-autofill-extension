@@ -415,8 +415,8 @@ describe('the AI eligibility budget survives the downstream prompt cut', () => {
   // MAX_TEXT. If AI_SCAN_BUDGET ever exceeds MAX_TEXT, that second cut throws
   // away part of the curated selection — and the loss is invisible at the edit
   // site, because both constants look correct in their own file.
-  it('keeps AI_SCAN_BUDGET within the prompt builder cap', () => {
-    expect(AI_SCAN_BUDGET).toBeLessThanOrEqual(MAX_TEXT);
+  it('keeps AI_SCAN_BUDGET equal to the prompt builder cap', () => {
+    expect(AI_SCAN_BUDGET).toBe(MAX_TEXT);
   });
 
   it('reaches the eligibility prompt whole, with nothing trimmed twice', () => {
