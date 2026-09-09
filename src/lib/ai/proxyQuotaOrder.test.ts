@@ -43,6 +43,10 @@ const missingPromptGuard = () =>
   indexOfOrThrow(/Missing "prompt"/, "the 400 'Missing \"prompt\"' guard");
 const oversizeGuard = () =>
   indexOfOrThrow(/prompt\.length > MAX_PROMPT_CHARS/, 'the 413 oversize guard');
+const bodyShapeGuard = () =>
+  indexOfOrThrow(/Array\.isArray\(parsed\)/, 'the parsed-body shape guard');
+const promptTypeGuard = () =>
+  indexOfOrThrow(/typeof prompt !== 'string'/, 'the prompt type guard');
 const bodyRead = () => indexOfOrThrow(/await readBody\(req\)/, 'the readBody call');
 
 describe('#280 — self-rejected requests are not metered', () => {
@@ -58,6 +62,11 @@ describe('#280 — self-rejected requests are not metered', () => {
     // their whole daily allowance — and the shared global ceiling — on
     // requests Vertex never saw.
     expect(oversizeGuard()).toBeLessThan(quotaCall());
+  });
+
+  it('rejects unsupported body shapes and prompt types before consuming quota', () => {
+    expect(bodyShapeGuard()).toBeLessThan(quotaCall());
+    expect(promptTypeGuard()).toBeLessThan(quotaCall());
   });
 
   it('reads the body before consuming quota', () => {
@@ -79,7 +88,14 @@ describe('#280 — self-rejected requests are not metered', () => {
   it('locates distinct markers', () => {
     // Guards the parsing itself: if two regexes collided on one site, the
     // ordering assertions above would compare a position against itself.
-    const positions = [bodyRead(), missingPromptGuard(), oversizeGuard(), quotaCall()];
+    const positions = [
+      bodyRead(),
+      bodyShapeGuard(),
+      promptTypeGuard(),
+      missingPromptGuard(),
+      oversizeGuard(),
+      quotaCall(),
+    ];
     expect(new Set(positions).size).toBe(positions.length);
   });
 });

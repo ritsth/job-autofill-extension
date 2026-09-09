@@ -169,12 +169,24 @@ function send(res, status, body) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
+    let size = 0;
+    let settled = false;
     req.on('data', (chunk) => {
+      if (settled) return;
+      size += Buffer.byteLength(chunk);
+      if (size > 1_000_000) {
+        settled = true;
+        reject(new Error('Request body too large'));
+        return;
+      }
       data += chunk;
-      if (data.length > 1_000_000) reject(new Error('Request body too large'));
     });
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
+    req.on('end', () => {
+      if (!settled) resolve(data);
+    });
+    req.on('error', (err) => {
+      if (!settled) reject(err);
+    });
   });
 }
 
@@ -265,25 +277,34 @@ const server = http.createServer(async (req, res) => {
   // an oversized body that arrives before any quota state is touched.
   // The 5xx paths below are deliberately left metered: they have already
   // invoked Vertex, so real cost was incurred.
-  let args;
+  let raw;
   try {
-    const raw = await readBody(req);
-    let parsed;
-    try {
-      parsed = JSON.parse(raw || '{}');
-    } catch {
-      return send(res, 400, { error: 'Invalid JSON body' });
-    }
-    const { system = '', prompt = '', maxOutputTokens, json, thinking, model } = parsed;
-    if (!prompt) return send(res, 400, { error: 'Missing "prompt"' });
-    if (prompt.length > MAX_PROMPT_CHARS || (system && system.length > MAX_PROMPT_CHARS)) {
-      return send(res, 413, { error: 'Request too large.' });
-    }
-    args = { system, prompt, maxOutputTokens, json, thinking, model };
+    raw = await readBody(req);
   } catch (err) {
     console.error('[proxy] body read failed', err);
     return send(res, 413, { error: 'Request too large.' });
   }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw || '{}');
+  } catch {
+    return send(res, 400, { error: 'Invalid JSON body' });
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return send(res, 400, { error: 'Invalid JSON body' });
+  }
+  const { system = '', prompt = '', maxOutputTokens, json, thinking, model } = parsed;
+  if (typeof prompt !== 'string' || !prompt) {
+    return send(res, 400, { error: 'Missing "prompt"' });
+  }
+  if (typeof system !== 'string') {
+    return send(res, 400, { error: 'Invalid "system"' });
+  }
+  if (prompt.length > MAX_PROMPT_CHARS || system.length > MAX_PROMPT_CHARS) {
+    return send(res, 413, { error: 'Request too large.' });
+  }
+  const args = { system, prompt, maxOutputTokens, json, thinking, model };
 
   if (!isAdmin) {
     let quota;
