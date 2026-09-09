@@ -124,6 +124,8 @@ describe('the /generate handler meters only servable requests (#280)', () => {
   });
 
   it('reads the body before it increments the quota', () => {
+    expect(source).toContain('if (overflowed) return;');
+    expect(source).toContain("data = '';");
     expect(source.indexOf('raw = await readBody(req)')).toBeLessThan(source.indexOf(meterCall));
   });
 

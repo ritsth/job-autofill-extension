@@ -170,12 +170,29 @@ function send(res, status, body) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
+    let bytes = 0;
+    let overflowed = false;
     req.on('data', (chunk) => {
+      // Keep the stream flowing after overflow so Node drains the request and
+      // can finish the 413 response, but never retain another byte. Without
+      // this guard an authenticated client can keep growing `data` after the
+      // promise has already rejected.
+      if (overflowed) return;
+      bytes += Buffer.byteLength(chunk);
+      if (bytes > 1_000_000) {
+        overflowed = true;
+        data = '';
+        reject(new Error('Request body too large'));
+        return;
+      }
       data += chunk;
-      if (data.length > 1_000_000) reject(new Error('Request body too large'));
     });
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
+    req.on('end', () => {
+      if (!overflowed) resolve(data);
+    });
+    req.on('error', (error) => {
+      if (!overflowed) reject(error);
+    });
   });
 }
 
