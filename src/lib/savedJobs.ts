@@ -7,7 +7,12 @@
 const STORAGE_KEY = 'savedJobs';
 /** The saved-jobs list is capped here; adding past it drops the oldest. */
 export const MAX_JOBS = 20;
-/** Captured posting text is capped at this many characters before storage. */
+/**
+ * Captured posting text is capped at this many characters before storage, and
+ * every prompt builder in ./ai/prompts.ts caps the job text it embeds at the
+ * same number. `AI_SCAN_BUDGET` in ../content/sponsorship.ts is derived from
+ * this, so raising it also widens the AI eligibility read.
+ */
 export const MAX_TEXT = 12_000;
 
 /** True when `text` is longer than the cap and would be trimmed on save. */

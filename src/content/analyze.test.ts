@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { buildJobEligibilityPrompt } from '../lib/ai/prompts';
+import { MAX_TEXT } from '../lib/savedJobs';
 import {
+  AI_SCAN_BUDGET,
   addBadgeDismissListener,
   analyze,
   badgeSignature,
@@ -403,5 +406,28 @@ describe('analyze — experience extraction', () => {
   it('leaves experience null when the posting states none', () => {
     const a = analyze('A fun role for anyone excited about the mission.');
     expect(a.experience.required).toBeNull();
+  });
+});
+
+describe('the AI eligibility budget survives the downstream prompt cut', () => {
+  // focusEligibilityText spends real effort choosing WHICH text fits in
+  // AI_SCAN_BUDGET, and buildJobEligibilityPrompt then slices the same text to
+  // MAX_TEXT. If AI_SCAN_BUDGET ever exceeds MAX_TEXT, that second cut throws
+  // away part of the curated selection — and the loss is invisible at the edit
+  // site, because both constants look correct in their own file.
+  it('keeps AI_SCAN_BUDGET equal to the prompt builder cap', () => {
+    expect(AI_SCAN_BUDGET).toBe(MAX_TEXT);
+  });
+
+  it('reaches the eligibility prompt whole, with nothing trimmed twice', () => {
+    // End to end over the real call path's two caps: text selected at budget
+    // must appear in the built prompt unshortened.
+    const posting =
+      'We sponsor H-1B visas for this role. '.repeat(50) +
+      'Filler about the team and the office. '.repeat(Math.ceil(AI_SCAN_BUDGET / 20));
+    const focused = focusEligibilityText(posting);
+
+    expect(focused.length).toBe(AI_SCAN_BUDGET);
+    expect(buildJobEligibilityPrompt(focused).prompt).toContain(focused);
   });
 });
