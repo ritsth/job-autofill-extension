@@ -46,13 +46,28 @@ jobs:
           if-no-files-found: error
 
   server:
-    name: Server syntax check
+    name: Server install · syntax check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
+          # Deliberately the same version server/package.json declares
+          # (engines.node ">=20") and .nvmrc pins. Raising it here without
+          # raising engines.node would silently disarm the --engine-strict
+          # check below.
           node-version: 20
-      # The proxy is a single ESM file with no build step — a syntax check is the
-      # right gate (does not execute or need dependencies installed).
-      - run: node --check server/index.js
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      # The proxy has no build step, but it does have dependencies, and
+      # dependabot watches /server weekly. Installing them is what makes this
+      # job able to fail on a bump that the declared Node cannot run:
+      # --engine-strict turns npm's EBADENGINE warning into a non-zero exit.
+      - run: npm ci --engine-strict
+        working-directory: server
+
+      - run: node --check index.js
+        working-directory: server
+      - run: node --check classify.js
+        working-directory: server
