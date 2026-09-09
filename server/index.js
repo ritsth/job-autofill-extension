@@ -250,11 +250,42 @@ const server = http.createServer(async (req, res) => {
     return send(res, 401, { error: 'Sign in to use the managed AI.' });
   }
   const isAdmin = safeEqual(token, PROXY_TOKEN);
+  let user = null;
   if (!isAdmin) {
-    const user = await verifyGoogleToken(token);
+    user = await verifyGoogleToken(token);
     if (!user) {
       return send(res, 401, { error: 'Sign in to use the managed AI.' });
     }
+  }
+
+  // Validate the request before metering it. A body we reject at 400/413 never
+  // reaches Vertex, so charging a daily slot for it would spend the user's
+  // allowance — and the shared global ceiling — on work that was never done.
+  // readBody caps the stream at 1 MB independently, so this stays bounded for
+  // an oversized body that arrives before any quota state is touched.
+  // The 5xx paths below are deliberately left metered: they have already
+  // invoked Vertex, so real cost was incurred.
+  let args;
+  try {
+    const raw = await readBody(req);
+    let parsed;
+    try {
+      parsed = JSON.parse(raw || '{}');
+    } catch {
+      return send(res, 400, { error: 'Invalid JSON body' });
+    }
+    const { system = '', prompt = '', maxOutputTokens, json, thinking, model } = parsed;
+    if (!prompt) return send(res, 400, { error: 'Missing "prompt"' });
+    if (prompt.length > MAX_PROMPT_CHARS || (system && system.length > MAX_PROMPT_CHARS)) {
+      return send(res, 413, { error: 'Request too large.' });
+    }
+    args = { system, prompt, maxOutputTokens, json, thinking, model };
+  } catch (err) {
+    console.error('[proxy] body read failed', err);
+    return send(res, 413, { error: 'Request too large.' });
+  }
+
+  if (!isAdmin) {
     let quota;
     try {
       quota = await checkAndIncrementQuota(user.sub, user.email);
@@ -272,14 +303,6 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    const raw = await readBody(req);
-    const { system = '', prompt = '', maxOutputTokens, json, thinking, model } = JSON.parse(raw || '{}');
-    if (!prompt) return send(res, 400, { error: 'Missing "prompt"' });
-    if (prompt.length > MAX_PROMPT_CHARS || (system && system.length > MAX_PROMPT_CHARS)) {
-      return send(res, 413, { error: 'Request too large.' });
-    }
-
-    const args = { system, prompt, maxOutputTokens, json, thinking, model };
     // Gemini occasionally returns an empty candidate for no real reason (a
     // transient hiccup). One retry almost always succeeds and saves the user a
     // manual re-run. The quota was already counted above, so the retry is free
