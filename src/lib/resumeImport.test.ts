@@ -10,6 +10,15 @@ describe('parseLooseJson', () => {
     expect(parseLooseJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
   });
 
+  it.each(['', '```json\n', '```JSON\r\n', 'Here is the JSON:\n```json\n'])(
+    'preserves code-fence text inside JSON values with wrapper %j',
+    (prefix) => {
+      const data = { description: 'Wrote ```json examples``` and ```JSON samples```.' };
+      const raw = `${prefix}${JSON.stringify(data)}${prefix ? '\n```' : ''}`;
+      expect(parseLooseJson(raw)).toEqual(data);
+    },
+  );
+
   it('ignores prose before and after the object', () => {
     expect(parseLooseJson('Sure! Here is the JSON:\n{"a":1}\nHope that helps.')).toEqual({ a: 1 });
   });
@@ -33,6 +42,13 @@ describe('parseLooseJson', () => {
     expect(parseLooseJson(raw)).toEqual({ a: 1, b: 2 });
   });
 
+  it.each([
+    ['```json\n{"a":1,"summary":"partial\n```', 'partial '],
+    ['```json{"a":1,"summary":"partial```', 'partial'],
+  ])('still repairs a truncated JSON object before a closing fence: %j', (raw, summary) => {
+    expect(parseLooseJson(raw)).toEqual({ a: 1, summary });
+  });
+
   it('returns null when nothing is parseable', () => {
     expect(parseLooseJson('no json here at all')).toBeNull();
   });
@@ -46,9 +62,20 @@ describe('extractJsonObject', () => {
   it('does not stop at a brace inside a string', () => {
     expect(extractJsonObject('{"a":"has } brace"}')).toBe('{"a":"has } brace"}');
   });
+
+  it('returns JSON string contents unchanged', () => {
+    const raw = JSON.stringify({ description: 'Documented ```json {"ok": true} ``` examples.' });
+    expect(extractJsonObject(raw)).toBe(raw);
+  });
 });
 
 describe('parseResumeJson', () => {
+  it('preserves literal code fences in work descriptions', () => {
+    const description = 'Wrote ```json examples``` for the API documentation.';
+    const parsed = parseResumeJson(JSON.stringify({ work: [{ title: 'Engineer', description }] }));
+    expect(parsed.work[0].description).toBe(description);
+  });
+
   it('maps a truncated resume response to partial data instead of throwing', () => {
     const raw =
       '{"personal":{"firstName":"Ada","lastName":"Lovelace","email":"ada@x.com"},' +

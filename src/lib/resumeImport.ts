@@ -78,15 +78,14 @@ export function parseResumeJson(raw: string): ParsedResume {
  * `{` onward and lets {@link parseLooseJson} repair it.
  */
 export function extractJsonObject(raw: string): string | null {
-  const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '');
-  const start = cleaned.indexOf('{');
+  const start = raw.indexOf('{');
   if (start === -1) return null;
 
   const stack: string[] = [];
   let inStr = false;
   let esc = false;
-  for (let i = start; i < cleaned.length; i++) {
-    const c = cleaned[i];
+  for (let i = start; i < raw.length; i++) {
+    const c = raw[i];
     if (inStr) {
       if (esc) esc = false;
       else if (c === '\\') esc = true;
@@ -97,11 +96,12 @@ export function extractJsonObject(raw: string): string | null {
     else if (c === '{' || c === '[') stack.push(c === '{' ? '}' : ']');
     else if (c === '}' || c === ']') {
       stack.pop();
-      if (stack.length === 0) return cleaned.slice(start, i + 1);
+      // Skip wrappers by slicing, without removing fence text inside strings.
+      if (stack.length === 0) return raw.slice(start, i + 1);
     }
   }
-  // Unbalanced → truncated response; hand the tail to the repair step.
-  return cleaned.slice(start);
+  // Unbalanced → keep the existing fence cleanup for truncation recovery.
+  return raw.slice(start).replace(/```json/gi, '').replace(/```/g, '');
 }
 
 /** Replaces raw control characters with spaces — models sometimes emit an
