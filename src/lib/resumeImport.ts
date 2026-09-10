@@ -73,20 +73,21 @@ export function parseResumeJson(raw: string): ParsedResume {
 /**
  * Extracts the JSON object from a model response that may be wrapped in code
  * fences or surrounded by prose. Scans from the first `{` tracking string/escape
- * state to find the matching close brace, so trailing commentary is dropped. If
- * the response was truncated (never balances), returns everything from the first
- * `{` onward and lets {@link parseLooseJson} repair it.
+ * state to find the matching close brace, so an opening fence (before the first
+ * `{`) and trailing commentary or closing fence are both dropped without editing
+ * the object itself — a literal ``` inside a string value survives. If the
+ * response was truncated (never balances), returns everything from the first `{`
+ * onward, minus a dangling fence, and lets {@link parseLooseJson} repair it.
  */
 export function extractJsonObject(raw: string): string | null {
-  const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '');
-  const start = cleaned.indexOf('{');
+  const start = raw.indexOf('{');
   if (start === -1) return null;
 
   const stack: string[] = [];
   let inStr = false;
   let esc = false;
-  for (let i = start; i < cleaned.length; i++) {
-    const c = cleaned[i];
+  for (let i = start; i < raw.length; i++) {
+    const c = raw[i];
     if (inStr) {
       if (esc) esc = false;
       else if (c === '\\') esc = true;
@@ -97,11 +98,13 @@ export function extractJsonObject(raw: string): string | null {
     else if (c === '{' || c === '[') stack.push(c === '{' ? '}' : ']');
     else if (c === '}' || c === ']') {
       stack.pop();
-      if (stack.length === 0) return cleaned.slice(start, i + 1);
+      if (stack.length === 0) return raw.slice(start, i + 1);
     }
   }
-  // Unbalanced → truncated response; hand the tail to the repair step.
-  return cleaned.slice(start);
+  // Unbalanced → truncated response; hand the tail to the repair step. Only a
+  // trailing fence is structural noise here: inside the object it would have to
+  // sit in a string value, which the scan above never left.
+  return raw.slice(start).replace(/\s*```\s*$/, '');
 }
 
 /** Replaces raw control characters with spaces — models sometimes emit an

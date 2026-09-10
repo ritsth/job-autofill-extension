@@ -46,6 +46,20 @@ describe('extractJsonObject', () => {
   it('does not stop at a brace inside a string', () => {
     expect(extractJsonObject('{"a":"has } brace"}')).toBe('{"a":"has } brace"}');
   });
+
+  it('keeps a literal code fence inside a string value', () => {
+    const raw = JSON.stringify({ a: 'Wrote ```json examples``` for the docs.' });
+    expect(extractJsonObject(raw)).toBe(raw);
+  });
+
+  it('drops an outer fence without touching a fence inside a string value', () => {
+    const inner = JSON.stringify({ a: 'see ```json here```' });
+    expect(extractJsonObject('```json\n' + inner + '\n```')).toBe(inner);
+  });
+
+  it('drops a dangling closing fence from a truncated response', () => {
+    expect(extractJsonObject('```json\n{"a":"unterminated\n```')).toBe('{"a":"unterminated');
+  });
 });
 
 describe('parseResumeJson', () => {
@@ -56,5 +70,11 @@ describe('parseResumeJson', () => {
     const parsed = parseResumeJson(raw);
     expect(parsed.personal.firstName).toBe('Ada');
     expect(parsed.work[0].company).toBe('Acme');
+  });
+
+  it('preserves a Markdown example quoted in a work description', () => {
+    const description = 'Wrote ```json examples``` for the API documentation.';
+    const raw = JSON.stringify({ work: [{ title: 'Engineer', description }] });
+    expect(parseResumeJson(raw).work[0].description).toBe(description);
   });
 });
