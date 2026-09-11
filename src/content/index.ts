@@ -143,13 +143,13 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse
 });
 
 // --- AI answer buttons ---
-// Reconcile the page to exactly one button immediately after each open question.
+// Reconcile the page to exactly one button per open question.
 // We do NOT mark the textarea (an attribute or node identity the host framework
 // would strip on re-render): Oracle/Workday-style forms re-render the field
 // continuously, which previously made every observer cycle append another button
 // while the old ones orphaned — a runaway pile-up. Keying on structure instead
-// (button right after its textarea) is churn-proof: strays are removed, gaps are
-// filled, and the count can't exceed the number of current questions.
+// (which question a button belongs to) is churn-proof: strays are removed, gaps
+// are filled, and the count can't exceed the number of current questions.
 function injectQuestionButtons(): void {
   // Suspend the observer so our own DOM writes below don't re-trigger this pass.
   const wasObserving = questionsOn;
@@ -158,14 +158,33 @@ function injectQuestionButtons(): void {
   const questions = findOpenQuestions();
   const wanted = new Set<Element>(questions.map((q) => q.el));
 
-  // Group OUR buttons by the current open-question textarea they sit right after.
-  // Anything else — a button orphaned by a re-render, or a stray — is dropped.
+  // Group OUR buttons by the open question they belong to: the NEAREST wanted
+  // question that precedes the button among its OWN siblings (not necessarily
+  // the immediate previous sibling). A strict immediate-sibling check broke the
+  // instant a host framework inserted anything else between a question and its
+  // button — a live character counter re-rendered on every keystroke, on a
+  // page like Oracle Cloud Recruiting, was enough: the button's
+  // previousElementSibling became the counter instead of the textarea, so it
+  // read as a stray and got removed while a fresh button was added right after
+  // the textarea, both firing again on the very next keystroke — exactly the
+  // one-button-per-character pile-up this function exists to prevent. Walking
+  // back past intervening siblings survives that, since it stops only at
+  // another wanted question (this button belongs to whichever wanted question
+  // sits closest before it, wherever it ended up) or another owned button
+  // (whose own walk already claims everything before it).
   const byQuestion = new Map<Element, HTMLButtonElement[]>();
   for (const btn of document.querySelectorAll<HTMLButtonElement>(`.${BUTTON_CLASS}`)) {
     if (!ownedButtons.has(btn)) continue; // ignore host elements sharing the class
-    const prev = btn.previousElementSibling;
-    if (prev && wanted.has(prev)) {
-      (byQuestion.get(prev) ?? byQuestion.set(prev, []).get(prev)!).push(btn);
+    let owner: Element | null = null;
+    for (let sib = btn.previousElementSibling; sib; sib = sib.previousElementSibling) {
+      if (wanted.has(sib)) {
+        owner = sib;
+        break;
+      }
+      if (sib instanceof HTMLButtonElement && ownedButtons.has(sib)) break;
+    }
+    if (owner) {
+      (byQuestion.get(owner) ?? byQuestion.set(owner, []).get(owner)!).push(btn);
     } else {
       btn.remove();
     }
