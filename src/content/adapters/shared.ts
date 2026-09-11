@@ -4,7 +4,9 @@
 
 import type { Profile } from '../../lib/profile';
 
-export type FillableField = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+// No <select>: "Fill this page" never autofills a dropdown (see
+// applyStandardFills), so nothing downstream needs to handle one.
+export type FillableField = HTMLInputElement | HTMLTextAreaElement;
 
 // Zero-width characters that JS `\s` does NOT match: ZWSP, ZWNJ, ZWJ, word
 // joiner, and the BOM / zero-width no-break space. They turn up in scraped
@@ -112,114 +114,10 @@ export function fillInput(el: HTMLInputElement | HTMLTextAreaElement, value: str
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-/** One `<option>` reduced to the two strings the matcher reads. */
-export interface OptionText {
-  text: string;
-  value: string;
-}
-
-/**
- * True when `needle` occurs inside `haystack` as a self-contained phrase.
- *
- * Plain `includes` is what let a dropdown be answered with the OPPOSITE of the
- * profile value: "no" is a substring of "not at this time", and "us citizen" is
- * a substring of "non-us citizen". A bare `\b` boundary doesn't help with the
- * second one — the hyphen in "non-us" IS a word boundary, so `\bus citizen\b`
- * still matches the negated option.
- *
- * So a neighbouring character disqualifies a match when it's alphanumeric OR a
- * hyphen: alphanumeric catches "no" inside "not", and the hyphen catches a
- * negating prefix. Other punctuation stays allowed, which is what keeps the
- * common elaborated option working — "Yes, I require sponsorship" is still
- * matched by "Yes", because the comma is a legitimate phrase end.
- */
-function containsPhrase(haystack: string, needle: string): boolean {
-  // An empty needle is never a match. This is what keeps a blank placeholder row
-  // ("<option value=''></option>") from being selected: the old loop tested
-  // `target.includes(text)`, which is unconditionally true for empty option
-  // text, so a select opening with one had its placeholder chosen outright and
-  // the field still counted as filled.
-  if (!needle) return false;
-  const blocks = (c: string) => c !== '' && /[a-z0-9-]/.test(c);
-  for (let from = 0; from <= haystack.length; ) {
-    const i = haystack.indexOf(needle, from);
-    if (i === -1) return false;
-    const before = i === 0 ? '' : haystack[i - 1];
-    const after = haystack[i + needle.length] ?? '';
-    if (!blocks(before) && !blocks(after)) return true;
-    // Overlapping occurrences matter: "no" appears twice in "no-nonsense".
-    from = i + 1;
-  }
-  return false;
-}
-
-/**
- * Index of the option best matching `rawTarget`, or -1 when none matches
- * confidently.
- *
- * Exact matches are resolved across EVERY option before any fuzzy match is
- * considered. The old single pass took the first option satisfying either test
- * in DOM order, so an exact "No" sitting below "Not at this time" never won —
- * correctness depended purely on the order the site happened to list options in.
- *
- * Returning -1 rather than guessing is deliberate: these dropdowns include work
- * authorization and sponsorship, where a wrong answer is a false statement on an
- * application. An unanswered select is visible to the applicant; a confidently
- * wrong one is not.
- *
- * Split out of fillSelect so it can be unit-tested — the test env is `node` with
- * no DOM, so anything touching real <option> elements is untestable.
- */
-export function chooseOption(rawTarget: string, options: readonly OptionText[]): number {
-  const target = normalize(rawTarget);
-  if (!target) return -1;
-
-  const norm = options.map((o) => ({ text: normalize(o.text), value: normalize(o.value) }));
-
-  for (let i = 0; i < norm.length; i++) {
-    if (norm[i].text === target || norm[i].value === target) return i;
-  }
-
-  // A fuzzy match only counts when it is the ONLY one. Two options can both
-  // contain the target — a work-authorization dropdown offering "Yes, I am
-  // authorized to work in the US" and "Yes, but I require sponsorship" is
-  // matched twice by a profile value of "Yes" — and picking the earlier one
-  // would decide a sponsorship answer by DOM order, which is the whole failure
-  // this function exists to prevent. Ambiguous means unanswered.
-  let candidate = -1;
-  for (let i = 0; i < norm.length; i++) {
-    const { text } = norm[i];
-    if (containsPhrase(text, target) || containsPhrase(target, text)) {
-      if (candidate !== -1) return -1;
-      candidate = i;
-    }
-  }
-
-  return candidate;
-}
-
-/** Selects the option whose text/value best matches `value`. */
-export function fillSelect(el: HTMLSelectElement, value: string): boolean {
-  const opts = Array.from(el.options);
-  const i = chooseOption(
-    value,
-    opts.map((o) => ({ text: o.textContent ?? '', value: o.value })),
-  );
-  if (i === -1) return false;
-  // selectedIndex, not `el.value = …`: the value setter selects the FIRST option
-  // carrying that value, so a form listing two options with the same value would
-  // have the wrong one selected.
-  el.selectedIndex = i;
-  el.dispatchEvent(new Event('change', { bubbles: true }));
-  return true;
-}
-
 interface Rule {
   test: RegExp;
   /** Returns the value to fill, or '' to skip. */
   value: (p: Profile) => string;
-  /** Avoid filling free-text essays from short rules. */
-  selectOk?: boolean;
 }
 
 // Ordered: earlier, more specific rules win.
@@ -259,14 +157,13 @@ export const RULES: Rule[] = [
     test: /^(?!.*\bcity\b[^.!?]{0,30}\b(?:explore|visit|travel)\b)(?!.*\b(?:our|the company.?s)\s+(?:office|headquarters|location)\b).*\bcity\b/,
     value: (p) => p.personal.city,
   },
-  { test: /\b(state|province|region)\b/, value: (p) => p.personal.state, selectOk: true },
+  { test: /\b(state|province|region)\b/, value: (p) => p.personal.state },
   // "What is your favorite country to visit and why?" asks for a travel wish,
   // not a residence. "favorite" is the sole trigger — a plain "What is your
   // country?" carries none of it and must still fill.
   {
     test: /^(?!.*\bfavorite\b[^.!?]{0,15}\bcountry\b).*\bcountry\b/,
     value: (p) => p.personal.country,
-    selectOk: true,
   },
   // These two read the applicant's CURRENT employer/title, but their keywords
   // flip referent inside question prose: in "Why are you interested in this
@@ -305,29 +202,24 @@ export const RULES: Rule[] = [
     // is still a word character.
     test: /\b(work\s*authoriz(?:ation|ed)|authoriz(?:ation|ed).*work|legally.*work|eligible.*work)\b/,
     value: (p) => p.preferences.workAuthorization,
-    selectOk: true,
   },
   {
     // Likewise, consume the common sponsorship suffix instead of asking for a
     // word boundary in the middle of the word.
     test: /\b(sponsor(?:ship)?|visa\s*sponsor(?:ship)?|require.*sponsor(?:ship)?)\b/,
     value: (p) => p.preferences.requiresSponsorship,
-    selectOk: true,
   },
 ];
 
-function matchRule(label: string, el: FillableField): Rule | undefined {
-  // Standard rules fill short, known values (name, title, company…). A textarea
-  // is always a free-text/essay question, so no standard rule applies — e.g.
-  // "describe your role" must NOT be filled with the job title. This also lets
-  // findOpenQuestions give every textarea an AI-answer button.
+function matchRule(label: string, el: HTMLInputElement | HTMLTextAreaElement): Rule | undefined {
+  // Standard rules fill short, known values (name, title, company…) into a plain
+  // <input>. A <textarea> is always a free-text/essay question, so no standard
+  // rule applies — e.g. "describe your role" must NOT be filled with the job
+  // title. This also lets findOpenQuestions give every textarea an AI-answer
+  // button. <select> and combobox-style <input> dropdowns are excluded by the
+  // caller (applyStandardFills / findOpenQuestions), not here.
   if (el instanceof HTMLTextAreaElement) return undefined;
-  for (const rule of RULES) {
-    if (!rule.test.test(label)) continue;
-    if (el instanceof HTMLSelectElement && !rule.selectOk) continue;
-    return rule;
-  }
-  return undefined;
+  return RULES.find((rule) => rule.test.test(label));
 }
 
 export interface FillSummary {
@@ -337,11 +229,19 @@ export interface FillSummary {
   alreadyFilled: number;
 }
 
-/** Fills every recognised, empty field within `root`. */
+/**
+ * Fills every recognised, empty field within `root`.
+ *
+ * Dropdowns are never touched — not a native <select>, and not an <input> that
+ * is really a combobox widget. Their options include work-authorization,
+ * citizenship and sponsorship, where an autofilled wrong answer is a false
+ * statement on an application; the applicant picks from the list themselves.
+ * A <select> is not even queried; a combobox <input> is filtered out below.
+ */
 export function applyStandardFills(profile: Profile, root: ParentNode = document): FillSummary {
   const fields = Array.from(
-    root.querySelectorAll<FillableField>('input, textarea, select'),
-  ).filter(isFillable);
+    root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea'),
+  ).filter((el) => isFillable(el) && !(el instanceof HTMLInputElement && isCombobox(el)));
 
   let filled = 0;
   let total = 0;
@@ -355,16 +255,12 @@ export function applyStandardFills(profile: Profile, root: ParentNode = document
     if (!value) continue;
     total++;
 
-    if (el instanceof HTMLSelectElement) {
-      if (fillSelect(el, value)) filled++;
-    } else {
-      if (el.value.trim()) {
-        alreadyFilled++;
-        continue; // don't clobber existing input
-      }
-      fillInput(el, value);
-      filled++;
+    if (el.value.trim()) {
+      alreadyFilled++;
+      continue; // don't clobber existing input
     }
+    fillInput(el, value);
+    filled++;
   }
 
   return { filled, total, alreadyFilled };
