@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { timeAgo } from './Popup';
+import { timeAgo } from './notices';
 
 // timeAgo is relative to Date.now(), so pin a fixed "now" and express each case
 // as an offset back from it.

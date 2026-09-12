@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fillNotice } from './Popup';
+import { fillNotice } from './notices';
 
 describe('fillNotice', () => {
   it('reads unchanged when nothing was already filled', () => {

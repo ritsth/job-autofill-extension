@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { saveJobNotice } from './Popup';
+import { saveJobNotice } from './notices';
 import { MAX_JOBS, MAX_TEXT } from '../lib/savedJobs';
 
 describe('saveJobNotice', () => {

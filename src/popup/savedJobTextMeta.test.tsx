@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MAX_TEXT } from '../lib/savedJobs';
-import { SavedJobTextMeta } from './Popup';
+import { SavedJobTextMeta } from './SavedJobTextMeta';
 
 describe('SavedJobTextMeta', () => {
   it('shows an ordinary count below the storage cap', () => {
