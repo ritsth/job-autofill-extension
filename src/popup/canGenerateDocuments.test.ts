@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canGenerateDocuments } from './Popup';
+import { canGenerateDocuments } from './notices';
 
 describe('canGenerateDocuments', () => {
   it('is true only when both company and role have non-whitespace text', () => {
