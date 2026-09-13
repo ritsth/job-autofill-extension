@@ -109,7 +109,10 @@ export class GeminiProvider implements AIProvider {
 // immediately" rather than "a real answer got clipped near the end" — chosen
 // well under the shortest legitimate reply this codebase asks for (the
 // free-text answer prompt's own floor is "about 4-6 sentences").
-const MIN_VIABLE_ANSWER_LENGTH = 40;
+//
+// Exported so src/lib/ai/minViableAnswerLength.test.ts can hold it equal to
+// server/classify.js's copy, which the standalone proxy cannot import (#316).
+export const MIN_VIABLE_ANSWER_LENGTH = 40;
 
 interface GeminiResponse {
   candidates?: Array<{
