@@ -20,6 +20,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { VertexAI } from '@google-cloud/vertexai';
 import { Firestore, FieldValue } from '@google-cloud/firestore';
 import { classifyFinishReason } from './classify.js';
+import { parseGenerateBody } from './request.js';
 
 const PORT = process.env.PORT || 8080;
 const PROJECT = process.env.GOOGLE_CLOUD_PROJECT;
@@ -169,12 +170,29 @@ function send(res, status, body) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
+    let bytes = 0;
+    let overflowed = false;
     req.on('data', (chunk) => {
+      // Keep the stream flowing after overflow so Node drains the request and
+      // can finish the 413 response, but never retain another byte. Without
+      // this guard an authenticated client can keep growing `data` after the
+      // promise has already rejected.
+      if (overflowed) return;
+      bytes += Buffer.byteLength(chunk);
+      if (bytes > 1_000_000) {
+        overflowed = true;
+        data = '';
+        reject(new Error('Request body too large'));
+        return;
+      }
       data += chunk;
-      if (data.length > 1_000_000) reject(new Error('Request body too large'));
     });
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
+    req.on('end', () => {
+      if (!overflowed) resolve(data);
+    });
+    req.on('error', (error) => {
+      if (!overflowed) reject(error);
+    });
   });
 }
 
@@ -241,20 +259,40 @@ const server = http.createServer(async (req, res) => {
     return send(res, 404, { error: 'Not found' });
   }
 
-  // Auth + quota. Admin token (if configured) bypasses sign-in and metering;
-  // otherwise the bearer must be a valid Google sign-in token and the user must
-  // be under their daily limit.
+  // Auth, then the request body, then quota. Admin token (if configured)
+  // bypasses sign-in and metering; otherwise the bearer must be a valid Google
+  // sign-in token and the user must be under their daily limit.
   const auth = req.headers['authorization'] || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   if (!token) {
     return send(res, 401, { error: 'Sign in to use the managed AI.' });
   }
   const isAdmin = safeEqual(token, PROXY_TOKEN);
+  let user = null;
   if (!isAdmin) {
-    const user = await verifyGoogleToken(token);
+    user = await verifyGoogleToken(token);
     if (!user) {
       return send(res, 401, { error: 'Sign in to use the managed AI.' });
     }
+  }
+
+  // Read and validate before metering (#280). A request the server itself
+  // rejects at 400/413 never reaches Vertex, so charging a daily slot for it
+  // spends the user's allowance — and the shared global ceiling — on nothing.
+  // The 5xx paths below are deliberately different: they have already invoked
+  // Vertex, so real cost was incurred and the increment stands.
+  let raw;
+  try {
+    raw = await readBody(req);
+  } catch (e) {
+    console.error('[proxy] body read failed', e);
+    return send(res, 413, { error: 'Request too large.' });
+  }
+  const parsed = parseGenerateBody(raw, MAX_PROMPT_CHARS);
+  if (!parsed.ok) return send(res, parsed.status, { error: parsed.error });
+  const args = parsed.args;
+
+  if (!isAdmin) {
     let quota;
     try {
       quota = await checkAndIncrementQuota(user.sub, user.email);
@@ -272,14 +310,6 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    const raw = await readBody(req);
-    const { system = '', prompt = '', maxOutputTokens, json, thinking, model } = JSON.parse(raw || '{}');
-    if (!prompt) return send(res, 400, { error: 'Missing "prompt"' });
-    if (prompt.length > MAX_PROMPT_CHARS || (system && system.length > MAX_PROMPT_CHARS)) {
-      return send(res, 413, { error: 'Request too large.' });
-    }
-
-    const args = { system, prompt, maxOutputTokens, json, thinking, model };
     // Gemini occasionally returns an empty candidate for no real reason (a
     // transient hiccup). One retry almost always succeeds and saves the user a
     // manual re-run. The quota was already counted above, so the retry is free
