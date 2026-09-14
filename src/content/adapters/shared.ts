@@ -295,14 +295,27 @@ const QUESTION_MIN_WORDS = 4;
 /**
  * Attributes that mark an <input> as the text box of a dropdown widget rather
  * than a free-text field. A native <select> is never a candidate (it isn't in
- * findOpenQuestions' selector), but React combobox libraries render a real
+ * findOpenQuestions' selector), but a combobox library renders a real
  * <input type="text"> with a styled option list — and its label is usually a
  * question, so it would otherwise pass looksLikeQuestion.
  *
- * `list` is the native pairing with <datalist>; the rest are the ARIA combobox
- * pattern, which any of these widgets sets in order to be operable at all.
+ * `list` is the native pairing with <datalist>; the rest cover both halves of
+ * the WAI-ARIA combobox pattern that any such widget needs to be operable at
+ * all — `aria-haspopup`/`aria-expanded`/`aria-autocomplete` announce that
+ * opening it reveals a list, while `aria-controls`/`aria-owns` point AT that
+ * list and `aria-activedescendant` tracks which of its options is highlighted.
+ * A widget only needs one half depending on exactly when it wires the
+ * attributes up, so this checks for either.
  */
-const COMBOBOX_ATTRS = ['aria-haspopup', 'aria-autocomplete', 'aria-expanded', 'aria-controls', 'list'];
+const COMBOBOX_ATTRS = [
+  'aria-haspopup',
+  'aria-autocomplete',
+  'aria-expanded',
+  'aria-controls',
+  'aria-owns',
+  'aria-activedescendant',
+  'list',
+];
 
 /**
  * Whether an input is really a dropdown in disguise. Pure so the rule is
@@ -321,12 +334,39 @@ export function isComboboxLike(el: {
   return el.hasComboboxAncestor;
 }
 
+/**
+ * Element.closest(), but continuing across a shadow root boundary into its
+ * host instead of stopping there. Many component libraries (Workday's
+ * included, per a live report) render a form control's shadow tree separately
+ * from the role that marks the whole widget as a combobox, which sits on a
+ * light-DOM ancestor `closest()` can never see from inside the shadow tree —
+ * `getRootNode()` returns the ShadowRoot itself, whose `.host` is the element
+ * to keep walking from. A plain (non-shadow) tree behaves exactly like
+ * `closest()`, since `getRootNode()` there is just `document`.
+ */
+function closestAcrossShadowRoots(start: Element, selector: string): Element | null {
+  let node: Element | null = start;
+  while (node) {
+    if (node.matches(selector)) return node;
+    const parentEl: Element | null = node.parentElement;
+    if (parentEl) {
+      node = parentEl;
+      continue;
+    }
+    const root = node.getRootNode();
+    node = root instanceof ShadowRoot ? root.host : null;
+  }
+  return null;
+}
+
 function isCombobox(el: HTMLInputElement): boolean {
   return isComboboxLike({
     role: el.getAttribute('role'),
     attributeNames: el.getAttributeNames(),
-    // Widgets that put the role on a wrapper instead of the input itself.
-    hasComboboxAncestor: el.closest('[role="combobox"], [role="listbox"]') !== null,
+    // Widgets that put the role on a wrapper instead of the input itself —
+    // including one on the other side of a shadow root.
+    hasComboboxAncestor:
+      closestAcrossShadowRoots(el, '[role="combobox"], [role="listbox"]') !== null,
   });
 }
 
