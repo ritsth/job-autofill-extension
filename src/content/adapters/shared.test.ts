@@ -349,7 +349,14 @@ describe('isComboboxLike — dropdowns are never autofilled or given an AI-answe
   });
 
   it('detects the ARIA combobox attributes', () => {
-    for (const attr of ['aria-haspopup', 'aria-autocomplete', 'aria-expanded', 'aria-controls']) {
+    for (const attr of [
+      'aria-haspopup',
+      'aria-autocomplete',
+      'aria-expanded',
+      'aria-controls',
+      'aria-owns',
+      'aria-activedescendant',
+    ]) {
       expect(isComboboxLike({ ...plain, attributeNames: ['type', attr] })).toBe(true);
     }
   });
