@@ -294,13 +294,19 @@ const QUESTION_MIN_WORDS = 4;
 
 /**
  * Attributes that mark an <input> as the text box of a dropdown widget rather
- * than a free-text field. A native <select> is never a candidate (it isn't in
- * findOpenQuestions' selector), but React combobox libraries render a real
- * <input type="text"> with a styled option list — and its label is usually a
- * question, so it would otherwise pass looksLikeQuestion.
+ * than a free-text field, on their PRESENCE alone. A native <select> is never a
+ * candidate (it isn't in findOpenQuestions' selector), but a combobox library
+ * renders a real <input type="text"> with a styled option list — and its label
+ * is usually a question, so it would otherwise pass looksLikeQuestion.
  *
- * `list` is the native pairing with <datalist>; the rest are the ARIA combobox
- * pattern, which any of these widgets sets in order to be operable at all.
+ * `list` is the native pairing with <datalist>; `aria-haspopup`/`aria-expanded`/
+ * `aria-autocomplete`/`aria-controls` are the WAI-ARIA combobox pattern's own
+ * "opening this reveals a list" signals. Deliberately NOT here:
+ * `aria-owns`/`aria-activedescendant` — a genuinely free-text field can carry
+ * either for an unrelated reason (e.g. spellcheck or mention-autocomplete
+ * suggestions layered on top of normal typing), so presence alone over-matches;
+ * referencesListboxRole() below only trusts them once the element they point AT
+ * actually has a listbox-family role, not just their presence.
  */
 const COMBOBOX_ATTRS = ['aria-haspopup', 'aria-autocomplete', 'aria-expanded', 'aria-controls', 'list'];
 
@@ -321,13 +327,62 @@ export function isComboboxLike(el: {
   return el.hasComboboxAncestor;
 }
 
-function isCombobox(el: HTMLInputElement): boolean {
-  return isComboboxLike({
-    role: el.getAttribute('role'),
-    attributeNames: el.getAttributeNames(),
-    // Widgets that put the role on a wrapper instead of the input itself.
-    hasComboboxAncestor: el.closest('[role="combobox"], [role="listbox"]') !== null,
+/**
+ * Element.closest(), but continuing across a shadow root boundary into its
+ * host instead of stopping there. Many component libraries (Workday's
+ * included, per a live report) render a form control's shadow tree separately
+ * from the role that marks the whole widget as a combobox, which sits on a
+ * light-DOM ancestor `closest()` can never see from inside the shadow tree —
+ * `getRootNode()` returns the ShadowRoot itself, whose `.host` is the element
+ * to keep walking from. A plain (non-shadow) tree behaves exactly like
+ * `closest()`, since `getRootNode()` there is just `document`.
+ */
+function closestAcrossShadowRoots(start: Element, selector: string): Element | null {
+  let node: Element | null = start;
+  while (node) {
+    if (node.matches(selector)) return node;
+    const parentEl: Element | null = node.parentElement;
+    if (parentEl) {
+      node = parentEl;
+      continue;
+    }
+    const root = node.getRootNode();
+    node = root instanceof ShadowRoot ? root.host : null;
+  }
+  return null;
+}
+
+/**
+ * True when `el`'s `aria-owns` or `aria-activedescendant` names an id that
+ * resolves to a real element carrying a listbox-family role — the "validated
+ * evidence" COMBOBOX_ATTRS' docblock promises instead of trusting either
+ * attribute's bare presence. `aria-activedescendant` points at the highlighted
+ * OPTION itself (role="option"), not the list; `aria-owns` more often points at
+ * the list/popup container (role="listbox"/"combobox") but a widget that instead
+ * owns individual options is covered by the `option` check too.
+ */
+function referencesListboxRole(el: HTMLInputElement): boolean {
+  const ids = [
+    ...(el.getAttribute('aria-owns') ?? '').split(/\s+/),
+    ...(el.getAttribute('aria-activedescendant') ?? '').split(/\s+/),
+  ].filter(Boolean);
+  return ids.some((id) => {
+    const ref = document.getElementById(id);
+    return !!ref?.matches('[role="listbox"], [role="combobox"], [role="option"]');
   });
+}
+
+function isCombobox(el: HTMLInputElement): boolean {
+  return (
+    isComboboxLike({
+      role: el.getAttribute('role'),
+      attributeNames: el.getAttributeNames(),
+      // Widgets that put the role on a wrapper instead of the input itself —
+      // including one on the other side of a shadow root.
+      hasComboboxAncestor:
+        closestAcrossShadowRoots(el, '[role="combobox"], [role="listbox"]') !== null,
+    }) || referencesListboxRole(el)
+  );
 }
 
 /**
