@@ -11,8 +11,9 @@
 // finishReason entirely and could only ever say "empty response"). Duplicated
 // rather than imported from gemini.ts: server/ is a standalone Cloud Run
 // deployable with its own package.json, not built alongside the extension, so
-// there is no shared module to import from — keep the two in sync by hand if
-// either changes.
+// there is no shared module to import from. The threshold below is no longer
+// kept in sync by hand: src/lib/ai/minViableAnswerLength.test.ts asserts the
+// two copies are equal and fails CI if either moves alone (#316).
 //
 // Wording deliberately does NOT say "Gemini" (unlike gemini.ts) — every other
 // message in this file speaks generically ("the managed AI", "the AI service")
