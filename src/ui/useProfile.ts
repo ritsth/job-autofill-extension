@@ -22,6 +22,18 @@ export function useProfile() {
   const [saveError, setSaveError] = useState('');
   const saveTimer = useRef<number | undefined>(undefined);
   const editing = useRef(false);
+  // Identifies the most recently scheduled save. clearTimeout below only cancels
+  // a timer that hasn't fired yet — once its 500ms debounce elapses and the async
+  // callback starts (i.e. it's inside `await saveProfile`), a NEW edit can no
+  // longer cancel it. Without this, that now-uncancellable callback still shares
+  // editing.current/saveState/saveError with whatever a later edit schedules, so
+  // whichever save finishes last wins regardless of which edit is actually
+  // newer — the earlier save's completion can flip editing.current to false
+  // while a newer edit is still in flight, letting onProfileChanged apply a
+  // stale external update over it (#194). Each in-flight callback checks its
+  // own generation against the current one before touching any shared state, so
+  // a superseded save's completion becomes a no-op instead of clobbering it.
+  const saveGeneration = useRef(0);
 
   useEffect(() => {
     getProfile().then((p) => {
@@ -34,6 +46,7 @@ export function useProfile() {
   }, []);
 
   function update(updater: (prev: Profile) => Profile): void {
+    const generation = ++saveGeneration.current;
     editing.current = true;
     setProfile((prev) => {
       const next = updater(prev);
@@ -43,13 +56,17 @@ export function useProfile() {
       saveTimer.current = window.setTimeout(async () => {
         try {
           await saveProfile(next);
-          setSaveState('saved');
-          window.setTimeout(() => setSaveState('idle'), 1500);
+          if (generation === saveGeneration.current) {
+            setSaveState('saved');
+            window.setTimeout(() => setSaveState('idle'), 1500);
+          }
         } catch (err) {
-          setSaveState('error');
-          setSaveError(profileSaveErrorMessage(err));
+          if (generation === saveGeneration.current) {
+            setSaveState('error');
+            setSaveError(profileSaveErrorMessage(err));
+          }
         } finally {
-          editing.current = false;
+          if (generation === saveGeneration.current) editing.current = false;
         }
       }, 500);
       return next;
