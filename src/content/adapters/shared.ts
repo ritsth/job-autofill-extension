@@ -294,28 +294,21 @@ const QUESTION_MIN_WORDS = 4;
 
 /**
  * Attributes that mark an <input> as the text box of a dropdown widget rather
- * than a free-text field. A native <select> is never a candidate (it isn't in
- * findOpenQuestions' selector), but a combobox library renders a real
- * <input type="text"> with a styled option list — and its label is usually a
- * question, so it would otherwise pass looksLikeQuestion.
+ * than a free-text field, on their PRESENCE alone. A native <select> is never a
+ * candidate (it isn't in findOpenQuestions' selector), but a combobox library
+ * renders a real <input type="text"> with a styled option list — and its label
+ * is usually a question, so it would otherwise pass looksLikeQuestion.
  *
- * `list` is the native pairing with <datalist>; the rest cover both halves of
- * the WAI-ARIA combobox pattern that any such widget needs to be operable at
- * all — `aria-haspopup`/`aria-expanded`/`aria-autocomplete` announce that
- * opening it reveals a list, while `aria-controls`/`aria-owns` point AT that
- * list and `aria-activedescendant` tracks which of its options is highlighted.
- * A widget only needs one half depending on exactly when it wires the
- * attributes up, so this checks for either.
+ * `list` is the native pairing with <datalist>; `aria-haspopup`/`aria-expanded`/
+ * `aria-autocomplete`/`aria-controls` are the WAI-ARIA combobox pattern's own
+ * "opening this reveals a list" signals. Deliberately NOT here:
+ * `aria-owns`/`aria-activedescendant` — a genuinely free-text field can carry
+ * either for an unrelated reason (e.g. spellcheck or mention-autocomplete
+ * suggestions layered on top of normal typing), so presence alone over-matches;
+ * referencesListboxRole() below only trusts them once the element they point AT
+ * actually has a listbox-family role, not just their presence.
  */
-const COMBOBOX_ATTRS = [
-  'aria-haspopup',
-  'aria-autocomplete',
-  'aria-expanded',
-  'aria-controls',
-  'aria-owns',
-  'aria-activedescendant',
-  'list',
-];
+const COMBOBOX_ATTRS = ['aria-haspopup', 'aria-autocomplete', 'aria-expanded', 'aria-controls', 'list'];
 
 /**
  * Whether an input is really a dropdown in disguise. Pure so the rule is
@@ -359,15 +352,37 @@ function closestAcrossShadowRoots(start: Element, selector: string): Element | n
   return null;
 }
 
-function isCombobox(el: HTMLInputElement): boolean {
-  return isComboboxLike({
-    role: el.getAttribute('role'),
-    attributeNames: el.getAttributeNames(),
-    // Widgets that put the role on a wrapper instead of the input itself —
-    // including one on the other side of a shadow root.
-    hasComboboxAncestor:
-      closestAcrossShadowRoots(el, '[role="combobox"], [role="listbox"]') !== null,
+/**
+ * True when `el`'s `aria-owns` or `aria-activedescendant` names an id that
+ * resolves to a real element carrying a listbox-family role — the "validated
+ * evidence" COMBOBOX_ATTRS' docblock promises instead of trusting either
+ * attribute's bare presence. `aria-activedescendant` points at the highlighted
+ * OPTION itself (role="option"), not the list; `aria-owns` more often points at
+ * the list/popup container (role="listbox"/"combobox") but a widget that instead
+ * owns individual options is covered by the `option` check too.
+ */
+function referencesListboxRole(el: HTMLInputElement): boolean {
+  const ids = [
+    ...(el.getAttribute('aria-owns') ?? '').split(/\s+/),
+    ...(el.getAttribute('aria-activedescendant') ?? '').split(/\s+/),
+  ].filter(Boolean);
+  return ids.some((id) => {
+    const ref = document.getElementById(id);
+    return !!ref?.matches('[role="listbox"], [role="combobox"], [role="option"]');
   });
+}
+
+function isCombobox(el: HTMLInputElement): boolean {
+  return (
+    isComboboxLike({
+      role: el.getAttribute('role'),
+      attributeNames: el.getAttributeNames(),
+      // Widgets that put the role on a wrapper instead of the input itself —
+      // including one on the other side of a shadow root.
+      hasComboboxAncestor:
+        closestAcrossShadowRoots(el, '[role="combobox"], [role="listbox"]') !== null,
+    }) || referencesListboxRole(el)
+  );
 }
 
 /**

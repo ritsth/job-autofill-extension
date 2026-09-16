@@ -349,16 +349,18 @@ describe('isComboboxLike — dropdowns are never autofilled or given an AI-answe
   });
 
   it('detects the ARIA combobox attributes', () => {
-    for (const attr of [
-      'aria-haspopup',
-      'aria-autocomplete',
-      'aria-expanded',
-      'aria-controls',
-      'aria-owns',
-      'aria-activedescendant',
-    ]) {
+    for (const attr of ['aria-haspopup', 'aria-autocomplete', 'aria-expanded', 'aria-controls']) {
       expect(isComboboxLike({ ...plain, attributeNames: ['type', attr] })).toBe(true);
     }
+  });
+
+  it('does NOT treat aria-owns or aria-activedescendant as a marker by themselves', () => {
+    // Either can sit on a genuinely free-text field for an unrelated reason
+    // (spellcheck or mention-autocomplete suggestions layered on top of normal
+    // typing) — only referencesListboxRole (DOM-dependent, checks what the id
+    // actually resolves to) may treat these as evidence of a real dropdown.
+    expect(isComboboxLike({ ...plain, attributeNames: ['type', 'aria-owns'] })).toBe(false);
+    expect(isComboboxLike({ ...plain, attributeNames: ['type', 'aria-activedescendant'] })).toBe(false);
   });
 
   it('detects a native <datalist> pairing', () => {
