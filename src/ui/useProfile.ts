@@ -58,7 +58,13 @@ export function useProfile() {
           await saveProfile(next);
           if (generation === saveGeneration.current) {
             setSaveState('saved');
-            window.setTimeout(() => setSaveState('idle'), 1500);
+            // Guarded too: without this, a slow-to-reset save A can flip
+            // saveState back to 'idle' 1500ms later even though a newer save B
+            // has since taken over — A's own generation check above only
+            // covers the moment its save just finished, not this nested timer.
+            window.setTimeout(() => {
+              if (generation === saveGeneration.current) setSaveState('idle');
+            }, 1500);
           }
         } catch (err) {
           if (generation === saveGeneration.current) {
