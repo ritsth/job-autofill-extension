@@ -3,6 +3,7 @@
 // {{company}}/{{role}}/{{date}} with no AI rewrite; this module prepares the
 // base text and handles the file download.
 
+import { documentFilename } from './filename';
 import { downloadTextPdf } from './pdf';
 
 export interface LetterVars {
@@ -33,15 +34,7 @@ export function substitutePlaceholders(template: string, vars: LetterVars): stri
 
 /** Builds a filesystem-safe filename (without extension) for the letter. */
 export function letterFilename(company: string, role: string): string {
-  const slug = [company, role]
-    .filter(Boolean)
-    .join('-')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60)
-    .replace(/-+$/, '');
-  return `cover-letter${slug ? '-' + slug : ''}`;
+  return documentFilename('cover-letter', company, role);
 }
 
 /** Triggers a .pdf download of the letter from an extension page (popup/options). */
