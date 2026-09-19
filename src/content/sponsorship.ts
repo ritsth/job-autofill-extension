@@ -500,9 +500,20 @@ let renderedSig = '';
 // action (the AI check) notice a posting switch happened while it was awaiting
 // and discard its now-stale result instead of clobbering the new badge.
 let badgeGeneration = 0;
-// AI results cached per posting (by scanned-text hash) so revisiting a job — or
-// a re-render from the watcher — reuses the AI verdict without another call.
-const aiCache = new Map<number, SponsorAnalysis>();
+/**
+ * AI results cached per posting so revisiting a job — or a re-render from the
+ * watcher — reuses the AI verdict without another call.
+ *
+ * Keyed by the scanned text's hash for lookup, but the text itself is stored
+ * alongside and compared on read: the hash only narrows the search, it never
+ * authorises the answer. `hash` is 32 bits, so two different postings CAN land
+ * on the same key, and serving one posting's verdict for another would report
+ * its sponsorship / citizenship / clearance requirements on an unrelated job —
+ * the confidently-wrong eligibility read this whole file is written to avoid,
+ * and one the applicant has no way to spot (#331). Comparing the text makes the
+ * hash's collision resistance irrelevant rather than load-bearing.
+ */
+const aiCache = new Map<number, { text: string; analysis: SponsorAnalysis }>();
 const AI_CACHE_MAX = 50;
 // The AI verdict the user explicitly requested for the posting currently in view,
 // pinned to its URL. The watcher mutates often (live counts, timestamps) which
@@ -731,7 +742,7 @@ function renderFrom(text: string): void {
   // AI cache hit, then the instant rules pass.
   const analysis =
     (pinnedAi && pinnedAiUrl === location.href ? pinnedAi : null) ??
-    aiCache.get(hash(text)) ??
+    getCachedAiVerdict(text) ??
     analyze(text);
   // Read the meta once and reuse it for both the signature and the render, so a
   // mutation landing between two reads can't sign one posting while showing
@@ -819,17 +830,37 @@ async function runAiCheck(): Promise<SponsorAnalysis> {
   const local = extractExperience(normalizeText(raw));
   analysis.experience.required ??= local.required;
   analysis.experience.preferred ??= local.preferred;
-  cacheAiResult(hash(raw), analysis);
+  setCachedAiVerdict(raw, analysis);
   return analysis;
 }
 
+/**
+ * The cached AI verdict for exactly this scanned text, or null.
+ *
+ * A hash hit is only a candidate: the stored text must match too, or an
+ * unrelated posting that happened to hash the same would be served this one's
+ * verdict. See the aiCache docblock.
+ *
+ * Exported (with setCachedAiVerdict / clearAiVerdictCache) so the collision
+ * guard is testable — renderFrom, its only real caller, needs a DOM.
+ */
+export function getCachedAiVerdict(text: string): SponsorAnalysis | null {
+  const hit = aiCache.get(hash(text));
+  return hit?.text === text ? hit.analysis : null;
+}
+
 /** Stores an AI result while keeping the tab-lifetime cache bounded. */
-function cacheAiResult(key: number, analysis: SponsorAnalysis): void {
+export function setCachedAiVerdict(text: string, analysis: SponsorAnalysis): void {
   if (aiCache.size >= AI_CACHE_MAX) {
     const oldest = aiCache.keys().next().value;
     if (oldest !== undefined) aiCache.delete(oldest);
   }
-  aiCache.set(key, analysis);
+  aiCache.set(hash(text), { text, analysis });
+}
+
+/** Test seam: the cache is tab-lifetime state with no production reset. */
+export function clearAiVerdictCache(): void {
+  aiCache.clear();
 }
 
 /**
