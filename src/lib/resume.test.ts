@@ -1,51 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { resumeFilename } from './resume';
 
+// The slug rules themselves (special characters, the 60-char cap, trimming)
+// are covered once in filename.test.ts — what matters here is only that this
+// caller passes the right prefix through to documentFilename (#327).
 describe('resumeFilename', () => {
-  it('handles the normal case with both company and role', () => {
+  it('prefixes the company/role slug with "resume"', () => {
     expect(resumeFilename('Acme Corp', 'Software Engineer')).toBe(
       'resume-acme-corp-software-engineer'
     );
   });
 
-  it('collapses special characters to single hyphens and trims leading/trailing hyphens', () => {
-    expect(resumeFilename('Acme & Corp!!', 'Software   Engineer')).toBe(
-      'resume-acme-corp-software-engineer'
-    );
-    expect(resumeFilename('...Acme Corp...', '!!!Software Engineer!!!')).toBe(
-      'resume-acme-corp-software-engineer'
-    );
-  });
-
-  it('returns resume when both fields are empty', () => {
+  it('is the bare prefix when there is no company or role', () => {
     expect(resumeFilename('', '')).toBe('resume');
-  });
-
-  it('handles only company provided', () => {
-    expect(resumeFilename('Acme Corp', '')).toBe('resume-acme-corp');
-  });
-
-  it('handles only role provided', () => {
-    expect(resumeFilename('', 'Software Engineer')).toBe('resume-software-engineer');
-  });
-
-  it('caps the slug at 60 characters', () => {
-    const longCompany = 'a'.repeat(50);
-    const longRole = 'b'.repeat(50);
-    const result = resumeFilename(longCompany, longRole);
-
-    // Prefix "resume-" is 7 chars.
-    // The slug itself should be sliced at 60 chars.
-    // Expected slug: 50 'a's + 1 hyphen + 9 'b's = 60 chars.
-    expect(result).toHaveLength(67); // 7 + 60
-    expect(result).toBe(`resume-${'a'.repeat(50)}-${'b'.repeat(9)}`);
-  });
-
-  it('does not leave a trailing hyphen when the slice boundary falls on the join separator', () => {
-    // 59 'a's + '-' + 50 'b's = 110 chars; slice(0, 60) yields 'a'.repeat(59) + '-'.
-    // The fix removes the trailing hyphen.
-    expect(resumeFilename('a'.repeat(59), 'b'.repeat(50))).toBe(
-      `resume-${'a'.repeat(59)}`
-    );
   });
 });

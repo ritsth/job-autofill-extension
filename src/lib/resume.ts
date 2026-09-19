@@ -2,19 +2,12 @@
 // runs in the background service worker (it owns the provider); this module just
 // turns the generated text into a downloadable PDF, mirroring coverLetter.ts.
 
+import { documentFilename } from './filename';
 import { downloadTextPdf } from './pdf';
 
 /** Builds a filesystem-safe filename (without extension) for the resume. */
 export function resumeFilename(company: string, role: string): string {
-  const slug = [company, role]
-    .filter(Boolean)
-    .join('-')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60)
-    .replace(/-+$/, '');
-  return `resume${slug ? '-' + slug : ''}`;
+  return documentFilename('resume', company, role);
 }
 
 /** Triggers a .pdf download of the tailored resume from an extension page. */
