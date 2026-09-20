@@ -9,6 +9,7 @@ import {
   type WorkEntry,
 } from '../lib/profile';
 import { removeDisabledHost } from '../lib/host';
+import { getSettings, onSettingsChanged, updateSettings, type Settings } from '../lib/settings';
 import { useProfile } from '../ui/useProfile';
 import { extractText, extractTextBatch } from '../lib/documents';
 import { sendToBackground } from '../lib/messages';
@@ -106,6 +107,15 @@ function OptionsView({
       cancelled = true;
     };
   }, [p.ai.provider]);
+
+  // The per-site badge opt-outs are settings, not profile fields (#347), so they
+  // load and save independently of the debounced profile editor around them.
+  const [disabledHosts, setDisabledHosts] = useState<string[]>([]);
+  useEffect(() => {
+    const apply = (s: Settings) => setDisabledHosts(s.disabledHosts);
+    getSettings().then(apply);
+    return onSettingsChanged(apply);
+  }, []);
 
   // Google sign-in state for the managed proxy.
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -631,9 +641,12 @@ function OptionsView({
       </section>
 
       <DisabledSites
-        hosts={p.disabledHosts}
+        hosts={disabledHosts}
         onEnable={(host) =>
-          update((prev) => ({ ...prev, disabledHosts: removeDisabledHost(prev.disabledHosts, host) }))
+          void updateSettings((prev) => ({
+            ...prev,
+            disabledHosts: removeDisabledHost(prev.disabledHosts, host),
+          }))
         }
       />
 
