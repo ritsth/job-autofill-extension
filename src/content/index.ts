@@ -348,11 +348,6 @@ if (window.top === window.self && !scannerGlobal.__jafScannerStarted) {
   scannerGlobal.__jafScannerStarted = true;
   (async () => {
     try {
-      // Settings only — deliberately NOT getProfile(). These four switches live
-      // in their own storage key precisely so this path (and the change listener
-      // below, which every open tab runs) never pulls the resume and every
-      // uploaded document's text along with them (#347).
-      const settings = await getSettings();
       // Seed the one-time badge coachmark flag and the user's badge corner before
       // enabling the scanner, so the first badge render is already correct.
       const { badgeIntroSeen, badgeCorner } = await chrome.storage.local.get([
@@ -361,7 +356,17 @@ if (window.top === window.self && !scannerGlobal.__jafScannerStarted) {
       ]);
       setBadgeIntroSeen(Boolean(badgeIntroSeen));
       setBadgeCorner(badgeCorner);
-      applySettings(settings);
+      // Read the settings LAST, and apply them with no await in between: the
+      // change listener below is already live by now, so a toggle landing while
+      // this function was awaiting something else would be applied by the
+      // listener and then silently reverted here by the older snapshot. (The
+      // pre-#347 code read the profile first and had the same hazard.)
+      //
+      // Settings only — deliberately NOT getProfile(). These four switches live
+      // in their own storage key precisely so this path (and the change listener
+      // below, which every open tab runs) never pulls the resume and every
+      // uploaded document's text along with them (#347).
+      applySettings(await getSettings());
     } catch (e) {
       // A failed storage read (e.g. an extension-update limbo) must not silently
       // kill the scanner — fall back to defaults, including for the per-site
