@@ -7,6 +7,7 @@ import {
   computeContextUsage,
   onProfileChanged,
   profileToContext,
+  shadowedByLaterUpload,
   upsertDocument,
   type Profile,
   type UploadedDoc,
@@ -523,5 +524,36 @@ describe('upsertDocument', () => {
       ['b.pdf', 'b1'],
       ['a.pdf', 'a2'],
     ]);
+  });
+});
+
+describe('shadowedByLaterUpload — same-batch upload name collisions (#333)', () => {
+  it('flags no one when every name in the batch is distinct', () => {
+    expect(shadowedByLaterUpload(['resume.pdf', 'cover.pdf', 'transcript.pdf'])).toEqual(new Set());
+  });
+
+  it('flags every earlier occurrence, keeping only the last', () => {
+    // Two files literally named "resume.pdf" picked from different folders in
+    // one multi-select — the real scenario #333 is about.
+    expect(shadowedByLaterUpload(['resume.pdf', 'resume.pdf'])).toEqual(new Set([0]));
+  });
+
+  it('matches names case- and whitespace-insensitively, exactly like upsertDocument', () => {
+    // Must use the identical comparison upsertDocument actually applies, or
+    // this would warn about pairs that upsertDocument treats as distinct (or
+    // silently fail to warn about ones it collapses) — see normalizeDocName.
+    expect(shadowedByLaterUpload(['Resume.PDF', '  resume.pdf  '])).toEqual(new Set([0]));
+  });
+
+  it('handles three or more files sharing a name, not just two', () => {
+    expect(shadowedByLaterUpload(['a.pdf', 'b.pdf', 'a.pdf', 'a.pdf'])).toEqual(new Set([0, 2]));
+  });
+
+  it('tracks each distinct repeated name independently', () => {
+    expect(shadowedByLaterUpload(['a.pdf', 'b.pdf', 'a.pdf', 'b.pdf'])).toEqual(new Set([0, 1]));
+  });
+
+  it('returns an empty set for an empty batch', () => {
+    expect(shadowedByLaterUpload([])).toEqual(new Set());
   });
 });

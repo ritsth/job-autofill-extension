@@ -51,9 +51,41 @@ export interface UploadedDoc {
  * accidental. A distinct filename is appended, never merged (see #267/#271).
  */
 export function upsertDocument(docs: UploadedDoc[], name: string, text: string): UploadedDoc[] {
-  const norm = name.trim().toLowerCase();
-  const without = docs.filter((d) => d.name.trim().toLowerCase() !== norm);
+  const norm = normalizeDocName(name);
+  const without = docs.filter((d) => normalizeDocName(d.name) !== norm);
   return [...without, { id: crypto.randomUUID(), name, text, addedAt: Date.now() }];
+}
+
+/**
+ * The "same document" comparison upsertDocument uses. Exported so a caller
+ * about to make several upsertDocument calls in a row — a multi-file upload —
+ * can detect a same-batch name collision using the identical rule, rather than
+ * an approximation that could drift from what actually gets overwritten (#333).
+ */
+export function normalizeDocName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/**
+ * Indices in `names` whose document is about to be silently overwritten by a
+ * LATER entry in the same batch with the same normalizeDocName — a same-batch
+ * multi-file collision (e.g. two files both literally named "resume.pdf" from
+ * different folders), not a re-upload replacing something from an earlier
+ * session. Feeding `names` through upsertDocument in order, as
+ * DocUpload's handler does, only the last occurrence of each name survives;
+ * this identifies the earlier ones so the caller can warn about them before
+ * that happens (#333). The winning (last) occurrence of a repeated name is
+ * never included.
+ */
+export function shadowedByLaterUpload(names: readonly string[]): Set<number> {
+  const lastIndexOf = new Map<string, number>();
+  names.forEach((name, i) => lastIndexOf.set(normalizeDocName(name), i));
+
+  const shadowed = new Set<number>();
+  names.forEach((name, i) => {
+    if (lastIndexOf.get(normalizeDocName(name)) !== i) shadowed.add(i);
+  });
+  return shadowed;
 }
 
 export interface Preferences {
