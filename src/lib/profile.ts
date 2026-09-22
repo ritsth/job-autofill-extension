@@ -94,19 +94,12 @@ export interface Profile {
   preferences: Preferences;
   baseCoverLetter: string;
   ai: AISettings;
-  /** Master on/off for the eligibility scanner (runs on every page when on). */
-  scanEnabled: boolean;
-  /**
-   * Hostnames the eligibility badge is switched off on ("turn off on this site
-   * only"), matched via hostMatches (exact-or-subdomain) in src/lib/host.ts.
-   * Independent of scanEnabled — this narrows where the scanner runs while
-   * scanEnabled is the global master switch.
-   */
-  disabledHosts: string[];
-  /** Show the tailored-resume generator in the side panel. */
-  tailoredResumeEnabled: boolean;
-  /** Show the tailored cover-letter generator in the side panel. */
-  coverLetterEnabled: boolean;
+  // The scanner/badge/generator switches used to live here too. They moved to
+  // their own storage key in ./settings.ts (#347): the content script reads them
+  // on every page and on every change, and shipping them alongside the resume
+  // and every uploaded document's text made that far more expensive than it
+  // needed to be. getSettings() still falls back to the copies left in existing
+  // profile records, so nothing is lost on upgrade.
 }
 
 export const DEFAULT_PROFILE: Profile = {
@@ -152,15 +145,25 @@ export const DEFAULT_PROFILE: Profile = {
     proxyUrl: 'https://job-autofill-proxy-rz75fufhtq-uc.a.run.app/generate',
     proxyToken: '',
   },
-  scanEnabled: true,
-  disabledHosts: [],
-  tailoredResumeEnabled: true,
-  coverLetterEnabled: true,
 };
 
-const STORAGE_KEY = 'profile';
+/**
+ * Exported only so ./settings.ts can read the pre-split copies of the switches
+ * that used to live in here — importing the key beats re-typing the string in a
+ * second file and hoping the two never drift.
+ */
+export const PROFILE_STORAGE_KEY = 'profile';
+const STORAGE_KEY = PROFILE_STORAGE_KEY;
 
-/** Deep-merges stored data over defaults so new fields always have a value. */
+/**
+ * Deep-merges stored data over defaults so new fields always have a value.
+ *
+ * The blanket `...stored` spread also carries through the settings fields that
+ * moved out in #347. That's deliberate: until the user touches a setting there
+ * is no `settings` record yet, so those legacy copies are still what
+ * getSettings() reads — dropping them here would silently reset the user's
+ * choices on their first profile save after upgrading.
+ */
 function withDefaults(stored: Partial<Profile> | undefined): Profile {
   if (!stored) return structuredClone(DEFAULT_PROFILE);
   const ai = { ...DEFAULT_PROFILE.ai, ...stored.ai };
@@ -178,10 +181,6 @@ function withDefaults(stored: Partial<Profile> | undefined): Profile {
     education: stored.education ?? DEFAULT_PROFILE.education,
     skills: stored.skills ?? DEFAULT_PROFILE.skills,
     documents: stored.documents ?? DEFAULT_PROFILE.documents,
-    scanEnabled: stored.scanEnabled ?? DEFAULT_PROFILE.scanEnabled,
-    disabledHosts: stored.disabledHosts ?? DEFAULT_PROFILE.disabledHosts,
-    tailoredResumeEnabled: stored.tailoredResumeEnabled ?? DEFAULT_PROFILE.tailoredResumeEnabled,
-    coverLetterEnabled: stored.coverLetterEnabled ?? DEFAULT_PROFILE.coverLetterEnabled,
   };
 }
 

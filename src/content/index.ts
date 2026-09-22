@@ -1,7 +1,11 @@
 // Content script: detects the ATS, fills standard fields on demand, and injects
 // an "✨ AI answer" button beside each open-ended question.
 
-import { getProfile, onProfileChanged } from '../lib/profile';
+// getProfile is for the fill path only, where the whole profile is genuinely
+// needed and the user has just asked for it. The always-on scanner reads
+// ./settings instead — see applySettings below.
+import { getProfile } from '../lib/profile';
+import { getSettings, onSettingsChanged, type Settings } from '../lib/settings';
 import { getSavedJobs, onSavedJobsChanged } from '../lib/savedJobs';
 import { hostMatches, isHostDisabled } from '../lib/host';
 import {
@@ -317,6 +321,25 @@ const recomputeQuestions = (activeId: string | null) =>
 getSavedJobs().then((s) => recomputeQuestions(s.activeId));
 onSavedJobsChanged((s) => recomputeQuestions(s.activeId));
 
+/**
+ * Pushes the user's switches into the badge. Shared by the initial read and the
+ * change listener so the two can't drift on how the gate is computed.
+ *
+ * The scanner gate is both the global switch AND this host's per-site opt-out
+ * ("⚙ Turn off on this site only" on the badge itself). Top frame only (see the
+ * guard below), so location.hostname is always the URL-bar host the user sees,
+ * even on a page whose posting text comes from a same-origin iframe.
+ */
+function applySettings(settings: Settings): void {
+  setBadgeFeatures({
+    coverLetter: settings.coverLetterEnabled,
+    resume: settings.tailoredResumeEnabled,
+  });
+  setScannerEnabled(
+    settings.scanEnabled && !isHostDisabled(location.hostname, settings.disabledHosts),
+  );
+}
+
 // The content script loads on every page; the scanner is gated by the user's
 // setting. Run it once, in the top frame only, to avoid duplicate badges from
 // re-injection or same-origin iframes.
@@ -325,7 +348,6 @@ if (window.top === window.self && !scannerGlobal.__jafScannerStarted) {
   scannerGlobal.__jafScannerStarted = true;
   (async () => {
     try {
-      const profile = await getProfile();
       // Seed the one-time badge coachmark flag and the user's badge corner before
       // enabling the scanner, so the first badge render is already correct.
       const { badgeIntroSeen, badgeCorner } = await chrome.storage.local.get([
@@ -334,17 +356,22 @@ if (window.top === window.self && !scannerGlobal.__jafScannerStarted) {
       ]);
       setBadgeIntroSeen(Boolean(badgeIntroSeen));
       setBadgeCorner(badgeCorner);
-      setBadgeFeatures({ coverLetter: profile.coverLetterEnabled, resume: profile.tailoredResumeEnabled });
-      // Gate on both the global switch and this host's per-site opt-out
-      // ("⚙ Turn off on this site only" on the badge itself). Top frame only
-      // (see the guard above), so this is always the URL-bar host the user
-      // sees, even on a page whose posting text comes from a same-origin iframe.
-      setScannerEnabled(profile.scanEnabled && !isHostDisabled(location.hostname, profile.disabledHosts));
+      // Read the settings LAST, and apply them with no await in between: the
+      // change listener below is already live by now, so a toggle landing while
+      // this function was awaiting something else would be applied by the
+      // listener and then silently reverted here by the older snapshot. (The
+      // pre-#347 code read the profile first and had the same hazard.)
+      //
+      // Settings only — deliberately NOT getProfile(). These four switches live
+      // in their own storage key precisely so this path (and the change listener
+      // below, which every open tab runs) never pulls the resume and every
+      // uploaded document's text along with them (#347).
+      applySettings(await getSettings());
     } catch (e) {
       // A failed storage read (e.g. an extension-update limbo) must not silently
       // kill the scanner — fall back to defaults, including for the per-site
-      // opt-out: scanEnabled defaults ON in withDefaults, so this matches a
-      // fresh profile with no disabled hosts. Force the coachmark to "seen" so
+      // opt-out: scanEnabled defaults ON in DEFAULT_SETTINGS, so this matches a
+      // fresh install with no disabled hosts. Force the coachmark to "seen" so
       // a fallback never flashes the intro bubble.
       console.warn('[Little AI Helper] scanner init failed; starting with defaults', e);
       setBadgeIntroSeen(true);
@@ -352,8 +379,5 @@ if (window.top === window.self && !scannerGlobal.__jafScannerStarted) {
     }
     startSponsorshipWatch();
   })();
-  onProfileChanged((profile) => {
-    setBadgeFeatures({ coverLetter: profile.coverLetterEnabled, resume: profile.tailoredResumeEnabled });
-    setScannerEnabled(profile.scanEnabled && !isHostDisabled(location.hostname, profile.disabledHosts));
-  });
+  onSettingsChanged(applySettings);
 }

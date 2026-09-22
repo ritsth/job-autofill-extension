@@ -9,7 +9,7 @@ import type { AIResult } from '../lib/messages';
 import { parseEligibilityJson } from '../lib/jobEligibility';
 import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
-import { getProfile, saveProfile } from '../lib/profile';
+import { updateSettings } from '../lib/settings';
 import { MAX_TEXT } from '../lib/savedJobs';
 import { addDisabledHost, hostMatches } from '../lib/host';
 import { BADGE_AI_CHECK_ERROR_MAX, clearButtonError, showButtonError } from './buttonError';
@@ -608,24 +608,25 @@ function applyCorner(wrap: HTMLElement, corner: BadgeCorner): void {
 
 /**
  * Turns the eligibility scanner off everywhere by persisting scanEnabled=false.
- * The profile-change listener in index.ts then removes the badge and the
+ * The settings-change listener in index.ts then removes the badge and the
  * side-panel toggle updates in lockstep — no direct setScannerEnabled needed.
  */
 async function disableScannerEverywhere(): Promise<void> {
-  const p = await getProfile();
-  await saveProfile({ ...p, scanEnabled: false });
+  await updateSettings((s) => ({ ...s, scanEnabled: false }));
 }
 
 /**
  * Turns the badge off for this host only ("⚙ Turn off on this site only").
  * Same propagation as the global off-switch above: write storage and let
- * index.ts's profile listener recompute the gate, so every open tab on this
+ * index.ts's settings listener recompute the gate, so every open tab on this
  * host updates in lockstep and the choice survives a reload. Undone from the
  * Options page's "Sites where the badge is turned off" list.
  */
 async function disableScannerForThisHost(): Promise<void> {
-  const p = await getProfile();
-  await saveProfile({ ...p, disabledHosts: addDisabledHost(p.disabledHosts, location.hostname) });
+  await updateSettings((s) => ({
+    ...s,
+    disabledHosts: addDisabledHost(s.disabledHosts, location.hostname),
+  }));
 }
 
 /** Which generators the badge shows (driven by the user's settings). */

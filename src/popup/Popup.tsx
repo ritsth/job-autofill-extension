@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { getProfile, saveProfile, onProfileChanged, type Profile } from '../lib/profile';
+import { getProfile, onProfileChanged, type Profile } from '../lib/profile';
+import { getSettings, onSettingsChanged, updateSettings, type Settings } from '../lib/settings';
 import { disabledHostFor, removeDisabledHost } from '../lib/host';
 import {
   getSavedJobs,
@@ -59,15 +60,16 @@ const copyTimer = useRef<number | null>(null);
     value: boolean,
   ) {
     setLocal(value);
-    const profile = await getProfile();
-    await saveProfile({ ...profile, [key]: value });
+    await updateSettings((prev) => ({ ...prev, [key]: value }));
   }
 
   /** "Turn back on" for the current site's per-site badge opt-out (see #272/#273). */
   async function enableSite(host: string) {
     setDisabledHosts((prev) => removeDisabledHost(prev, host));
-    const profile = await getProfile();
-    await saveProfile({ ...profile, disabledHosts: removeDisabledHost(profile.disabledHosts, host) });
+    await updateSettings((prev) => ({
+      ...prev,
+      disabledHosts: removeDisabledHost(prev.disabledHosts, host),
+    }));
   }
 
   async function copyToClipboard(text: string, target: 'letter' | 'resume') {
@@ -128,15 +130,25 @@ const copyTimer = useRef<number | null>(null);
     }
   }
 
-  // Feature toggles live in the profile (not tab-derived). Load once and keep in
+  // Feature toggles are stored settings (not tab-derived). Load once and keep in
   // sync via storage changes, so a tab refresh can never clobber a fresh toggle
   // mid-save (which made the checkboxes look like they did nothing).
   useEffect(() => {
+    const apply = (s: Settings) => {
+      setScanEnabled(s.scanEnabled);
+      setDisabledHosts(s.disabledHosts);
+      setCoverLetterEnabled(s.coverLetterEnabled);
+      setResumeEnabled(s.tailoredResumeEnabled);
+    };
+    getSettings().then(apply);
+    return onSettingsChanged(apply);
+  }, []);
+
+  // The AI-configuration hints below are the only thing here that needs the
+  // profile itself, so they get their own subscription rather than dragging the
+  // whole record into the toggle path above (#347).
+  useEffect(() => {
     const apply = (p: Profile) => {
-      setScanEnabled(p.scanEnabled);
-      setDisabledHosts(p.disabledHosts);
-      setCoverLetterEnabled(p.coverLetterEnabled);
-      setResumeEnabled(p.tailoredResumeEnabled);
       setAiProvider(p.ai.provider);
       setApiKeySet(!!p.ai.apiKey.trim());
       setAdminTokenSet(!!p.ai.proxyToken.trim());
