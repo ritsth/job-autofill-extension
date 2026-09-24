@@ -77,6 +77,14 @@ export default defineManifest({
     'https://generativelanguage.googleapis.com/*',
     // Managed-proxy mode (Cloud Run). Lets the service worker call the proxy.
     'https://*.run.app/*',
+    // Google sign-in (src/lib/auth.ts): fetchEmail reads userinfo, signOut
+    // posts to revoke. Without these listed, both fetches are ordinary
+    // cross-origin requests subject to Google's CORS policy for a
+    // chrome-extension:// origin rather than the host_permissions bypass —
+    // and a blocked revoke would mean "sign out" never actually kills the
+    // grant at Google, only the local signedOut flag (#334).
+    'https://www.googleapis.com/*',
+    'https://oauth2.googleapis.com/*',
   ],
   content_scripts: [
     {
