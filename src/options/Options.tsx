@@ -3,6 +3,7 @@ import { Field } from './Field';
 import { DisabledSites } from './DisabledSites';
 import {
   computeContextUsage,
+  shadowedByLaterUpload,
   upsertDocument,
   type EducationEntry,
   type Profile,
@@ -783,11 +784,24 @@ function DocUpload({ onText }: { onText: (name: string, text: string) => void })
 
     const results = await extractTextBatch(files, (done, total) => setProgress({ done, total }));
 
+    // Detect a same-batch name collision (e.g. two files both literally named
+    // "resume.pdf" from different folders) BEFORE upserting: onText's upserts
+    // below leave only the last one's text, with nothing on screen to explain
+    // why the other vanished unless this warns about it now (#333).
+    const texted = results.filter((r) => r.text);
+    const shadowed = shadowedByLaterUpload(texted.map((r) => r.name));
+    const collisionWarnings = texted
+      .filter((_, i) => shadowed.has(i))
+      .map((r) => `${r.name}: replaced by another file with the same name in this upload`);
+
     for (const r of results) {
       if (r.text) onText(r.name, r.text);
     }
     setProgress(null);
-    setWarnings(results.filter((r) => r.warning).map((r) => `${r.name}: ${r.warning}`));
+    setWarnings([
+      ...results.filter((r) => r.warning).map((r) => `${r.name}: ${r.warning}`),
+      ...collisionWarnings,
+    ]);
   }
 
   const busy = progress !== null;
