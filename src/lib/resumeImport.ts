@@ -8,7 +8,23 @@ export interface ParsedResume {
   skills: string[];
 }
 
+/**
+ * Coerces one parsed JSON value into the string a profile field holds.
+ *
+ * Numbers count. RESUME_PARSE_SYSTEM shows the model a shape where every field
+ * is quoted, but nothing enforces that on its actual output, and a bare year is
+ * exactly the kind of value a model emits unquoted anyway — graduationYear and
+ * work startDate/endDate being the exposed ones. Rejecting those dropped a
+ * field the import genuinely found, with no error and nothing on screen to
+ * suggest anything was lost (#343).
+ *
+ * Non-finite numbers are still rejected: JSON.parse can't produce NaN/Infinity
+ * (they aren't JSON literals) so this can't fire from the AI path, but it keeps
+ * any other caller from writing the literal text "NaN" into a profile field.
+ * Everything else — booleans, null, objects, arrays — stays dropped.
+ */
 function str(v: unknown): string {
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '';
   return typeof v === 'string' ? v.trim() : '';
 }
 
