@@ -77,4 +77,49 @@ describe('parseResumeJson', () => {
     const raw = JSON.stringify({ work: [{ title: 'Engineer', description }] });
     expect(parseResumeJson(raw).work[0].description).toBe(description);
   });
+
+  // The prompt shows the model a shape where every field is quoted, but nothing
+  // enforces that — and a bare year is exactly what a model emits unquoted.
+  // These used to be dropped silently, with no error and nothing on screen to
+  // suggest the import had lost a field it genuinely found (#343).
+  describe('fields the model returned as JSON numbers', () => {
+    it('keeps a numeric graduationYear', () => {
+      const raw = JSON.stringify({
+        education: [{ school: 'MIT', degree: 'BS', graduationYear: 2024 }],
+      });
+      expect(parseResumeJson(raw).education[0].graduationYear).toBe('2024');
+    });
+
+    it('keeps numeric work start/end dates', () => {
+      const raw = JSON.stringify({
+        work: [{ title: 'Engineer', company: 'Acme', startDate: 2020, endDate: 2024 }],
+      });
+      const [job] = parseResumeJson(raw).work;
+      expect(job.startDate).toBe('2020');
+      expect(job.endDate).toBe('2024');
+    });
+
+    it('keeps a numeric personal field', () => {
+      // Less likely than a year, but it runs through the same helper.
+      const raw = JSON.stringify({ personal: { phone: 5550100 } });
+      expect(parseResumeJson(raw).personal.phone).toBe('5550100');
+    });
+
+    it('keeps a numeric entry in the skills list', () => {
+      const raw = JSON.stringify({ skills: ['TypeScript', 3, 'React'] });
+      expect(parseResumeJson(raw).skills).toEqual(['TypeScript', '3', 'React']);
+    });
+
+    it('still drops values that are neither string nor number', () => {
+      // A boolean or object in a text field is meaningless — only the numeric
+      // case was a real loss, so the rest stay rejected.
+      const raw = JSON.stringify({
+        education: [{ school: 'MIT', degree: true, field: { name: 'CS' }, graduationYear: null }],
+      });
+      const [edu] = parseResumeJson(raw).education;
+      expect(edu.degree).toBe('');
+      expect(edu.field).toBe('');
+      expect(edu.graduationYear).toBe('');
+    });
+  });
 });
