@@ -1,4 +1,4 @@
-import type { EducationEntry, PersonalInfo, WorkEntry } from './profile';
+import type { EducationEntry, PersonalInfo, Profile, WorkEntry } from './profile';
 
 export interface ParsedResume {
   /** Only fields the AI actually found; merge over existing values. */
@@ -6,6 +6,47 @@ export interface ParsedResume {
   work: WorkEntry[];
   education: EducationEntry[];
   skills: string[];
+}
+
+/**
+ * Writes a parsed resume over a profile. Touches exactly four sections —
+ * everything else (documents, resumeText, preferences, the cover-letter
+ * template, AI settings) is left alone.
+ *
+ * Paired with {@link revertImport} on purpose: the set of sections an import
+ * writes is the same set an undo has to restore, so both read it from here
+ * rather than each listing it separately and drifting (#352).
+ */
+export function applyImport(prev: Profile, parsed: ParsedResume): Profile {
+  return {
+    ...prev,
+    // Merge personal so found fields fill in without clobbering existing ones.
+    personal: { ...prev.personal, ...parsed.personal },
+    workHistory: parsed.work.length ? parsed.work : prev.workHistory,
+    education: parsed.education.length ? parsed.education : prev.education,
+    skills: parsed.skills.length ? parsed.skills : prev.skills,
+  };
+}
+
+/**
+ * Undoes an import by restoring the four sections {@link applyImport} writes
+ * from a snapshot taken before it ran, and nothing else.
+ *
+ * Scoped deliberately. Replacing the whole profile with the snapshot — which is
+ * what this used to do — also discarded every unrelated edit made since,
+ * including uploaded documents and a pasted API key, long after the import the
+ * button claims to be undoing (#352). Edits made to these four sections after
+ * the import are still reverted, which is the correct reading of "undo the
+ * import": the import wrote them, so undoing it puts back what was there.
+ */
+export function revertImport(current: Profile, snapshot: Profile): Profile {
+  return {
+    ...current,
+    personal: snapshot.personal,
+    workHistory: snapshot.workHistory,
+    education: snapshot.education,
+    skills: snapshot.skills,
+  };
 }
 
 /**

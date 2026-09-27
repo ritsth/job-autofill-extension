@@ -15,7 +15,7 @@ import { useProfile } from '../ui/useProfile';
 import { extractText, extractTextBatch } from '../lib/documents';
 import { sendToBackground } from '../lib/messages';
 import type { AIResult } from '../lib/messages';
-import { parseResumeJson } from '../lib/resumeImport';
+import { applyImport, parseResumeJson, revertImport } from '../lib/resumeImport';
 import { ProxyProvider } from '../lib/ai/proxy';
 import { GEMINI_MODELS } from '../lib/ai/models';
 import { AIError, isOnDeviceAvailable, onDeviceAvailabilityMessage } from '../lib/ai';
@@ -192,14 +192,7 @@ function OptionsView({
       const personalCount = Object.keys(parsed.personal).length;
       // Capture the pre-import profile so the user can undo a bad parse.
       setUndoSnapshot(structuredClone(p));
-      update((prev) => ({
-        ...prev,
-        // Merge personal so found fields fill in without clobbering existing ones.
-        personal: { ...prev.personal, ...parsed.personal },
-        workHistory: parsed.work.length ? parsed.work : prev.workHistory,
-        education: parsed.education.length ? parsed.education : prev.education,
-        skills: parsed.skills.length ? parsed.skills : prev.skills,
-      }));
+      update((prev) => applyImport(prev, parsed));
       setImportState({
         busy: false,
         err: '',
@@ -213,9 +206,16 @@ function OptionsView({
   function undoImport(): void {
     if (!undoSnapshot) return;
     const snapshot = undoSnapshot;
-    update(() => snapshot);
+    // Restores only the sections the import wrote. It used to replace the whole
+    // profile with the snapshot, which also threw away anything edited since —
+    // uploaded documents and a pasted API key included (#352).
+    update((prev) => revertImport(prev, snapshot));
     setUndoSnapshot(null);
-    setImportState({ busy: false, err: '', msg: 'Reverted to the profile from before the import.' });
+    setImportState({
+      busy: false,
+      err: '',
+      msg: 'Reverted the imported personal, work, education and skills sections.',
+    });
   }
 
   return (
