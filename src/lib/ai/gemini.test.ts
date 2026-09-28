@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GeminiProvider } from './gemini';
+import { GeminiProvider, isApiKeyError } from './gemini';
 import { AIError } from './provider';
 
 function mockGeminiResponse(body: unknown, ok = true, status = 200): void {
@@ -82,5 +82,171 @@ describe('GeminiProvider — finishReason handling (#182)', () => {
       candidates: [{ content: { parts: [{ text: '   \n  ' }] }, finishReason: 'STOP' }],
     });
     await expect(generate()).rejects.toThrow(/empty response/i);
+  });
+});
+
+// None of the HTTP status branches had a test before (#329) — only the
+// finishReason handling above did. A 400 from this API is usually NOT about the
+// key, so the branch that decides between "check your key" and the real reason
+// is worth pinning.
+describe('GeminiProvider — HTTP error responses (#329)', () => {
+  const generate = () =>
+    new GeminiProvider('test-key').generate({ system: 'sys', prompt: 'p' });
+
+  /** Mocks a non-OK response whose body is raw text, as Google returns it. */
+  function mockErrorResponse(status: number, body: string): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status,
+        json: () => Promise.reject(new Error('not json')),
+        text: () => Promise.resolve(body),
+      }),
+    );
+  }
+
+  /** Runs `generate()` expecting it to reject, and returns the thrown error. */
+  async function rejection(): Promise<Error> {
+    let caught: unknown;
+    let threw = false;
+    try {
+      await generate();
+    } catch (e) {
+      threw = true;
+      caught = e;
+    }
+    expect(threw).toBe(true);
+    return caught as Error;
+  }
+
+  const KEY_INVALID_BODY = JSON.stringify({
+    error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] },
+  });
+
+  const MODEL_MISSING_BODY = JSON.stringify({
+    error: { code: 404, message: 'models/gemini-9.9-ultra is not found for API version v1beta', status: 'NOT_FOUND' },
+  });
+
+  const BAD_CONFIG_BODY = JSON.stringify({
+    error: { code: 400, message: 'Unable to submit request because thinkingBudget is not supported by this model', status: 'INVALID_ARGUMENT' },
+  });
+
+  describe('when the body says the key is the problem', () => {
+    it('tells the user to check their API key on a 400', async () => {
+      mockErrorResponse(400, KEY_INVALID_BODY);
+      await expect(generate()).rejects.toThrow(/check that your API key is valid/i);
+    });
+
+    it('tells the user to check their API key on a 403 that names the key', async () => {
+      mockErrorResponse(
+        403,
+        JSON.stringify({ error: { status: 'PERMISSION_DENIED', details: [{ reason: 'API_KEY_SERVICE_BLOCKED' }] } }),
+      );
+      await expect(generate()).rejects.toThrow(/check that your API key is valid/i);
+    });
+  });
+
+  describe('when the body says something else', () => {
+    it('surfaces an unsupported-config 400 instead of blaming the key', async () => {
+      // The exact hazard the thinkingBudget comment in gemini.ts is about:
+      // previously this read "check that your API key is valid", sending the
+      // user to regenerate a key that was fine.
+      mockErrorResponse(400, BAD_CONFIG_BODY);
+
+      const err = await rejection();
+      expect(err.message).toContain('thinkingBudget is not supported');
+      expect(err.message).not.toMatch(/API key/i);
+    });
+
+    it('surfaces a 403 whose reason is not the key', async () => {
+      // PERMISSION_DENIED covers more than a bad key — here the project simply
+      // has not enabled the API, and the body says exactly how to fix it.
+      // Treating the status alone as "bad key" would hide that.
+      mockErrorResponse(
+        403,
+        JSON.stringify({
+          error: {
+            status: 'PERMISSION_DENIED',
+            message: 'Generative Language API has not been used in project 12345 before or it is disabled.',
+          },
+        }),
+      );
+
+      const err = await rejection();
+      expect(err.message).toContain('has not been used in project');
+      expect(err.message).not.toMatch(/check that your API key is valid/i);
+    });
+
+    it('surfaces a missing-model error with its status code', async () => {
+      mockErrorResponse(400, MODEL_MISSING_BODY);
+
+      const err = await rejection();
+      expect(err.message).toContain('400');
+      expect(err.message).toContain('is not found for API version');
+      expect(err.message).not.toMatch(/API key/i);
+    });
+
+    it('truncates a very long body rather than surfacing all of it', async () => {
+      mockErrorResponse(400, 'x'.repeat(5000));
+
+      const err = await rejection();
+      expect(err.message.length).toBeLessThan(300);
+    });
+  });
+
+  it('falls back to the key hint when there is no body to go on', async () => {
+    // Nothing better to say, so keep the actionable guess rather than emitting
+    // a bare "Gemini error 400: ".
+    mockErrorResponse(400, '');
+    await expect(generate()).rejects.toThrow(/check that your API key is valid/i);
+  });
+
+  it('reports a 429 as a rate limit, not a key problem', async () => {
+    mockErrorResponse(429, JSON.stringify({ error: { status: 'RESOURCE_EXHAUSTED' } }));
+    await expect(generate()).rejects.toThrow(/rate limit/i);
+  });
+
+  it('reports an unmapped status with its code and body', async () => {
+    mockErrorResponse(500, 'upstream exploded');
+
+    const err = await rejection();
+    expect(err.message).toContain('500');
+    expect(err.message).toContain('upstream exploded');
+  });
+});
+
+describe('isApiKeyError', () => {
+  it('recognises the markers Google uses for a key problem', () => {
+    for (const marker of [
+      'API_KEY_INVALID',
+      'API_KEY_SERVICE_BLOCKED',
+      'API key not valid. Please pass a valid API key.',
+      'API key expired. Please renew the API key.',
+    ]) {
+      expect(isApiKeyError(`{"error":{"message":"${marker}"}}`)).toBe(true);
+    }
+  });
+
+  it('is case-insensitive', () => {
+    expect(isApiKeyError('api_key_invalid')).toBe(true);
+    expect(isApiKeyError('Api Key Not Valid')).toBe(true);
+  });
+
+  it('does not treat a bare PERMISSION_DENIED as a key problem', () => {
+    // It is a status, not a reason — "API not enabled for this project" and
+    // tuned-model access errors share it, and their bodies name the real fix.
+    expect(isApiKeyError('{"error":{"status":"PERMISSION_DENIED"}}')).toBe(false);
+    // ...but a key-specific reason alongside it still counts.
+    expect(
+      isApiKeyError('{"error":{"status":"PERMISSION_DENIED","details":[{"reason":"API_KEY_INVALID"}]}}'),
+    ).toBe(true);
+  });
+
+  it('does not treat other request errors as key problems', () => {
+    expect(isApiKeyError('thinkingBudget is not supported by this model')).toBe(false);
+    expect(isApiKeyError('The request payload size exceeds the limit')).toBe(false);
+    expect(isApiKeyError('models/foo is not found for API version v1beta')).toBe(false);
+    expect(isApiKeyError('')).toBe(false);
   });
 });
