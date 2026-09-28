@@ -138,8 +138,11 @@ describe('GeminiProvider — HTTP error responses (#329)', () => {
       await expect(generate()).rejects.toThrow(/check that your API key is valid/i);
     });
 
-    it('tells the user to check their API key on a 403 PERMISSION_DENIED', async () => {
-      mockErrorResponse(403, JSON.stringify({ error: { status: 'PERMISSION_DENIED' } }));
+    it('tells the user to check their API key on a 403 that names the key', async () => {
+      mockErrorResponse(
+        403,
+        JSON.stringify({ error: { status: 'PERMISSION_DENIED', details: [{ reason: 'API_KEY_SERVICE_BLOCKED' }] } }),
+      );
       await expect(generate()).rejects.toThrow(/check that your API key is valid/i);
     });
   });
@@ -154,6 +157,25 @@ describe('GeminiProvider — HTTP error responses (#329)', () => {
       const err = await rejection();
       expect(err.message).toContain('thinkingBudget is not supported');
       expect(err.message).not.toMatch(/API key/i);
+    });
+
+    it('surfaces a 403 whose reason is not the key', async () => {
+      // PERMISSION_DENIED covers more than a bad key — here the project simply
+      // has not enabled the API, and the body says exactly how to fix it.
+      // Treating the status alone as "bad key" would hide that.
+      mockErrorResponse(
+        403,
+        JSON.stringify({
+          error: {
+            status: 'PERMISSION_DENIED',
+            message: 'Generative Language API has not been used in project 12345 before or it is disabled.',
+          },
+        }),
+      );
+
+      const err = await rejection();
+      expect(err.message).toContain('has not been used in project');
+      expect(err.message).not.toMatch(/check that your API key is valid/i);
     });
 
     it('surfaces a missing-model error with its status code', async () => {
@@ -199,7 +221,6 @@ describe('isApiKeyError', () => {
     for (const marker of [
       'API_KEY_INVALID',
       'API_KEY_SERVICE_BLOCKED',
-      'PERMISSION_DENIED',
       'API key not valid. Please pass a valid API key.',
       'API key expired. Please renew the API key.',
     ]) {
@@ -210,6 +231,16 @@ describe('isApiKeyError', () => {
   it('is case-insensitive', () => {
     expect(isApiKeyError('api_key_invalid')).toBe(true);
     expect(isApiKeyError('Api Key Not Valid')).toBe(true);
+  });
+
+  it('does not treat a bare PERMISSION_DENIED as a key problem', () => {
+    // It is a status, not a reason — "API not enabled for this project" and
+    // tuned-model access errors share it, and their bodies name the real fix.
+    expect(isApiKeyError('{"error":{"status":"PERMISSION_DENIED"}}')).toBe(false);
+    // ...but a key-specific reason alongside it still counts.
+    expect(
+      isApiKeyError('{"error":{"status":"PERMISSION_DENIED","details":[{"reason":"API_KEY_INVALID"}]}}'),
+    ).toBe(true);
   });
 
   it('does not treat other request errors as key problems', () => {

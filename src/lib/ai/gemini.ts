@@ -13,10 +13,14 @@ const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
  * anything about the request. Matched case-insensitively against the raw error
  * body, since the wrapper JSON around them varies.
  */
+// Deliberately only key-SPECIFIC reasons. PERMISSION_DENIED is a status, not a
+// reason: it also covers "this API is not enabled for the project" and
+// tuned-model access errors, whose bodies name the actual fix. Matching on it
+// would hide exactly the detail this function exists to preserve. A genuine key
+// problem carries one of the markers below alongside it anyway.
 const KEY_ERROR_MARKERS = [
   'API_KEY_INVALID',
   'API_KEY_SERVICE_BLOCKED',
-  'PERMISSION_DENIED',
   'API key not valid',
   'API key expired',
 ];
