@@ -8,6 +8,28 @@ import { DEFAULT_MODEL } from './models';
 
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 
+/**
+ * Markers Google uses when the API key itself is the problem, rather than
+ * anything about the request. Matched case-insensitively against the raw error
+ * body, since the wrapper JSON around them varies.
+ */
+const KEY_ERROR_MARKERS = [
+  'API_KEY_INVALID',
+  'API_KEY_SERVICE_BLOCKED',
+  'PERMISSION_DENIED',
+  'API key not valid',
+  'API key expired',
+];
+
+/**
+ * Whether a 400/403 body is actually about the key. Exported for tests: the
+ * distinction decides which of two very different instructions the user gets.
+ */
+export function isApiKeyError(detail: string): boolean {
+  const upper = detail.toUpperCase();
+  return KEY_ERROR_MARKERS.some((marker) => upper.includes(marker.toUpperCase()));
+}
+
 export class GeminiProvider implements AIProvider {
   readonly id = 'gemini';
 
@@ -65,7 +87,17 @@ export class GeminiProvider implements AIProvider {
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
       if (res.status === 400 || res.status === 403) {
-        throw new AIError('Gemini rejected the request — check that your API key is valid.');
+        // Only blame the key when Google's own response says the key is the
+        // problem, or when there is no body to go on. A 400 from this API is
+        // more often something else entirely — an unavailable model, an
+        // oversized payload, an INVALID_ARGUMENT on a generation-config field
+        // (see the thinkingBudget note above) — and telling those users to
+        // check a perfectly good key sends them somewhere useless while the
+        // real reason, already fetched, goes unsaid (#329).
+        if (!detail.trim() || isApiKeyError(detail)) {
+          throw new AIError('Gemini rejected the request — check that your API key is valid.');
+        }
+        // Otherwise fall through: Google told us what's wrong, so pass it on.
       }
       if (res.status === 429) {
         throw new AIError('Gemini rate limit hit (free tier). Wait a minute and try again.');
