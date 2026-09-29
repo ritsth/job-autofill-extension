@@ -407,6 +407,57 @@ describe('analyze — experience extraction', () => {
     const a = analyze('A fun role for anyone excited about the mission.');
     expect(a.experience.required).toBeNull();
   });
+
+  // The badge exists to help someone decide whether a posting is worth
+  // applying to. Reporting a requirement the employer never stated pushes in
+  // the one direction that costs them the job, and it is invisible: the number
+  // looks plausible and the question that produced it lives in the application
+  // form, not the posting body (#366).
+  describe('application screening questions are not requirements', () => {
+    it('ignores a years-of-experience question the form asks', () => {
+      const a = analyze(
+        [
+          'Data Analyst at Acme. Join our team.',
+          'Do you have at least 3 years of experience? *',
+        ].join('\n'),
+      );
+
+      expect(a.experience.required).toBeNull();
+    });
+
+    it('ignores a "how many years" question', () => {
+      const a = analyze(
+        [
+          'Software Engineer at Acme. We build great products.',
+          'Application Questions',
+          'How many years of experience do you have with React? *',
+        ].join('\n'),
+      );
+
+      expect(a.experience.required).toBeNull();
+    });
+
+    it('still reads a real requirement stated alongside a screening question', () => {
+      // The fix must not be "strip everything" — the employer's own requirement
+      // has to survive next to the form's question.
+      const a = analyze(
+        [
+          'Senior Engineer at Acme. Requirements: 5+ years of experience with Go.',
+          'Do you have at least 2 years of experience? *',
+        ].join('\n'),
+      );
+
+      expect(a.experience.required).toBe('5+ yrs');
+    });
+
+    it('still reads a labelled experience field, which is not a question', () => {
+      // Workday-style label/value pairs must survive stripQuestions — they are
+      // neither interrogative nor an imperative form prompt.
+      const a = analyze('Required Years of Experience: 3-5\nDo you have a degree? *');
+
+      expect(a.experience.required).toBe('3–5 yrs');
+    });
+  });
 });
 
 describe('the AI eligibility budget survives the downstream prompt cut', () => {

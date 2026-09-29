@@ -137,7 +137,11 @@ export function analyze(text: string): SponsorAnalysis {
       : positives.length
         ? 'yes'
         : 'unknown';
-  return { verdict, restrictions, cautions, positives, experience: extractExperience(norm), source: 'rules' };
+  // `prose`, not `norm`, for the same reason the matching above uses it: "Do you
+  // have at least 3 years of experience?" is a question the FORM asks, not a
+  // requirement the employer stated, and reading it as one told the user a job
+  // needed experience it never asked for (#366).
+  return { verdict, restrictions, cautions, positives, experience: extractExperience(prose), source: 'rules' };
 }
 
 function dedupe(arr: string[]): string[] {
@@ -828,7 +832,10 @@ async function runAiCheck(): Promise<SponsorAnalysis> {
   // The AI's experience read is unreliable on labelled / structured fields
   // ("Required Years of Experience: None required"). Fill any field it left blank
   // from the local extractor, which reads those fields deterministically.
-  const local = extractExperience(normalizeText(raw));
+  // Questions are stripped first, same as in analyze(): otherwise a field the
+  // AI correctly left blank gets backfilled with a number scraped off one of
+  // the application form's own screening questions (#366).
+  const local = extractExperience(stripQuestions(normalizeText(raw)));
   analysis.experience.required ??= local.required;
   analysis.experience.preferred ??= local.preferred;
   setCachedAiVerdict(raw, analysis);
