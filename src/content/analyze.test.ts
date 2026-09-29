@@ -450,6 +450,17 @@ describe('analyze — experience extraction', () => {
       expect(a.experience.required).toBe('5+ yrs');
     });
 
+    it('does not let a labelled field swallow the line beneath it', () => {
+      // Regression from the first cut of this fix: stripping questions joined
+      // the surviving segments with spaces, collapsing the newline that bounds
+      // a labelled value. "Required years of experience: TBD" then ran on into
+      // the next line and reported its number as the requirement.
+      const a = analyze('Required years of experience: TBD\n5 years preferred');
+
+      expect(a.experience.required).toBeNull();
+      expect(a.experience.preferred).toBe('5+ yrs');
+    });
+
     it('still reads a labelled experience field, which is not a question', () => {
       // Workday-style label/value pairs must survive stripQuestions — they are
       // neither interrogative nor an imperative form prompt.

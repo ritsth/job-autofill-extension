@@ -118,7 +118,8 @@ export function analyze(text: string): SponsorAnalysis {
   // Match eligibility on prose only — screening QUESTIONS like "Are you
   // authorized to work without sponsorship?" describe the form, not the employer's
   // stance, and would otherwise produce a false NO.
-  const prose = stripQuestions(norm);
+  const segments = proseSegments(norm);
+  const prose = segments.join(' ');
   const restrictions = dedupe(RESTRICTIONS.filter((r) => r.re.test(prose)).map((r) => r.label));
   const positives = dedupe(POSITIVES.filter((p) => p.re.test(prose)).map((p) => p.label));
   const allCautions = dedupe(CAUTIONS.filter((c) => c.re.test(prose)).map((c) => c.label));
@@ -137,19 +138,38 @@ export function analyze(text: string): SponsorAnalysis {
       : positives.length
         ? 'yes'
         : 'unknown';
-  // `prose`, not `norm`, for the same reason the matching above uses it: "Do you
-  // have at least 3 years of experience?" is a question the FORM asks, not a
-  // requirement the employer stated, and reading it as one told the user a job
-  // needed experience it never asked for (#366).
-  return { verdict, restrictions, cautions, positives, experience: extractExperience(prose), source: 'rules' };
+  // Questions stripped, for the same reason the matching above strips them:
+  // "Do you have at least 3 years of experience?" is a question the FORM asks,
+  // not a requirement the employer stated, and reading it as one told the user
+  // a job needed experience it never asked for (#366). Newline-joined, not
+  // space-joined like `prose` — labeledExperience bounds a label's value at the
+  // next newline, so flattening them lets a label swallow the line below it.
+  return {
+    verdict,
+    restrictions,
+    cautions,
+    positives,
+    experience: extractExperience(segments.join('\n')),
+    source: 'rules',
+  };
 }
 
 function dedupe(arr: string[]): string[] {
   return [...new Set(arr)];
 }
 
-/** Drops question sentences/lines (screening questions) before eligibility matching. */
-function stripQuestions(text: string): string {
+/**
+ * The segments left after dropping question sentences/lines (screening
+ * questions), un-joined.
+ *
+ * Callers pick their own separator, because they need different ones. Eligibility
+ * matching joins with a space so a rule can span what were two lines; the
+ * experience reader joins with a newline, because `labeledExperience` bounds a
+ * label's value at the next newline — flatten those and
+ * "Required years of experience: TBD" happily swallows the line below it and
+ * reports whatever number is there (#366 review).
+ */
+function proseSegments(text: string): string[] {
   return text
     .split(/(?<=[.?!])\s+|\n+/)
     .filter((seg) => {
@@ -164,8 +184,12 @@ function stripQuestions(text: string): string {
       if (/\bplease (indicate|select|answer|confirm|specify|check|state|provide)\b/i.test(t)) return false;
       if (/\bfor the (sole )?purpose of determining\b/i.test(t)) return false;
       return true;
-    })
-    .join(' ');
+    });
+}
+
+/** Drops question sentences/lines (screening questions) before eligibility matching. */
+function stripQuestions(text: string): string {
+  return proseSegments(text).join(' ');
 }
 
 /**
@@ -834,8 +858,9 @@ async function runAiCheck(): Promise<SponsorAnalysis> {
   // from the local extractor, which reads those fields deterministically.
   // Questions are stripped first, same as in analyze(): otherwise a field the
   // AI correctly left blank gets backfilled with a number scraped off one of
-  // the application form's own screening questions (#366).
-  const local = extractExperience(stripQuestions(normalizeText(raw)));
+  // the application form's own screening questions (#366). Newline-joined for
+  // the same labelled-field reason analyze() is.
+  const local = extractExperience(proseSegments(normalizeText(raw)).join('\n'));
   analysis.experience.required ??= local.required;
   analysis.experience.preferred ??= local.preferred;
   setCachedAiVerdict(raw, analysis);
