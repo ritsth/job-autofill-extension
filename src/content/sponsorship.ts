@@ -80,11 +80,45 @@ const CAUTIONS: { re: RegExp; label: string }[] = [
   { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?]{0,30}\b(security )?clearance\b/i, label: 'Clearance preferred' },
 ];
 
+/**
+ * What a company is sponsoring when it means immigration.
+ *
+ * The VERB "sponsor" on its own says nothing: companies sponsor conferences,
+ * bootcamps, hackathons, gym memberships and football teams, and a careers page
+ * describes those in exactly the same first person ("we sponsor …") as a visa
+ * offer. Matching the bare verb turned every one of those into a green YES on
+ * the badge — the costly direction, since someone who needs sponsorship then
+ * applies to a job that screens them out for the very reason the badge said not
+ * to worry about (#368).
+ *
+ * An allowlist rather than an exclusion list on purpose: the set of things a
+ * company might sponsor is open-ended, while the immigration vocabulary is small
+ * and stable. The two verb rules below require one of these within a short
+ * window after "sponsor", the same shape the sibling noun-based rules use.
+ */
+const SPONSOR_OBJECT =
+  String.raw`(visas?|h-?1b|h1-?b|green\s*cards?|work\s*authoriz\w*|employment\s*authoriz\w*` +
+  String.raw`|immigration|opt\b|cpt\b|permanent residen\w*|foreign nationals?` +
+  String.raw`|international (candidates?|applicants?|hires?|students?)|candidates?|applicants?)`;
+
 // Friendly signals → green YES.
 const POSITIVES: { re: RegExp; label: string }[] = [
   { re: /\b(visa )?sponsorship (is )?(available|provided|offered|considered|supported)\b/i, label: 'Sponsorship available' },
-  { re: /\bwe (will |can |do |are happy to |are able to |are willing to )?sponsor\b/i, label: 'Employer sponsors' },
-  { re: /\b(willing|open|happy) to sponsor/i, label: 'Open to sponsorship' },
+  {
+    re: new RegExp(
+      String.raw`\bwe (will |can |do |are happy to |are able to |are willing to )?sponsor\b[^.!?]{0,30}\b` +
+        SPONSOR_OBJECT,
+      'i',
+    ),
+    label: 'Employer sponsors',
+  },
+  {
+    re: new RegExp(
+      String.raw`\b(willing|open|happy) to sponsor\b[^.!?]{0,30}\b` + SPONSOR_OBJECT,
+      'i',
+    ),
+    label: 'Open to sponsorship',
+  },
   { re: /\bwe (provide|offer)\b[^.!?]{0,15}\b(visa )?sponsorship\b/i, label: 'Employer sponsors' },
   { re: /\bsponsorship\b[^.!?]{0,25}\bfor the right candidate\b/i, label: 'Sponsorship available' },
   { re: /\bopen to international (candidates|applicants|hires)\b/i, label: 'Open to international candidates' },
