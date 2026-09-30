@@ -293,6 +293,80 @@ describe('analyze — eligibility verdict', () => {
     expect(a.positives.length).toBeGreaterThan(0);
   });
 
+  // A company sponsors conferences, bootcamps and football teams as well as
+  // visas, and a careers page says all of it in the same first person. Reading
+  // the bare verb as an immigration offer turned every perk into a green YES —
+  // the costly direction, since the applicant then invests in a job that will
+  // screen them out for the reason the badge said not to worry about (#368).
+  describe('the verb "sponsor" alone is not a sponsorship offer', () => {
+    it('does not read a non-visa sponsorship as YES', () => {
+      for (const text of [
+        'We sponsor conferences and meetups for our engineers.',
+        'We sponsor the local football team.',
+        'We are happy to sponsor conference attendance.',
+        'We will sponsor your continuing education.',
+        'We do sponsor a coding bootcamp for career changers.',
+        'We are willing to sponsor employee volunteering days.',
+        'We are open to sponsor a hackathon this year.',
+        'We sponsor charity events in our community.',
+      ]) {
+        const a = analyze(text);
+        expect(a.verdict, text).not.toBe('yes');
+        expect(a.positives, text).toEqual([]);
+      }
+    });
+
+    it('does not match a non-visa word that merely starts like one', () => {
+      // "optional" must not satisfy the OPT branch, "international conferences"
+      // must not satisfy the international-candidates one.
+      for (const text of [
+        'We sponsor optional training for new hires.',
+        'We sponsor international conferences each year.',
+        // A word boundary sits between "opt" and the hyphen, so `opt\b` alone
+        // would match this (raised in review of #368).
+        'We sponsor opt-in wellness programs.',
+      ]) {
+        expect(analyze(text).verdict, text).not.toBe('yes');
+      }
+    });
+
+    it('does not let another sponsored object smuggle in an audience noun', () => {
+      // "candidates"/"applicants" only count as the DIRECT object of the verb.
+      // Allowed anywhere in a window, a company sponsoring something else FOR
+      // candidates reads as a visa offer (raised in review of #368).
+      for (const text of [
+        'We sponsor hackathons for qualified candidates.',
+        'We sponsor conference travel for our applicants.',
+      ]) {
+        const a = analyze(text);
+        expect(a.verdict, text).not.toBe('yes');
+        expect(a.positives, text).toEqual([]);
+      }
+    });
+
+    it('still reads a genuine sponsorship offer as YES', () => {
+      // The fix must not be "require the noun" — these are all verb phrasings
+      // that genuinely mean immigration.
+      for (const text of [
+        'We will sponsor visas for the right candidate.',
+        'We are happy to sponsor H-1B visas for this role.',
+        'We can sponsor work visas.',
+        'We are able to sponsor candidates who need work authorization.',
+        'We sponsor employment-based green cards.',
+        'We are willing to sponsor the right candidate.',
+        'We will sponsor qualified applicants.',
+        'We are open to sponsor international candidates.',
+        'We sponsor permanent residency applications.',
+        'We can sponsor OPT students.',
+        'We sponsor an applicant who requires a visa.',
+      ]) {
+        const a = analyze(text);
+        expect(a.verdict, text).toBe('yes');
+        expect(a.positives.length, text).toBeGreaterThan(0);
+      }
+    });
+  });
+
   it('treats a citizenship preference as a caution, not a hard NO', () => {
     const a = analyze('U.S. citizenship preferred but not required.');
     expect(a.verdict).toBe('caution');
