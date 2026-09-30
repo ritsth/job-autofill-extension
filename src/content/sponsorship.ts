@@ -93,20 +93,46 @@ const CAUTIONS: { re: RegExp; label: string }[] = [
  *
  * An allowlist rather than an exclusion list on purpose: the set of things a
  * company might sponsor is open-ended, while the immigration vocabulary is small
- * and stable. The two verb rules below require one of these within a short
- * window after "sponsor", the same shape the sibling noun-based rules use.
+ * and stable.
+ *
+ * Two tiers, because the two kinds of object need different latitude.
  */
-const SPONSOR_OBJECT =
+
+/**
+ * Tier 1 — nouns that mean immigration and nothing else, so they are safe
+ * anywhere in a short window after the verb ("sponsor … for H-1B visas").
+ *
+ * `opt`/`cpt` carry an explicit `(?![\w-])` rather than `\b`: a word boundary
+ * sits between "opt" and the hyphen, so `opt\b` happily matches "opt-in".
+ */
+const VISA_NOUN =
   String.raw`(visas?|h-?1b|h1-?b|green\s*cards?|work\s*authoriz\w*|employment\s*authoriz\w*` +
-  String.raw`|immigration|opt\b|cpt\b|permanent residen\w*|foreign nationals?` +
-  String.raw`|international (candidates?|applicants?|hires?|students?)|candidates?|applicants?)`;
+  String.raw`|immigration|opt(?![\w-])|cpt(?![\w-])|permanent residen\w*|foreign nationals?` +
+  String.raw`|international (candidates?|applicants?|hires?|students?))`;
+
+/**
+ * Tier 2 — "candidates"/"applicants" only as the DIRECT object of the verb,
+ * with nothing but a determiner or adjective in between.
+ *
+ * These cannot use tier 1's window: a company sponsoring something else *for*
+ * candidates ("we sponsor hackathons for qualified candidates") would land
+ * inside it and read as a visa offer. Requiring the direct-object position
+ * keeps the genuine "sponsor the right candidate" phrasings while rejecting
+ * anything where another sponsored object comes first.
+ */
+const SPONSORED_PERSON =
+  String.raw`(?:the |an |a |our )?(?:right |qualified |eligible |strong |new )?(candidates?|applicants?)`;
+
+/** Either tier, anchored to whatever verb phrase precedes it. */
+const SPONSOR_OBJECT =
+  String.raw`(?:[^.!?]{0,30}\b` + VISA_NOUN + String.raw`|\s+` + SPONSORED_PERSON + String.raw`)`;
 
 // Friendly signals → green YES.
 const POSITIVES: { re: RegExp; label: string }[] = [
   { re: /\b(visa )?sponsorship (is )?(available|provided|offered|considered|supported)\b/i, label: 'Sponsorship available' },
   {
     re: new RegExp(
-      String.raw`\bwe (will |can |do |are happy to |are able to |are willing to )?sponsor\b[^.!?]{0,30}\b` +
+      String.raw`\bwe (will |can |do |are happy to |are able to |are willing to )?sponsor\b` +
         SPONSOR_OBJECT,
       'i',
     ),
@@ -114,7 +140,7 @@ const POSITIVES: { re: RegExp; label: string }[] = [
   },
   {
     re: new RegExp(
-      String.raw`\b(willing|open|happy) to sponsor\b[^.!?]{0,30}\b` + SPONSOR_OBJECT,
+      String.raw`\b(willing|open|happy) to sponsor\b` + SPONSOR_OBJECT,
       'i',
     ),
     label: 'Open to sponsorship',

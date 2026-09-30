@@ -322,8 +322,25 @@ describe('analyze — eligibility verdict', () => {
       for (const text of [
         'We sponsor optional training for new hires.',
         'We sponsor international conferences each year.',
+        // A word boundary sits between "opt" and the hyphen, so `opt\b` alone
+        // would match this (raised in review of #368).
+        'We sponsor opt-in wellness programs.',
       ]) {
         expect(analyze(text).verdict, text).not.toBe('yes');
+      }
+    });
+
+    it('does not let another sponsored object smuggle in an audience noun', () => {
+      // "candidates"/"applicants" only count as the DIRECT object of the verb.
+      // Allowed anywhere in a window, a company sponsoring something else FOR
+      // candidates reads as a visa offer (raised in review of #368).
+      for (const text of [
+        'We sponsor hackathons for qualified candidates.',
+        'We sponsor conference travel for our applicants.',
+      ]) {
+        const a = analyze(text);
+        expect(a.verdict, text).not.toBe('yes');
+        expect(a.positives, text).toEqual([]);
       }
     });
 
@@ -341,6 +358,7 @@ describe('analyze — eligibility verdict', () => {
         'We are open to sponsor international candidates.',
         'We sponsor permanent residency applications.',
         'We can sponsor OPT students.',
+        'We sponsor an applicant who requires a visa.',
       ]) {
         const a = analyze(text);
         expect(a.verdict, text).toBe('yes');
