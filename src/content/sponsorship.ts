@@ -35,12 +35,23 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
   { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b(?<!not )(require|required|must|only|need)/i, label: 'U.S. citizenship required' },
   { re: /\bcitizenship (is )?required\b/i, label: 'Citizenship required' },
   // Clearance counts as a hard restriction only with a level or requirement cue
-  // (so "clearance preferred" falls through to the caution tier).
-  { re: /\b(ts\/sci|top secret|secret clearance|public trust)\b/i, label: 'Security clearance' },
+  // (so "clearance preferred" falls through to the caution tier). Only TS/SCI and
+  // Top Secret are safe as bare levels — nobody says them casually. "Public
+  // trust" is everyday English ("building public trust in AI") and "secret
+  // clearance" can be a product noun, so both need clearance context (#370).
+  { re: /\b(ts\/sci|top secret)\b/i, label: 'Security clearance' },
   { re: /\b(active|current)\s+(security |government )?clearance\b/i, label: 'Security clearance' },
+  { re: /\bpublic trust\b[^.!?]{0,25}\b(clearance|eligib\w*|investigation|position|background|determination|obtain)/i, label: 'Security clearance' },
+  { re: /\b(obtain|hold|maintain|possess|active|current|eligib\w* (for|to obtain)|requires?|required|must have)\b[^.!?]{0,25}\b(public trust|secret (security )?clearance)\b/i, label: 'Security clearance' },
   { re: /\b(security )?clearance\b[^.!?]{0,25}\b(require|required|mandatory|must)\b/i, label: 'Security clearance' },
   { re: /\b(require[sd]?|must have|must hold|must (be able to )?obtain)\b[^.!?]{0,25}\b(security )?clearance\b/i, label: 'Security clearance' },
-  { re: /\b(itar|export[- ]control)/i, label: 'ITAR / export-controlled' },
+  // ITAR / export control only with a governing or requirement cue: a
+  // compliance-tooling company names both as the domain it SERVES, which says
+  // nothing about who may apply (#370). The optional "U.S." is spelled out
+  // because its periods would otherwise end the [^.!?] window early.
+  { re: /\b(subject to|governed by|pursuant to|due to|because of|under|per|in accordance with|compl(y|ies|iance) with)\b[^.!?]{0,20}(?:\bu\.s\.\s*)?\b(itar|export[- ]control)/i, label: 'ITAR / export-controlled' },
+  { re: /\b(itar|export[- ]control\w*)\b[^.!?]{0,40}\b(requir\w*|restrict\w*|must|eligib\w*|appl(y|ies)|u\.?s\.? persons?|u\.?s\.? citizens?)\b/i, label: 'ITAR / export-controlled' },
+  { re: /\b(itar|export)[- ]controlled\b/i, label: 'ITAR / export-controlled' },
   // Strong inability cue anywhere in the same sentence as "sponsor(ship)" —
   // catches "unable to consider candidates who require visa sponsorship".
   { re: /\b(unable to|not able to|cannot|can.?t|won.?t|will not|not in a position to|ineligible|not eligible|are unable to|is unable to)\b[^.!?]{0,70}\bsponsor(ship|ed|ing)?\b/i, label: 'No visa sponsorship' },
@@ -59,7 +70,10 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
   { re: /\bauthoriz(?:ed|ation) to work\b[^.!?]{0,45}\b(on a permanent basis|on an ongoing basis|indefinitely|without restriction)\b/i, label: 'Must not need sponsorship' },
   { re: /\b(lawful permanent resident|green card holder|permanent resident)\b[^.!?]{0,25}\b(require|required|must|only)\b/i, label: 'Permanent resident required' },
   { re: /\bmust (be|have|hold)\b[^.!?]{0,25}\b(green card|lawful permanent resident|permanent resident)\b/i, label: 'Permanent resident required' },
-  { re: /\b(u\.?s\.?|united states)\s+persons?\b/i, label: 'U.S. person (export control)' },
+  // "U.S. person" is an export-control term of art, but "serves U.S. persons
+  // and small businesses" is not a restriction — require a cue either side.
+  { re: /\b(must|only|requir\w*|restricted to|open to|limited to|qualify as|eligib\w*)\b[^.!?]{0,25}\b(u\.?s\.?|united states)\s+persons?\b/i, label: 'U.S. person (export control)' },
+  { re: /\b(u\.?s\.?|united states)\s+persons?\b[^.!?]{0,40}\b(only|requir\w*|must|as defined|itar|22 cfr|export|eligib\w*)\b/i, label: 'U.S. person (export control)' },
 ];
 
 /**

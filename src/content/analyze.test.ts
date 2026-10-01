@@ -567,3 +567,40 @@ describe('the AI eligibility budget survives the downstream prompt cut', () => {
     expect(buildJobEligibilityPrompt(focused).prompt).toContain(focused);
   });
 });
+
+describe('restriction keywords need a requirement cue, not just a mention (#370)', () => {
+  it('does not say NO when the restriction vocabulary is only the product domain', () => {
+    for (const text of [
+      'We are building public trust in artificial intelligence.',
+      'Our mission is to restore public trust in institutions.',
+      'Public trust must be earned every day.',
+      'Five years of experience required; our secret sauce is the team.',
+      'Join the team building secret clearance workflow software.',
+      'You will build export control compliance tooling for our customers.',
+      'We help exporters navigate ITAR and EAR regulations for their clients.',
+      'Our platform serves U.S. persons and small businesses.',
+    ]) {
+      const a = analyze(text);
+      expect(a.restrictions, text).toEqual([]);
+      expect(a.verdict, text).not.toBe('no');
+    }
+  });
+
+  it('still says NO for genuinely stated restrictions', () => {
+    for (const [text, label] of [
+      ['TS/SCI with polygraph required.', 'Security clearance'],
+      ['Active Secret clearance.', 'Security clearance'],
+      ['Must be able to obtain a Public Trust clearance.', 'Security clearance'],
+      ['Public Trust position; background investigation required.', 'Security clearance'],
+      ['This position is subject to ITAR.', 'ITAR / export-controlled'],
+      ['Subject to U.S. export control regulations.', 'ITAR / export-controlled'],
+      ['This role requires access to export-controlled technology.', 'ITAR / export-controlled'],
+      ['This position is open to U.S. persons only.', 'U.S. person (export control)'],
+      ['Applicants must be U.S. persons under ITAR.', 'U.S. person (export control)'],
+    ] as const) {
+      const a = analyze(text);
+      expect(a.restrictions, text).toContain(label);
+      expect(a.verdict, text).toBe('no');
+    }
+  });
+});
