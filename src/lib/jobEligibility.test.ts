@@ -79,6 +79,27 @@ describe('parseEligibilityJson', () => {
     expect(result.reason).toBeUndefined();
   });
 
+  it('keeps a bare numeric year count instead of dropping it (#364)', () => {
+    const result = parseEligibilityJson(
+      JSON.stringify({ experienceRequired: 3, experiencePreferred: 5 }),
+    );
+    // Same "N+ yrs" shape the local extractor produces, so the badge's
+    // "${required} required" line reads "3+ yrs required", not "3 required".
+    expect(result.experience).toEqual({ required: '3+ yrs', preferred: '5+ yrs' });
+  });
+
+  it('treats zero, negative and non-finite year counts as absent', () => {
+    // "0+ yrs required" would be noise; null lets the local extractor answer.
+    const result = parseEligibilityJson(
+      JSON.stringify({ experienceRequired: 0, experiencePreferred: -2 }),
+    );
+    expect(result.experience).toEqual({ required: null, preferred: null });
+  });
+
+  it('does not extend the numeric coercion to the summary', () => {
+    expect(parseEligibilityJson(JSON.stringify({ summary: 42 })).reason).toBeUndefined();
+  });
+
   it('gracefully handles non-string enum values without throwing', () => {
     const result = parseEligibilityJson(
       JSON.stringify({ sponsorship: 5, citizenship: true, clearance: { a: 1 } }),
