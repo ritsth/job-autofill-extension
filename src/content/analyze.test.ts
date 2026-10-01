@@ -579,6 +579,8 @@ describe('restriction keywords need a requirement cue, not just a mention (#370)
       'You will build export control compliance tooling for our customers.',
       'We help exporters navigate ITAR and EAR regulations for their clients.',
       'Our platform serves U.S. persons and small businesses.',
+      'We build software that automates export control screening for U.S. persons and foreign nationals alike.',
+      'Under ITAR and EAR, our customers face complex rules; we make it simple.',
     ]) {
       const a = analyze(text);
       expect(a.restrictions, text).toEqual([]);
@@ -597,6 +599,13 @@ describe('restriction keywords need a requirement cue, not just a mention (#370)
       ['This role requires access to export-controlled technology.', 'ITAR / export-controlled'],
       ['This position is open to U.S. persons only.', 'U.S. person (export control)'],
       ['Applicants must be U.S. persons under ITAR.', 'U.S. person (export control)'],
+      ['Clearance: Secret.', 'Security clearance'],
+      // Both read as NO before #370; the narrowed rules must not lose them.
+      // The full regulation name pushes "ITAR" past a short cue window, and the
+      // periods in "U.S." used to end the sentence window mid-phrase.
+      ['This position requires access to information subject to the International Traffic in Arms Regulations (ITAR).', 'ITAR / export-controlled'],
+      ['Only U.S. citizens or permanent residents (U.S. persons) will be considered.', 'U.S. person (export control)'],
+      ['Applicants must be a U.S. citizen or U.S. person.', 'U.S. person (export control)'],
     ] as const) {
       const a = analyze(text);
       expect(a.restrictions, text).toContain(label);

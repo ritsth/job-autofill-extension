@@ -41,16 +41,19 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
   // clearance" can be a product noun, so both need clearance context (#370).
   { re: /\b(ts\/sci|top secret)\b/i, label: 'Security clearance' },
   { re: /\b(active|current)\s+(security |government )?clearance\b/i, label: 'Security clearance' },
+  // Label form, common in requirement bullets: "Clearance: Secret".
+  { re: /\bclearance( level)?( required)?\s*:\s*(top secret|secret|ts\/sci|public trust)\b/i, label: 'Security clearance' },
   { re: /\bpublic trust\b[^.!?]{0,25}\b(clearance|eligib\w*|investigation|position|background|determination|obtain)/i, label: 'Security clearance' },
   { re: /\b(obtain|hold|maintain|possess|active|current|eligib\w* (for|to obtain)|requires?|required|must have)\b[^.!?]{0,25}\b(public trust|secret (security )?clearance)\b/i, label: 'Security clearance' },
   { re: /\b(security )?clearance\b[^.!?]{0,25}\b(require|required|mandatory|must)\b/i, label: 'Security clearance' },
   { re: /\b(require[sd]?|must have|must hold|must (be able to )?obtain)\b[^.!?]{0,25}\b(security )?clearance\b/i, label: 'Security clearance' },
   // ITAR / export control only with a governing or requirement cue: a
   // compliance-tooling company names both as the domain it SERVES, which says
-  // nothing about who may apply (#370). The optional "U.S." is spelled out
-  // because its periods would otherwise end the [^.!?] window early.
-  { re: /\b(subject to|governed by|pursuant to|due to|because of|under|per|in accordance with|compl(y|ies|iance) with)\b[^.!?]{0,20}(?:\bu\.s\.\s*)?\b(itar|export[- ]control)/i, label: 'ITAR / export-controlled' },
-  { re: /\b(itar|export[- ]control\w*)\b[^.!?]{0,40}\b(requir\w*|restrict\w*|must|eligib\w*|appl(y|ies)|u\.?s\.? persons?|u\.?s\.? citizens?)\b/i, label: 'ITAR / export-controlled' },
+  // nothing about who may apply (#370). Windows here are (?:u\.s\.|[^.!?]),
+  // not plain [^.!?]: the periods in "U.S." would otherwise end the sentence
+  // window mid-phrase ("Only U.S. citizens or … (U.S. persons)").
+  { re: /\b(subject to|governed by|pursuant to|due to|because of|(?:controlled|regulated|restricted) under|per|in accordance with|compl(y|ies|iance) with)\b(?:u\.s\.|[^.!?]){0,20}\b(itar|international traffic in arms|export[- ]control)/i, label: 'ITAR / export-controlled' },
+  { re: /\b(itar|export[- ]control\w*)\b(?:u\.s\.|[^.!?]){0,40}\b(requir\w*|restrict\w*|limit\w*|must|eligib\w*|appl(y|ies))\b/i, label: 'ITAR / export-controlled' },
   { re: /\b(itar|export)[- ]controlled\b/i, label: 'ITAR / export-controlled' },
   // Strong inability cue anywhere in the same sentence as "sponsor(ship)" —
   // catches "unable to consider candidates who require visa sponsorship".
@@ -72,8 +75,8 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
   { re: /\bmust (be|have|hold)\b[^.!?]{0,25}\b(green card|lawful permanent resident|permanent resident)\b/i, label: 'Permanent resident required' },
   // "U.S. person" is an export-control term of art, but "serves U.S. persons
   // and small businesses" is not a restriction — require a cue either side.
-  { re: /\b(must|only|requir\w*|restricted to|open to|limited to|qualify as|eligib\w*)\b[^.!?]{0,25}\b(u\.?s\.?|united states)\s+persons?\b/i, label: 'U.S. person (export control)' },
-  { re: /\b(u\.?s\.?|united states)\s+persons?\b[^.!?]{0,40}\b(only|requir\w*|must|as defined|itar|22 cfr|export|eligib\w*)\b/i, label: 'U.S. person (export control)' },
+  { re: /\b(must|only|requir\w*|restricted to|open to|limited to|qualify as|eligib\w*)\b(?:u\.s\.|[^.!?]){0,45}\b(u\.?s\.?|united states)\s+persons?\b/i, label: 'U.S. person (export control)' },
+  { re: /\b(u\.?s\.?|united states)\s+persons?\b(?:u\.s\.|[^.!?]){0,40}\b(only|requir\w*|must|as defined|itar|22 cfr|export|eligib\w*|considered)\b/i, label: 'U.S. person (export control)' },
 ];
 
 /**
