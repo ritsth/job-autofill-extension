@@ -8,8 +8,8 @@ interface RawEligibility {
   sponsorship?: string;
   citizenship?: string;
   clearance?: string;
-  experienceRequired?: string | null;
-  experiencePreferred?: string | null;
+  experienceRequired?: string | number | null;
+  experiencePreferred?: string | number | null;
   summary?: string;
 }
 
@@ -45,12 +45,20 @@ export function parseEligibilityJson(raw: string): SponsorAnalysis {
 
   const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
+  // The prompt asks for a string like "3+ years", but a bare year count is
+  // exactly what a model emits unquoted (#364). Render it in the local
+  // extractor's own "N+ yrs" shape: the badge prints `${required} required`,
+  // so a raw "3" would read as "3 required". Zero, negative and non-finite
+  // counts stay null and fall back to the rules-based read.
+  const years = (v: unknown): string | null =>
+    typeof v === 'number' ? (Number.isFinite(v) && v > 0 ? `${v}+ yrs` : null) : str(v);
+
   return {
     verdict,
     restrictions,
     cautions,
     positives,
-    experience: { required: str(d.experienceRequired), preferred: str(d.experiencePreferred) },
+    experience: { required: years(d.experienceRequired), preferred: years(d.experiencePreferred) },
     reason: str(d.summary) || undefined,
     source: 'ai',
   };
