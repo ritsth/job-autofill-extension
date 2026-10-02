@@ -95,48 +95,44 @@ const CLEARANCE_RESTRICTION = 'Security clearance';
 const CLEARANCE_CAUTION = 'Clearance preferred';
 
 /**
- * Whether a clearance match is actually stated as a PREFERENCE.
+ * Clearance rules are matched per CLAUSE, not across the whole posting.
  *
- * The clearance rules above key on a level ("Top Secret") or on "active", and
- * neither says anything about whether the employer requires it: "Top Secret
- * clearance preferred" named a level, matched, and the badge said NO beside its
- * own "Clearance preferred" caution (#373).
+ * The rules above key on a level ("Top Secret") or on "active", and neither
+ * says whether the employer requires it: "Top Secret clearance preferred" named
+ * a level, matched, and the badge said NO beside its own "Clearance preferred"
+ * caution (#373). Whether a clearance is required is a property of the clause
+ * it sits in.
  *
- * Judged per CLAUSE, not per posting, because one posting can genuinely
+ * Per clause rather than per posting, because one posting can genuinely
  * require one level and prefer a higher one ("Secret clearance required;
- * TS/SCI clearance is a plus") — that must stay NO. A clause ends at sentence
- * punctuation, a semicolon, or "but". A requirement word in the same clause
- * wins over a preference word ("Active TS/SCI required, polygraph preferred").
+ * TS/SCI clearance is a plus") — that must stay NO. And each rule runs on one
+ * clause at a time, so a requirement cue can't reach across a semicolon to a
+ * clearance the next clause only prefers ("Must hold a degree; Secret
+ * clearance preferred").
+ *
+ * A clause ends at sentence punctuation, a semicolon, or "but" — not at the
+ * period of "U.S.", or "Must be a U.S. citizen with an active Secret
+ * clearance" would lose the "Must" that governs it. Commas deliberately do not
+ * end one: "A Top Secret clearance, while not required, is a plus."
  */
-function isPreferredClause(prose: string, index: number): boolean {
-  // The period of "U.S." is not a clause end, or "Must be a U.S. citizen with
-  // an active Secret clearance" would lose the "Must" that governs it.
-  const boundary = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b/gi;
-  let start = 0;
-  let end = prose.length;
-  for (const b of prose.matchAll(boundary)) {
-    if (b.index < index) start = b.index + b[0].length;
-    else {
-      end = b.index;
-      break;
-    }
-  }
-  const clause = prose.slice(start, end);
-  return (
-    /\b(prefer(red|ence)?|a plus|nice to have|desired|desirable|bonus)\b/i.test(clause) &&
-    !/\b(?<!not )(must|requires?|required|mandatory)\b/i.test(clause)
-  );
-}
+const CLAUSE_BOUNDARY = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b/i;
 
-/** A clearance rule counts as a restriction if ANY of its matches isn't a preference. */
-function clearanceRequired(re: RegExp, prose: string): { required: boolean; preferred: boolean } {
-  let required = false;
-  let preferred = false;
-  for (const m of prose.matchAll(new RegExp(re.source, re.flags.replace('g', '') + 'g'))) {
-    if (isPreferredClause(prose, m.index)) preferred = true;
-    else required = true;
-  }
-  return { required, preferred };
+const PREFERENCE_CUE = /\b(prefer(red|ence)?|a plus|nice to have|desired|desirable|bonus)\b/i;
+const REQUIREMENT_CUE = /\b(?<!not )(must|requires?|required|mandatory)\b/i;
+// "Not required" / "don't need" — the clause says there is NO requirement.
+// Only requirement VERBS are negated here, never "hold": "Applicants who do
+// not hold an active TS/SCI will not be considered" is a requirement.
+const WAIVER_CUE =
+  /(?:\bnot|n't)\s+(?:(?:need|have) to\s+)?(?:be\s+)?(?:require[sd]?|need(?:ed)?|necessary|mandatory)\b|\bno\s+(?:security\s+)?clearance\s+(?:is\s+)?(?:required|needed|necessary)\b/i;
+
+type ClearanceStance = 'required' | 'preferred' | 'waived';
+
+function clearanceStance(clause: string): ClearanceStance {
+  // A requirement word in the same clause outranks a preference word
+  // ("Active TS/SCI required, polygraph preferred").
+  if (PREFERENCE_CUE.test(clause) && !REQUIREMENT_CUE.test(clause)) return 'preferred';
+  if (WAIVER_CUE.test(clause)) return 'waived';
+  return 'required';
 }
 
 // Soft / preference signals → amber caution (not a hard disqualifier).
@@ -249,12 +245,18 @@ export function analyze(text: string): SponsorAnalysis {
   // stance, and would otherwise produce a false NO.
   const segments = proseSegments(norm);
   const prose = segments.join(' ');
+  const clauses = prose.split(CLAUSE_BOUNDARY);
   let clearancePreferred = false;
   const restrictions = dedupe(
     RESTRICTIONS.filter((r) => {
       if (r.label !== CLEARANCE_RESTRICTION) return r.re.test(prose);
-      const { required, preferred } = clearanceRequired(r.re, prose);
-      clearancePreferred ||= preferred;
+      let required = false;
+      for (const clause of clauses) {
+        if (!r.re.test(clause)) continue;
+        const stance = clearanceStance(clause);
+        if (stance === 'required') required = true;
+        else if (stance === 'preferred') clearancePreferred = true;
+      }
       return required;
     }).map((r) => r.label),
   );
