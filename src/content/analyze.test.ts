@@ -613,3 +613,74 @@ describe('restriction keywords need a requirement cue, not just a mention (#370)
     }
   });
 });
+
+describe('a clearance stated as a preference is a caution, not NO (#373)', () => {
+  it('demotes a named level or "active" clearance to MAYBE when the clause only prefers it', () => {
+    for (const text of [
+      'Top Secret clearance preferred.',
+      'TS/SCI clearance is a plus.',
+      'An active TS/SCI is nice to have.',
+      'Active security clearance preferred.',
+      'Secret clearance preferred but not required.',
+      'Clearance is not required, but a Top Secret clearance is a plus.',
+      'A Top Secret clearance, while not required, is a plus.',
+      // Waived AND preferred: still a preference. No "clearance" word here, so
+      // the caution can only come from the demoted level match.
+      'An active TS/SCI, while not required, is nice to have.',
+      'Preferred: Active Secret clearance.',
+      "You don't need to hold a Secret clearance, but it's a plus.",
+      // "but" ends the clause, so the unrelated "required" can't claim the TS/SCI.
+      'Python is required, but an active TS/SCI is a plus.',
+      // A requirement cue must not reach across a semicolon to a clearance the
+      // next clause only prefers.
+      'Must hold a degree; Secret clearance preferred.',
+      'Requires a bachelor degree; Top Secret clearance preferred.',
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('caution');
+      expect(a.restrictions, text).toEqual([]);
+      expect(a.cautions, text).toContain('Clearance preferred');
+    }
+  });
+
+  it('does not read a waived clearance as a requirement', () => {
+    for (const text of [
+      'This role does not require a security clearance.',
+      'This role does not require a Secret clearance.',
+      // Bare levels match on their own, so the clause has to waive them.
+      'This role does not require a Top Secret clearance.',
+      'This role does not require a TS/SCI.',
+      'No security clearance is required.',
+      'A TS/SCI is not necessary for this role.',
+      "You don't need a Top Secret clearance to apply.",
+    ]) {
+      expect(analyze(text).restrictions, text).toEqual([]);
+    }
+  });
+
+  it('stays NO when the clearance itself is required, even beside a preference', () => {
+    for (const text of [
+      'TS/SCI required.',
+      'Active Secret clearance.',
+      // One posting can require one level and prefer a higher one.
+      'Secret required; TS/SCI a plus.',
+      'Secret clearance required; TS/SCI clearance is a plus.',
+      // A requirement word in the same clause outranks the preference word.
+      'Must hold an active TS/SCI clearance, polygraph preferred.',
+      'Active TS/SCI required, polygraph preferred.',
+      // The period in "U.S." must not split "Must" off from the clearance.
+      'Must be a U.S. citizen with an active Secret clearance, TS/SCI preferred.',
+      // A preference in the NEXT sentence says nothing about this one.
+      'Candidates must have a Top Secret clearance. Experience with AWS is a plus.',
+      'Top Secret clearance with SCI eligibility. Python experience preferred.',
+      // Negating "hold" is a requirement stated in the negative, not a waiver.
+      'Applicants who do not hold an active TS/SCI will not be considered.',
+      // The waiver is about the degree, in its own clause.
+      'A degree is not required, but an active TS/SCI clearance is.',
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('no');
+      expect(a.restrictions, text).toContain('Security clearance');
+    }
+  });
+});
