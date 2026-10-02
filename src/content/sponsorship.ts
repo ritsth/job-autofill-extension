@@ -44,9 +44,13 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
   // Label form, common in requirement bullets: "Clearance: Secret".
   { re: /\bclearance( level)?( required)?\s*:\s*(top secret|secret|ts\/sci|public trust)\b/i, label: 'Security clearance' },
   { re: /\bpublic trust\b[^.!?]{0,25}\b(clearance|eligib\w*|investigation|position|background|determination|obtain)/i, label: 'Security clearance' },
-  { re: /\b(obtain|hold|maintain|possess|active|current|eligib\w* (for|to obtain)|requires?|required|must have)\b[^.!?]{0,25}\b(public trust|secret (security )?clearance)\b/i, label: 'Security clearance' },
-  { re: /\b(security )?clearance\b[^.!?]{0,25}\b(require|required|mandatory|must)\b/i, label: 'Security clearance' },
-  { re: /\b(require[sd]?|must have|must hold|must (be able to )?obtain)\b[^.!?]{0,25}\b(security )?clearance\b/i, label: 'Security clearance' },
+  { re: /\b(?<!(?:not|n't)\s(?:(?:need|have) to\s)?)(obtain|hold|maintain|possess|active|current|eligib\w* (for|to obtain)|requires?|required|must have)\b[^.!?]{0,25}\b(public trust|secret (security )?clearance)\b/i, label: 'Security clearance' },
+  // `(?<!not )` for the same reason as the citizenship rule above: "clearance
+  // preferred but not required" is the opposite of a requirement (#373).
+  { re: /\b(security )?clearance\b[^.!?]{0,25}\b(?<!not )(require|required|mandatory|must)\b/i, label: 'Security clearance' },
+  { re: /\b(?<!(?:not|n't)\s(?:(?:need|have) to\s)?)(require[sd]?|must have|must hold|must (be able to )?obtain)\b[^.!?]{0,25}\b(security )?clearance\b/i, label: 'Security clearance' },
+  // A level stated as required without the word "clearance": "Secret required".
+  { re: /\b(top secret|secret|ts\/sci|public trust)\s+(is )?(?<!not )(required|mandatory)\b/i, label: 'Security clearance' },
   // ITAR / export control only with a governing or requirement cue: a
   // compliance-tooling company names both as the domain it SERVES, which says
   // nothing about who may apply (#370). Windows here are (?:u\.s\.|[^.!?]),
@@ -86,6 +90,54 @@ const RESTRICTIONS: { re: RegExp; label: string }[] = [
  * why it must never dominate an explicit sponsorship positive — see analyze().
  */
 const WORK_AUTH_CAUTION = 'U.S. work authorization required';
+
+const CLEARANCE_RESTRICTION = 'Security clearance';
+const CLEARANCE_CAUTION = 'Clearance preferred';
+
+/**
+ * Whether a clearance match is actually stated as a PREFERENCE.
+ *
+ * The clearance rules above key on a level ("Top Secret") or on "active", and
+ * neither says anything about whether the employer requires it: "Top Secret
+ * clearance preferred" named a level, matched, and the badge said NO beside its
+ * own "Clearance preferred" caution (#373).
+ *
+ * Judged per CLAUSE, not per posting, because one posting can genuinely
+ * require one level and prefer a higher one ("Secret clearance required;
+ * TS/SCI clearance is a plus") — that must stay NO. A clause ends at sentence
+ * punctuation, a semicolon, or "but". A requirement word in the same clause
+ * wins over a preference word ("Active TS/SCI required, polygraph preferred").
+ */
+function isPreferredClause(prose: string, index: number): boolean {
+  // The period of "U.S." is not a clause end, or "Must be a U.S. citizen with
+  // an active Secret clearance" would lose the "Must" that governs it.
+  const boundary = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b/gi;
+  let start = 0;
+  let end = prose.length;
+  for (const b of prose.matchAll(boundary)) {
+    if (b.index < index) start = b.index + b[0].length;
+    else {
+      end = b.index;
+      break;
+    }
+  }
+  const clause = prose.slice(start, end);
+  return (
+    /\b(prefer(red|ence)?|a plus|nice to have|desired|desirable|bonus)\b/i.test(clause) &&
+    !/\b(?<!not )(must|requires?|required|mandatory)\b/i.test(clause)
+  );
+}
+
+/** A clearance rule counts as a restriction if ANY of its matches isn't a preference. */
+function clearanceRequired(re: RegExp, prose: string): { required: boolean; preferred: boolean } {
+  let required = false;
+  let preferred = false;
+  for (const m of prose.matchAll(new RegExp(re.source, re.flags.replace('g', '') + 'g'))) {
+    if (isPreferredClause(prose, m.index)) preferred = true;
+    else required = true;
+  }
+  return { required, preferred };
+}
 
 // Soft / preference signals → amber caution (not a hard disqualifier).
 const CAUTIONS: { re: RegExp; label: string }[] = [
@@ -197,9 +249,23 @@ export function analyze(text: string): SponsorAnalysis {
   // stance, and would otherwise produce a false NO.
   const segments = proseSegments(norm);
   const prose = segments.join(' ');
-  const restrictions = dedupe(RESTRICTIONS.filter((r) => r.re.test(prose)).map((r) => r.label));
+  let clearancePreferred = false;
+  const restrictions = dedupe(
+    RESTRICTIONS.filter((r) => {
+      if (r.label !== CLEARANCE_RESTRICTION) return r.re.test(prose);
+      const { required, preferred } = clearanceRequired(r.re, prose);
+      clearancePreferred ||= preferred;
+      return required;
+    }).map((r) => r.label),
+  );
   const positives = dedupe(POSITIVES.filter((p) => p.re.test(prose)).map((p) => p.label));
-  const allCautions = dedupe(CAUTIONS.filter((c) => c.re.test(prose)).map((c) => c.label));
+  // A demoted clearance match surfaces as the caution it really is — the
+  // CAUTIONS rule only sees "clearance … preferred", so "an active TS/SCI is
+  // nice to have" would otherwise vanish rather than read as MAYBE.
+  const allCautions = dedupe([
+    ...CAUTIONS.filter((c) => c.re.test(prose)).map((c) => c.label),
+    ...(clearancePreferred ? [CLEARANCE_CAUTION] : []),
+  ]);
   // A caution outranks a positive below, so the boilerplate work-authorization
   // line would otherwise drag a posting that explicitly sponsors (or welcomes
   // OPT/CPT) down to MAYBE. An explicit positive answers that line directly, so
