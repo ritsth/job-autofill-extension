@@ -29,10 +29,13 @@ export interface SponsorAnalysis {
 }
 
 // Hard restrictive signals → red NO. Order doesn't matter; labels are de-duped.
-const RESTRICTIONS: { re: RegExp; label: string }[] = [
+const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   { re: /\bmust be (a |an )?(u\.?s\.?|united states) citizen/i, label: 'U.S. citizenship required' },
-  // Lookbehind avoids "preferred but not required" → false NO.
-  { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b(?<!not )(require|required|must|only|need)/i, label: 'U.S. citizenship required' },
+  // Lookbehind avoids "preferred but not required" → false NO. Matched per
+  // clause (see CLAUSE_BOUNDARY): the 40-char window otherwise runs on into the
+  // NEXT requirement in a list — "U.S. citizenship preferred; must have 5 years
+  // of Python" read as citizenship REQUIRED (#377).
+  { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b(?<!not )(require|required|must|only|need)/i, label: 'U.S. citizenship required', perClause: true },
   { re: /\bcitizenship (is )?required\b/i, label: 'Citizenship required' },
   // Clearance counts as a hard restriction only with a level or requirement cue
   // (so "clearance preferred" falls through to the caution tier). Only TS/SCI and
@@ -110,12 +113,14 @@ const CLEARANCE_CAUTION = 'Clearance preferred';
  * clearance the next clause only prefers ("Must hold a degree; Secret
  * clearance preferred").
  *
- * A clause ends at sentence punctuation, a semicolon, or "but" — not at the
- * period of "U.S.", or "Must be a U.S. citizen with an active Secret
- * clearance" would lose the "Must" that governs it. Commas deliberately do not
- * end one: "A Top Secret clearance, while not required, is a plus."
+ * A clause ends at sentence punctuation, a semicolon, "but", or ", and" — not
+ * at the period of "U.S.", or "Must be a U.S. citizen with an active Secret
+ * clearance" would lose the "Must" that governs it. A bare comma deliberately
+ * does not end one: "A Top Secret clearance, while not required, is a plus."
+ * ", and" does, because it joins a separate requirement onto the list
+ * ("U.S. citizenship is a plus, and you must be comfortable on call").
  */
-const CLAUSE_BOUNDARY = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b/i;
+const CLAUSE_BOUNDARY = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b|,\s+and\b/i;
 
 const PREFERENCE_CUE = /\b(prefer(red|ence)?|a plus|nice to have|desired|desirable|bonus)\b/i;
 const REQUIREMENT_CUE = /\b(?<!not )(must|requires?|required|mandatory)\b/i;
@@ -249,6 +254,7 @@ export function analyze(text: string): SponsorAnalysis {
   let clearancePreferred = false;
   const restrictions = dedupe(
     RESTRICTIONS.filter((r) => {
+      if (r.perClause) return clauses.some((clause) => r.re.test(clause));
       if (r.label !== CLEARANCE_RESTRICTION) return r.re.test(prose);
       let required = false;
       for (const clause of clauses) {

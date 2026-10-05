@@ -684,3 +684,40 @@ describe('a clearance stated as a preference is a caution, not NO (#373)', () =>
     }
   });
 });
+
+describe('a citizenship preference is not turned into a requirement by the next clause (#377)', () => {
+  it('reads the preference as MAYBE when a later, unrelated clause says must / required', () => {
+    for (const text of [
+      'U.S. citizenship preferred; must have 5 years of Python.',
+      'U.S. citizenship preferred; a degree is required.',
+      // ", and" joins a separate requirement onto the list.
+      'U.S. citizenship is a plus, and you must be comfortable on call.',
+      'U.S. citizenship preferred, but a degree is required.',
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('caution');
+      expect(a.restrictions, text).toEqual([]);
+      expect(a.cautions, text).toContain('U.S. citizenship preferred');
+    }
+  });
+
+  it('still says NO when the citizenship clause itself is the requirement', () => {
+    for (const text of [
+      'U.S. citizenship is required for this role.',
+      'US citizenship needed.',
+      'U.S. citizenship required; Python preferred.',
+      'U.S. citizenship is required, and a Secret clearance is a plus.',
+      'Due to contract requirements, U.S. citizenship is required.',
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('no');
+      expect(a.restrictions, text).toContain('U.S. citizenship required');
+    }
+  });
+
+  it('keeps a clearance requirement intact across the new ", and" boundary', () => {
+    expect(analyze('Must hold an active TS/SCI clearance, and polygraph preferred.').verdict).toBe('no');
+    expect(analyze('Must have, and maintain, a TS/SCI clearance.').verdict).toBe('no');
+    expect(analyze('Secret clearance preferred, and must relocate.').verdict).toBe('caution');
+  });
+});
