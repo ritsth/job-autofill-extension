@@ -29,10 +29,13 @@ export interface SponsorAnalysis {
 }
 
 // Hard restrictive signals → red NO. Order doesn't matter; labels are de-duped.
-const RESTRICTIONS: { re: RegExp; label: string }[] = [
+const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   { re: /\bmust be (a |an )?(u\.?s\.?|united states) citizen/i, label: 'U.S. citizenship required' },
-  // Lookbehind avoids "preferred but not required" → false NO.
-  { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b(?<!not )(require|required|must|only|need)/i, label: 'U.S. citizenship required' },
+  // Lookbehind avoids "preferred but not required" → false NO. Matched per
+  // clause (see CLAUSE_BOUNDARY): the 40-char window otherwise runs on into the
+  // NEXT requirement in a list — "U.S. citizenship preferred; must have 5 years
+  // of Python" read as citizenship REQUIRED (#377).
+  { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b(?<!not )(require|required|must|only|need)/i, label: 'U.S. citizenship required', perClause: true },
   { re: /\bcitizenship (is )?required\b/i, label: 'Citizenship required' },
   // Clearance counts as a hard restriction only with a level or requirement cue
   // (so "clearance preferred" falls through to the caution tier). Only TS/SCI and
@@ -112,8 +115,9 @@ const CLEARANCE_CAUTION = 'Clearance preferred';
  *
  * A clause ends at sentence punctuation, a semicolon, or "but" — not at the
  * period of "U.S.", or "Must be a U.S. citizen with an active Secret
- * clearance" would lose the "Must" that governs it. Commas deliberately do not
- * end one: "A Top Secret clearance, while not required, is a plus."
+ * clearance" would lose the "Must" that governs it. A bare comma deliberately
+ * does not end one: "A Top Secret clearance, while not required, is a plus."
+ * ", and" sometimes does — see splitClauses.
  */
 const CLAUSE_BOUNDARY = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b/i;
 
@@ -124,6 +128,27 @@ const REQUIREMENT_CUE = /\b(?<!not )(must|requires?|required|mandatory)\b/i;
 // not hold an active TS/SCI will not be considered" is a requirement.
 const WAIVER_CUE =
   /(?:\bnot|n't)\s+(?:(?:need|have) to\s+)?(?:be\s+)?(?:require[sd]?|need(?:ed)?|necessary|mandatory)\b|\bno\s+(?:security\s+)?clearance\s+(?:is\s+)?(?:required|needed|necessary)\b/i;
+
+/**
+ * ", and" ends a clause only when the text before it is already a complete
+ * statement — it carries its own preference, requirement or waiver. Then what
+ * follows is a separate item: "U.S. citizenship is a plus, and you must be
+ * comfortable on call" (#377). Otherwise the two share one predicate and must
+ * stay together: in "U.S. citizenship, and a valid driver's license, required"
+ * the "required" belongs to the citizenship too.
+ */
+function splitClauses(prose: string): string[] {
+  return prose.split(CLAUSE_BOUNDARY).flatMap((clause) => {
+    const parts = clause.split(/,\s+and\b/i);
+    const out = [parts[0]];
+    for (const part of parts.slice(1)) {
+      const prev = out[out.length - 1];
+      if (PREFERENCE_CUE.test(prev) || REQUIREMENT_CUE.test(prev) || WAIVER_CUE.test(prev)) out.push(part);
+      else out[out.length - 1] = `${prev}, and${part}`;
+    }
+    return out;
+  });
+}
 
 type ClearanceStance = 'required' | 'preferred' | 'waived';
 
@@ -245,10 +270,11 @@ export function analyze(text: string): SponsorAnalysis {
   // stance, and would otherwise produce a false NO.
   const segments = proseSegments(norm);
   const prose = segments.join(' ');
-  const clauses = prose.split(CLAUSE_BOUNDARY);
+  const clauses = splitClauses(prose);
   let clearancePreferred = false;
   const restrictions = dedupe(
     RESTRICTIONS.filter((r) => {
+      if (r.perClause) return clauses.some((clause) => r.re.test(clause));
       if (r.label !== CLEARANCE_RESTRICTION) return r.re.test(prose);
       let required = false;
       for (const clause of clauses) {
