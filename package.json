@@ -21,7 +21,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",
-    "package": "CRX_NO_KEY=1 npm run build && cd dist && zip -r -FS ../web-store-package.zip . -x '.DS_Store' && cd .."
+    "package": "CRX_NO_KEY=1 npm run build && cd dist && zip -r -FS ../web-store-package.zip . -x '*.DS_Store' '__MACOSX/*' && cd .."
   },
   "dependencies": {
     "react": "^18.3.1",
