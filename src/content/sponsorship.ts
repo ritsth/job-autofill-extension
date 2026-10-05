@@ -113,14 +113,13 @@ const CLEARANCE_CAUTION = 'Clearance preferred';
  * clearance the next clause only prefers ("Must hold a degree; Secret
  * clearance preferred").
  *
- * A clause ends at sentence punctuation, a semicolon, "but", or ", and" — not
- * at the period of "U.S.", or "Must be a U.S. citizen with an active Secret
+ * A clause ends at sentence punctuation, a semicolon, or "but" — not at the
+ * period of "U.S.", or "Must be a U.S. citizen with an active Secret
  * clearance" would lose the "Must" that governs it. A bare comma deliberately
  * does not end one: "A Top Secret clearance, while not required, is a plus."
- * ", and" does, because it joins a separate requirement onto the list
- * ("U.S. citizenship is a plus, and you must be comfortable on call").
+ * ", and" sometimes does — see splitClauses.
  */
-const CLAUSE_BOUNDARY = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b|,\s+and\b/i;
+const CLAUSE_BOUNDARY = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b/i;
 
 const PREFERENCE_CUE = /\b(prefer(red|ence)?|a plus|nice to have|desired|desirable|bonus)\b/i;
 const REQUIREMENT_CUE = /\b(?<!not )(must|requires?|required|mandatory)\b/i;
@@ -129,6 +128,27 @@ const REQUIREMENT_CUE = /\b(?<!not )(must|requires?|required|mandatory)\b/i;
 // not hold an active TS/SCI will not be considered" is a requirement.
 const WAIVER_CUE =
   /(?:\bnot|n't)\s+(?:(?:need|have) to\s+)?(?:be\s+)?(?:require[sd]?|need(?:ed)?|necessary|mandatory)\b|\bno\s+(?:security\s+)?clearance\s+(?:is\s+)?(?:required|needed|necessary)\b/i;
+
+/**
+ * ", and" ends a clause only when the text before it is already a complete
+ * statement — it carries its own preference, requirement or waiver. Then what
+ * follows is a separate item: "U.S. citizenship is a plus, and you must be
+ * comfortable on call" (#377). Otherwise the two share one predicate and must
+ * stay together: in "U.S. citizenship, and a valid driver's license, required"
+ * the "required" belongs to the citizenship too.
+ */
+function splitClauses(prose: string): string[] {
+  return prose.split(CLAUSE_BOUNDARY).flatMap((clause) => {
+    const parts = clause.split(/,\s+and\b/i);
+    const out = [parts[0]];
+    for (const part of parts.slice(1)) {
+      const prev = out[out.length - 1];
+      if (PREFERENCE_CUE.test(prev) || REQUIREMENT_CUE.test(prev) || WAIVER_CUE.test(prev)) out.push(part);
+      else out[out.length - 1] = `${prev}, and${part}`;
+    }
+    return out;
+  });
+}
 
 type ClearanceStance = 'required' | 'preferred' | 'waived';
 
@@ -250,7 +270,7 @@ export function analyze(text: string): SponsorAnalysis {
   // stance, and would otherwise produce a false NO.
   const segments = proseSegments(norm);
   const prose = segments.join(' ');
-  const clauses = prose.split(CLAUSE_BOUNDARY);
+  const clauses = splitClauses(prose);
   let clearancePreferred = false;
   const restrictions = dedupe(
     RESTRICTIONS.filter((r) => {

@@ -708,6 +708,10 @@ describe('a citizenship preference is not turned into a requirement by the next 
       'U.S. citizenship required; Python preferred.',
       'U.S. citizenship is required, and a Secret clearance is a plus.',
       'Due to contract requirements, U.S. citizenship is required.',
+      // ", and" with nothing stated before it shares the later predicate:
+      // the "required" governs the citizenship too.
+      "U.S. citizenship, and a valid driver's license, required.",
+      'U.S. citizenship, and an active clearance, required.',
     ]) {
       const a = analyze(text);
       expect(a.verdict, text).toBe('no');
@@ -719,5 +723,7 @@ describe('a citizenship preference is not turned into a requirement by the next 
     expect(analyze('Must hold an active TS/SCI clearance, and polygraph preferred.').verdict).toBe('no');
     expect(analyze('Must have, and maintain, a TS/SCI clearance.').verdict).toBe('no');
     expect(analyze('Secret clearance preferred, and must relocate.').verdict).toBe('caution');
+    // A completed requirement on the left: the TS/SCI after ", and" is its own item.
+    expect(analyze('A degree is required, and an active TS/SCI is nice to have.').verdict).toBe('caution');
   });
 });
