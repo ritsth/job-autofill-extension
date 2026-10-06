@@ -741,6 +741,8 @@ describe('plural "U.S. citizens" restriction phrasings (#383)', () => {
       'This role is limited to United States citizens.',
       'Restricted to U.S. citizens due to contract requirements.',
       'Clearance: Secret; U.S. citizens only',
+      // "any" here is not the start of an inclusive list.
+      'Only U.S. citizens may apply for any role on this contract.',
     ]) {
       const a = analyze(text);
       expect(a.verdict, text).toBe('no');
@@ -757,6 +759,12 @@ describe('plural "U.S. citizens" restriction phrasings (#383)', () => {
       // An "open to" list that goes on to include sponsorship is inclusive.
       'This role is open to U.S. citizens, permanent residents, and visa holders.',
       'Open to U.S. citizens and candidates requiring sponsorship.',
+      // The inclusive-list guard covers the "only" forms too, both word orders.
+      'Only U.S. citizens and visa holders may apply.',
+      'U.S. citizens or visa holders only.',
+      'Only U.S. citizens and H-1B holders will be considered.',
+      // The "and … only" list holds immigration statuses, not audiences.
+      'Built for U.S. citizens and veterans only, our nonprofit app is free.',
       'U.S. citizens are not required to have a passport for this trip.',
       // "only" as an adverb, not the end of a restriction.
       'Many U.S. citizens only learn about benefits too late.',
