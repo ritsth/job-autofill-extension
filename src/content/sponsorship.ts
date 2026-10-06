@@ -37,6 +37,18 @@ const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   // of Python" read as citizenship REQUIRED (#377).
   { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b(?<!not )(require|required|must|only|need)/i, label: 'U.S. citizenship required', perClause: true },
   { re: /\bcitizenship (is )?required\b/i, label: 'Citizenship required' },
+  // The PLURAL restriction phrasings. The rule above ends its noun in
+  // `citizen(ship)?\b`, which can't match "citizens" — and widening it would
+  // let its after-the-noun cues read product copy ("helps U.S. citizens who
+  // need to file taxes") as a hard NO. So these are tight, applicant-facing
+  // shapes instead (#383): "only" must END the phrase ("Many U.S. citizens only
+  // learn…" is an adverb), "not only" is excluded, and an "open to" list that
+  // goes on to include visa holders or sponsorship is inclusive, not a limit.
+  {
+    re: /\b(?:u\.?s\.?|united states) citizens( (?:and|or) [a-z ]{1,30}?)? only(?=\s*(?:[.;,:!()]|$))|(?<!\bnot )\bonly (?:u\.?s\.?|united states) citizens\b|\b(?:open|limited|restricted) (?:only )?to (?:u\.?s\.?|united states) citizens\b(?![^.;]*\b(?:visas?|sponsor\w*|international|foreign|h-?1b|opt|all|any)\b)|\b(?:u\.?s\.?|united states) citizens (?:are|is) (?<!not )required\b/i,
+    label: 'U.S. citizenship required',
+    perClause: true,
+  },
   // Clearance counts as a hard restriction only with a level or requirement cue
   // (so "clearance preferred" falls through to the caution tier). Only TS/SCI and
   // Top Secret are safe as bare levels — nobody says them casually. "Public

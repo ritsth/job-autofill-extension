@@ -727,3 +727,44 @@ describe('a citizenship preference is not turned into a requirement by the next 
     expect(analyze('A degree is required, and an active TS/SCI is nice to have.').verdict).toBe('caution');
   });
 });
+
+describe('plural "U.S. citizens" restriction phrasings (#383)', () => {
+  it('says NO for the ways a posting actually limits applicants to citizens', () => {
+    for (const text of [
+      'U.S. citizens only.',
+      'Open only to U.S. citizens.',
+      'This position is open to U.S. citizens.',
+      'Only U.S. citizens will be considered.',
+      'Only US citizens may apply.',
+      'U.S. citizens are required for this contract.',
+      'U.S. citizens and permanent residents only.',
+      'This role is limited to United States citizens.',
+      'Restricted to U.S. citizens due to contract requirements.',
+      'Clearance: Secret; U.S. citizens only',
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('no');
+      expect(a.restrictions, text).toContain('U.S. citizenship required');
+    }
+  });
+
+  it('does not read the noun in product copy or inclusive lists as a restriction', () => {
+    for (const text of [
+      'Our app helps U.S. citizens who need to file taxes.',
+      'We serve U.S. citizens abroad who must renew passports.',
+      // "not only … but also" welcomes more people, not fewer.
+      'We welcome not only U.S. citizens but also international candidates.',
+      // An "open to" list that goes on to include sponsorship is inclusive.
+      'This role is open to U.S. citizens, permanent residents, and visa holders.',
+      'Open to U.S. citizens and candidates requiring sponsorship.',
+      'U.S. citizens are not required to have a passport for this trip.',
+      // "only" as an adverb, not the end of a restriction.
+      'Many U.S. citizens only learn about benefits too late.',
+      'U.S. citizens only need a valid ID to enter.',
+    ]) {
+      const a = analyze(text);
+      expect(a.restrictions, text).toEqual([]);
+      expect(a.verdict, text).not.toBe('no');
+    }
+  });
+});
