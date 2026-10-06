@@ -29,6 +29,34 @@ export interface SponsorAnalysis {
 }
 
 // Hard restrictive signals → red NO. Order doesn't matter; labels are de-duped.
+/**
+ * The plural "U.S. citizens" restriction phrasings. The main citizenship rule
+ * ends its noun in `citizen(ship)?\b`, which can't match "citizens" — and
+ * widening it would let its after-the-noun cues read product copy ("helps U.S.
+ * citizens who need to file taxes") as a hard NO. So these are tight,
+ * applicant-facing shapes instead (#383).
+ */
+const US_CITIZENS = String.raw`(?:u\.?s\.?|united states) citizens\b`;
+// A list that goes on to admit non-citizens is inclusive, not a limit: "Only
+// U.S. citizens and visa holders may apply". "all"/"any" only as the start of
+// such a list ("all work-authorized candidates"), never bare, or "Only U.S.
+// citizens may apply for any role" would be waved through.
+const ADMITS_NON_CITIZENS = String.raw`(?![^.;]*\b(?:visas?|sponsor\w*|international|foreign|h-?1b|opt|(?:all|any) (?:work|qualified|eligible|authorized)\w*)\b)`;
+// "U.S. citizens and permanent residents only" — the list may hold immigration
+// STATUSES only, so "U.S. citizens and veterans only" (product copy) is out.
+// That also keeps out "U.S. citizens or visa holders only", so this form needs
+// no ADMITS_NON_CITIZENS guard of its own.
+const STATUS_LIST = String.raw`(?: (?:and|or) (?:u\.?s\.? )?(?:lawful )?(?:permanent residents?|green card holders?|nationals?))?`;
+const PLURAL_CITIZENS_RE = new RegExp(
+  // "only" must END the phrase: "Many U.S. citizens only learn…" is an adverb.
+  String.raw`\b${US_CITIZENS}${STATUS_LIST} only(?=\s*(?:[.;,:!()]|$))` +
+    // "not only U.S. citizens but also…" welcomes more people, not fewer.
+    String.raw`|(?<!\bnot )\bonly ${US_CITIZENS}${ADMITS_NON_CITIZENS}` +
+    String.raw`|\b(?:open|limited|restricted) (?:only )?to ${US_CITIZENS}${ADMITS_NON_CITIZENS}` +
+    String.raw`|\b${US_CITIZENS} (?:are|is) (?<!not )required\b`,
+  'i',
+);
+
 const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   { re: /\bmust be (a |an )?(u\.?s\.?|united states) citizen/i, label: 'U.S. citizenship required' },
   // Lookbehind avoids "preferred but not required" → false NO. Matched per
@@ -37,6 +65,8 @@ const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   // of Python" read as citizenship REQUIRED (#377).
   { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b(?<!not )(require|required|must|only|need)/i, label: 'U.S. citizenship required', perClause: true },
   { re: /\bcitizenship (is )?required\b/i, label: 'Citizenship required' },
+  // The PLURAL restriction phrasings — see PLURAL_CITIZENS_RE (#383).
+  { re: PLURAL_CITIZENS_RE, label: 'U.S. citizenship required', perClause: true },
   // Clearance counts as a hard restriction only with a level or requirement cue
   // (so "clearance preferred" falls through to the caution tier). Only TS/SCI and
   // Top Secret are safe as bare levels — nobody says them casually. "Public
