@@ -776,3 +776,86 @@ describe('plural "U.S. citizens" restriction phrasings (#383)', () => {
     }
   });
 });
+
+describe('permanent-resident rules: plurals, per clause, and a preference caution (#385)', () => {
+  it('says NO for plural permanent-resident restrictions', () => {
+    for (const text of [
+      'Green card holders required.',
+      'Permanent residents only.',
+      'Green card holders only.',
+      'Lawful permanent residents are required for this role.',
+      'Only permanent residents will be considered.',
+      'Open only to green card holders.',
+      'Permanent residents and U.S. citizens only.',
+      'Must be a permanent resident.',
+      // Singular noun used attributively: no singular-rule cue follows it.
+      'Only permanent resident applicants will be considered.',
+      'Open to green card holder applicants.',
+      // A NEGATED mention excludes — it is not an inclusive list.
+      'Only permanent residents can apply, no visa holders.',
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('no');
+      expect(a.restrictions, text).toContain('Permanent resident required');
+    }
+  });
+
+  it('keeps a preference caution from reaching across a semicolon', () => {
+    const a = analyze('Green card holders required; Python a plus.');
+    expect(a.restrictions).toContain('Permanent resident required');
+    // "a plus" is about Python, in the next clause.
+    expect(a.cautions).not.toContain('Permanent resident preferred');
+  });
+
+  it('reads a permanent-resident preference as MAYBE, even with a later requirement', () => {
+    for (const text of [
+      'Permanent resident preferred; must have a degree.',
+      'Green card holder a plus; Python required.',
+      'Permanent residents preferred.',
+      'Permanent resident preferred but not required.',
+      'Preference for permanent residents.',
+      'Preferred: green card.',
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('caution');
+      expect(a.restrictions, text).toEqual([]);
+      expect(a.cautions, text).toContain('Permanent resident preferred');
+    }
+  });
+
+  it('does not read product copy or inclusive lists as a restriction', () => {
+    for (const text of [
+      'We help permanent residents apply for citizenship.',
+      // No "but" to split the clause — the singular rule's own guard must hold.
+      'Permanent resident status is not required.',
+      'Permanent residents are required to carry their green card at all times.',
+      'Our app reminds green card holders who must renew their cards.',
+      'Many permanent residents only learn about naturalization later.',
+      'Open to permanent residents and visa holders.',
+      'We welcome not only green card holders but also international candidates.',
+      // The same "required TO" guard fixes the citizens form from #384.
+      'U.S. citizens are required to file taxes on worldwide income.',
+      // A negated "limited to" REMOVES the restriction (both groups).
+      'This role is not limited to permanent residents.',
+      "This role isn't limited to green card holders.",
+      'This role is not restricted to U.S. citizens.',
+    ]) {
+      const a = analyze(text);
+      expect(a.restrictions, text).toEqual([]);
+      expect(a.verdict, text).not.toBe('no');
+    }
+  });
+});
+
+describe('"green card sponsorship" is not a permanent-resident preference (#386 review)', () => {
+  it('does not add the caution when the green card is something the employer offers', () => {
+    const a = analyze('Green card sponsorship is a plus for us to offer.');
+    expect(a.cautions).not.toContain('Permanent resident preferred');
+  });
+
+  it('keeps the citizenship restriction when the clause also says "no visa holders"', () => {
+    const a = analyze('Only U.S. citizens may apply, no visa holders.');
+    expect(a.verdict).toBe('no');
+    expect(a.restrictions).toContain('U.S. citizenship required');
+  });
+});
