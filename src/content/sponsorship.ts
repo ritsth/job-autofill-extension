@@ -47,14 +47,36 @@ const ADMITS_NON_CITIZENS = String.raw`(?![^.;]*\b(?:visas?|sponsor\w*|internati
 // That also keeps out "U.S. citizens or visa holders only", so this form needs
 // no ADMITS_NON_CITIZENS guard of its own.
 const STATUS_LIST = String.raw`(?: (?:and|or) (?:u\.?s\.? )?(?:lawful )?(?:permanent residents?|green card holders?|nationals?))?`;
-const PLURAL_CITIZENS_RE = new RegExp(
-  // "only" must END the phrase: "Many U.S. citizens only learn…" is an adverb.
-  String.raw`\b${US_CITIZENS}${STATUS_LIST} only(?=\s*(?:[.;,:!()]|$))` +
-    // "not only U.S. citizens but also…" welcomes more people, not fewer.
-    String.raw`|(?<!\bnot )\bonly ${US_CITIZENS}${ADMITS_NON_CITIZENS}` +
-    String.raw`|\b(?:open|limited|restricted) (?:only )?to ${US_CITIZENS}${ADMITS_NON_CITIZENS}` +
-    String.raw`|\b${US_CITIZENS} (?:are|is) (?<!not )required\b`,
-  'i',
+/**
+ * The applicant-facing restriction shapes for a PLURAL group noun ("U.S.
+ * citizens", "permanent residents"). Shared so every group gets the same guards.
+ * `list` is what may follow the group before a trailing "only".
+ */
+function pluralRestrictionRe(group: string, list: string): RegExp {
+  return new RegExp(
+    // "only" must END the phrase: "Many U.S. citizens only learn…" is an adverb.
+    String.raw`\b${group}${list} only(?=\s*(?:[.;,:!()]|$))` +
+      // "not only U.S. citizens but also…" welcomes more people, not fewer.
+      String.raw`|(?<!\bnot )\bonly ${group}${ADMITS_NON_CITIZENS}` +
+      String.raw`|\b(?:open|limited|restricted) (?:only )?to ${group}${ADMITS_NON_CITIZENS}` +
+      // "are required TO file taxes" is a fact about the group, not a limit on
+      // who may apply — only "required" with nothing infinitive after it.
+      String.raw`|\b${group} (?:(?:are|is) )?(?<!not )required\b(?!\s+to\b)`,
+    'i',
+  );
+}
+
+const PLURAL_CITIZENS_RE = pluralRestrictionRe(US_CITIZENS, STATUS_LIST);
+
+// Same shapes for permanent residents (#385). `resident\b` / `holder\b` in the
+// singular rules below can't match the plural, and widening them would hand
+// their after-the-noun cues ("must", "only") to product copy — the #383 trap.
+// Singular too: "Only permanent resident applicants" / "Open to green card
+// holder applicants" are restrictions the singular rules never see either.
+const PERMANENT_RESIDENTS = String.raw`(?:(?:lawful )?permanent residents?|green card holders?)\b`;
+const PLURAL_PERMANENT_RESIDENTS_RE = pluralRestrictionRe(
+  PERMANENT_RESIDENTS,
+  String.raw`(?: (?:and|or) (?:u\.?s\.? )?citizens)?`,
 );
 
 const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
@@ -108,8 +130,12 @@ const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   { re: /\bwithout (the need for |requiring |needing )?(visa |employer )?sponsorship\b/i, label: 'Must not need sponsorship' },
   { re: /\bwork authoriz(?:ed|ation)\b[^.!?]{0,30}\b(does not|do not|that does not)\b[^.!?]{0,15}\bsponsor/i, label: 'No visa sponsorship' },
   { re: /\bauthoriz(?:ed|ation) to work\b[^.!?]{0,45}\b(on a permanent basis|on an ongoing basis|indefinitely|without restriction)\b/i, label: 'Must not need sponsorship' },
-  { re: /\b(lawful permanent resident|green card holder|permanent resident)\b[^.!?]{0,25}\b(require|required|must|only)\b/i, label: 'Permanent resident required' },
-  { re: /\bmust (be|have|hold)\b[^.!?]{0,25}\b(green card|lawful permanent resident|permanent resident)\b/i, label: 'Permanent resident required' },
+  // Per clause, for the same reason as the citizenship rule (#377): the window
+  // otherwise reaches the next item's "must" — "Permanent resident preferred;
+  // must have a degree" read as REQUIRED (#385). `(?<!not )` likewise.
+  { re: /\b(lawful permanent resident|green card holder|permanent resident)\b[^.!?]{0,25}\b(?<!not )(require|required|must|only)\b/i, label: 'Permanent resident required', perClause: true },
+  { re: /\bmust (be|have|hold)\b[^.!?]{0,25}\b(green card|lawful permanent resident|permanent resident)\b/i, label: 'Permanent resident required', perClause: true },
+  { re: PLURAL_PERMANENT_RESIDENTS_RE, label: 'Permanent resident required', perClause: true },
   // "U.S. person" is an export-control term of art, but "serves U.S. persons
   // and small businesses" is not a restriction — require a cue either side.
   { re: /\b(must|only|requir\w*|restricted to|open to|limited to|qualify as|eligib\w*)\b(?:u\.s\.|[^.!?]){0,45}\b(u\.?s\.?|united states)\s+persons?\b/i, label: 'U.S. person (export control)' },
@@ -196,6 +222,10 @@ const CAUTIONS: { re: RegExp; label: string }[] = [
   { re: /\bmust be authorized to work\b[^.!?]{0,40}\b(u\.?s\.?|united states)\b/i, label: WORK_AUTH_CAUTION },
   { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.!?]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'U.S. citizenship preferred' },
   { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?]{0,30}\b(u\.?s\.?|united states)\s+citizen/i, label: 'U.S. citizenship preferred' },
+  // [^.!?;] — a preference stops at the semicolon, like the rules above it
+  // should: "Green card holders required; Python a plus" is not a preference.
+  { re: /\b(lawful permanent residents?|green card holders?|permanent residents?|green card)\b[^.!?;]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'Permanent resident preferred' },
+  { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?;]{0,30}\b(lawful permanent residents?|green card holders?|permanent residents?)\b/i, label: 'Permanent resident preferred' },
   { re: /\b(security )?clearance\b[^.!?]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'Clearance preferred' },
   { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?]{0,30}\b(security )?clearance\b/i, label: 'Clearance preferred' },
 ];
