@@ -791,6 +791,8 @@ describe('permanent-resident rules: plurals, per clause, and a preference cautio
       // Singular noun used attributively: no singular-rule cue follows it.
       'Only permanent resident applicants will be considered.',
       'Open to green card holder applicants.',
+      // A NEGATED mention excludes — it is not an inclusive list.
+      'Only permanent residents can apply, no visa holders.',
     ]) {
       const a = analyze(text);
       expect(a.verdict, text).toBe('no');
@@ -812,6 +814,7 @@ describe('permanent-resident rules: plurals, per clause, and a preference cautio
       'Permanent residents preferred.',
       'Permanent resident preferred but not required.',
       'Preference for permanent residents.',
+      'Preferred: green card.',
     ]) {
       const a = analyze(text);
       expect(a.verdict, text).toBe('caution');
@@ -832,10 +835,27 @@ describe('permanent-resident rules: plurals, per clause, and a preference cautio
       'We welcome not only green card holders but also international candidates.',
       // The same "required TO" guard fixes the citizens form from #384.
       'U.S. citizens are required to file taxes on worldwide income.',
+      // A negated "limited to" REMOVES the restriction (both groups).
+      'This role is not limited to permanent residents.',
+      "This role isn't limited to green card holders.",
+      'This role is not restricted to U.S. citizens.',
     ]) {
       const a = analyze(text);
       expect(a.restrictions, text).toEqual([]);
       expect(a.verdict, text).not.toBe('no');
     }
+  });
+});
+
+describe('"green card sponsorship" is not a permanent-resident preference (#386 review)', () => {
+  it('does not add the caution when the green card is something the employer offers', () => {
+    const a = analyze('Green card sponsorship is a plus for us to offer.');
+    expect(a.cautions).not.toContain('Permanent resident preferred');
+  });
+
+  it('keeps the citizenship restriction when the clause also says "no visa holders"', () => {
+    const a = analyze('Only U.S. citizens may apply, no visa holders.');
+    expect(a.verdict).toBe('no');
+    expect(a.restrictions).toContain('U.S. citizenship required');
   });
 });

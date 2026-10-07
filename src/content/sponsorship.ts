@@ -40,8 +40,10 @@ const US_CITIZENS = String.raw`(?:u\.?s\.?|united states) citizens\b`;
 // A list that goes on to admit non-citizens is inclusive, not a limit: "Only
 // U.S. citizens and visa holders may apply". "all"/"any" only as the start of
 // such a list ("all work-authorized candidates"), never bare, or "Only U.S.
-// citizens may apply for any role" would be waved through.
-const ADMITS_NON_CITIZENS = String.raw`(?![^.;]*\b(?:visas?|sponsor\w*|international|foreign|h-?1b|opt|(?:all|any) (?:work|qualified|eligible|authorized)\w*)\b)`;
+// citizens may apply for any role" would be waved through. A NEGATED mention
+// excludes rather than admits — "…can apply, no visa holders" is the
+// restriction stated twice, not an inclusive list.
+const ADMITS_NON_CITIZENS = String.raw`(?![^.;]*\b(?<!\b(?:no|not|nor|without|excluding|except) )(?:visas?|sponsor\w*|international|foreign|h-?1b|opt|(?:all|any) (?:work|qualified|eligible|authorized)\w*)\b)`;
 // "U.S. citizens and permanent residents only" — the list may hold immigration
 // STATUSES only, so "U.S. citizens and veterans only" (product copy) is out.
 // That also keeps out "U.S. citizens or visa holders only", so this form needs
@@ -58,7 +60,8 @@ function pluralRestrictionRe(group: string, list: string): RegExp {
     String.raw`\b${group}${list} only(?=\s*(?:[.;,:!()]|$))` +
       // "not only U.S. citizens but also…" welcomes more people, not fewer.
       String.raw`|(?<!\bnot )\bonly ${group}${ADMITS_NON_CITIZENS}` +
-      String.raw`|\b(?:open|limited|restricted) (?:only )?to ${group}${ADMITS_NON_CITIZENS}` +
+      // "not limited to permanent residents" removes the restriction.
+      String.raw`|(?<!(?:\bnot|n't) )\b(?:open|limited|restricted) (?:only )?to ${group}${ADMITS_NON_CITIZENS}` +
       // "are required TO file taxes" is a fact about the group, not a limit on
       // who may apply — only "required" with nothing infinitive after it.
       String.raw`|\b${group} (?:(?:are|is) )?(?<!not )required\b(?!\s+to\b)`,
@@ -224,8 +227,10 @@ const CAUTIONS: { re: RegExp; label: string }[] = [
   { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?]{0,30}\b(u\.?s\.?|united states)\s+citizen/i, label: 'U.S. citizenship preferred' },
   // [^.!?;] — a preference stops at the semicolon, like the rules above it
   // should: "Green card holders required; Python a plus" is not a preference.
-  { re: /\b(lawful permanent residents?|green card holders?|permanent residents?|green card)\b[^.!?;]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'Permanent resident preferred' },
-  { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?;]{0,30}\b(lawful permanent residents?|green card holders?|permanent residents?)\b/i, label: 'Permanent resident preferred' },
+  // Bare "green card" — but not "green card sponsorship", which is the
+  // opposite of requiring one.
+  { re: /\b(lawful permanent residents?|green card holders?|permanent residents?|green card(?!\s+sponsor))\b[^.!?;]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'Permanent resident preferred' },
+  { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?;]{0,30}\b(lawful permanent residents?|green card holders?|permanent residents?|green card(?!\s+sponsor))\b/i, label: 'Permanent resident preferred' },
   { re: /\b(security )?clearance\b[^.!?]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'Clearance preferred' },
   { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?]{0,30}\b(security )?clearance\b/i, label: 'Clearance preferred' },
 ];
