@@ -13,6 +13,7 @@ import { updateSettings } from '../lib/settings';
 import { MAX_TEXT } from '../lib/savedJobs';
 import { addDisabledHost, hostMatches } from '../lib/host';
 import { BADGE_AI_CHECK_ERROR_MAX, clearButtonError, showButtonError } from './buttonError';
+import { createScannerWatchController } from './scannerWatch';
 
 export type Verdict = 'yes' | 'no' | 'caution' | 'unknown';
 
@@ -751,8 +752,6 @@ let dismissed = false;
 let enabled = true;
 let watchUrl = '';
 let lastHash = 0;
-let observer: MutationObserver | null = null;
-let debounceTimer = 0;
 // Set by the MutationObserver, cleared by a full scan. Lets the interval tick
 // skip the whole-page innerText read when nothing has changed — its only real
 // job is catching SPA history changes that mutate little.
@@ -794,8 +793,13 @@ let showResumeInBadge = true;
 /** Turns the scanner on/off globally (driven by the user's setting). */
 export function setScannerEnabled(value: boolean): void {
   enabled = value;
-  if (!enabled) removeBadge();
-  else scanSponsorship();
+  if (!enabled) {
+    sponsorshipWatch.stop();
+    removeBadge();
+  } else {
+    if (sponsorshipWatch.active) scanSponsorship();
+    else sponsorshipWatch.start();
+  }
 }
 
 // One-time "what is this badge" coachmark, shown the first time the badge ever
@@ -1138,44 +1142,16 @@ export function clearAiVerdictCache(): void {
  * not just the URL.
  */
 export function startSponsorshipWatch(): void {
-  scanSponsorship();
-  setTimeout(scanSponsorship, 800);
-  setTimeout(scanSponsorship, 1800);
-
-  if (document.body) {
-    observer = new MutationObserver(() => {
-      mutationDirty = true;
-      window.clearTimeout(debounceTimer);
-      debounceTimer = window.setTimeout(tick, 600);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
-  // Fallback for history changes that mutate little. tick() short-circuits to a
-  // string compare unless a mutation or URL change happened, so this stays cheap.
-  setInterval(tick, 1200);
-  // tick() skips hidden tabs; catch up the moment the tab is focused so a job
-  // page opened in the background still gets its badge.
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) tick();
-  });
-  // An iframe finishing to load is invisible to the top-document MutationObserver
-  // (its content mutates inside its own document), but ATSes like iCIMS deliver
-  // the posting exactly that way — the scan reads it via sameOriginFrameText(),
-  // so a late-loading frame must count as a content change or the badge sticks
-  // on the pre-frame verdict. `load` doesn't bubble, but capture-phase listeners
-  // on window still see subresource loads.
-  window.addEventListener(
-    'load',
-    (e) => {
-      if (e.target instanceof HTMLIFrameElement) {
-        mutationDirty = true;
-        window.clearTimeout(debounceTimer);
-        debounceTimer = window.setTimeout(tick, 600);
-      }
-    },
-    true,
-  );
+  if (enabled) sponsorshipWatch.start();
 }
+
+const sponsorshipWatch = createScannerWatchController({
+  scan: scanSponsorship,
+  tick,
+  markDirty: () => {
+    mutationDirty = true;
+  },
+});
 
 // --- Badge rendering ---
 
