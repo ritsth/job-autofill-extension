@@ -22,10 +22,16 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: 20
+          # .nvmrc holds the declared FLOOR (engines.node "^22.13.0 || >=24"),
+          # not "latest 22": CI must run the oldest Node we claim to support,
+          # or --engine-strict below can't notice a dependency that raises it.
+          node-version-file: .nvmrc
           cache: npm
 
-      - run: npm ci
+      # --engine-strict turns npm's EBADENGINE warning into a failure. Without
+      # it, pdfjs-dist requiring Node >=22.13 scrolled past as a warning in a
+      # green build for months while CI ran Node 20 (#353).
+      - run: npm ci --engine-strict
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
@@ -56,11 +62,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          # Deliberately the same version server/package.json declares
-          # (engines.node ">=20") and .nvmrc pins. Raising it here without
-          # raising engines.node would silently disarm the --engine-strict
-          # check below.
-          node-version: 20
+          # Deliberately the floor server/package.json declares (engines.node
+          # ">=22.13.0"), read from the same .nvmrc as the extension job.
+          # Running a newer Node here than engines.node declares would
+          # silently disarm the --engine-strict check below.
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: server/package-lock.json
 

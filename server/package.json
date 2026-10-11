@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Cloud Run proxy that relays generation requests to Vertex AI (Gemini). Keeps the GCP credential server-side; identifies each caller by their Google sign-in token and enforces a per-user daily quota in Firestore. A shared admin token bypasses sign-in + quota.",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "start": "node index.js"

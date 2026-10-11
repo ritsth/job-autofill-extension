@@ -136,7 +136,7 @@ as-is). Deploy it (2nd-gen, Pub/Sub-triggered) and grant its SA permission to ch
 
 ```bash
 gcloud functions deploy billing-killswitch --gen2 --region us-central1 \
-  --runtime nodejs20 --source infra/billing-killswitch --entry-point killSwitch \
+  --runtime nodejs22 --source infra/billing-killswitch --entry-point killSwitch \
   --trigger-topic billing-killswitch --set-env-vars GCLOUD_PROJECT=$PROJECT_ID
 
 # The function's runtime SA must be Billing Account Administrator on the billing account
