@@ -136,7 +136,15 @@ const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   // Per clause, for the same reason as the citizenship rule (#377): the window
   // otherwise reaches the next item's "must" — "Permanent resident preferred;
   // must have a degree" read as REQUIRED (#385). `(?<!not )` likewise.
-  { re: /\b(lawful permanent resident|green card holder|permanent resident)\b[^.!?]{0,25}\b(?<!not )(require|required|must|only)\b/i, label: 'Permanent resident required', perClause: true },
+  // Only "required" / "mandatory", never bare "must" or "only": those read
+  // product copy about green card holders as a limit on applicants — "helps
+  // every green card holder who must apply for citizenship" (#387), the same
+  // trap the plural shapes avoid (#383). "Only" and "must be" restrictions are
+  // covered by PLURAL_PERMANENT_RESIDENTS_RE (singular too) and the rule below.
+  // `(?!\s+to)`: "is required TO carry proof of status" is a fact, not a limit.
+  // The window treats "u.s." as one unit, or its periods end the sentence
+  // mid-phrase: "Permanent resident or U.S. citizen required" (#372, #379).
+  { re: /\b(lawful permanent resident|green card holder|permanent resident)\b(?:u\.s\.|[^.!?]){0,25}\b(?<!not )(required|mandatory)\b(?!\s+to\b)/i, label: 'Permanent resident required', perClause: true },
   { re: /\bmust (be|have|hold)\b[^.!?]{0,25}\b(green card|lawful permanent resident|permanent resident)\b/i, label: 'Permanent resident required', perClause: true },
   { re: PLURAL_PERMANENT_RESIDENTS_RE, label: 'Permanent resident required', perClause: true },
   // "U.S. person" is an export-control term of art, but "serves U.S. persons

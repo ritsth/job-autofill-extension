@@ -859,3 +859,37 @@ describe('"green card sponsorship" is not a permanent-resident preference (#386 
     expect(a.restrictions).toContain('U.S. citizenship required');
   });
 });
+
+describe('singular permanent-resident rule vs product copy (#387)', () => {
+  it('does not read sentences ABOUT green card holders as a limit on applicants', () => {
+    for (const text of [
+      'A green card holder is required to carry proof of status at all times.',
+      'Every permanent resident must file taxes on worldwide income.',
+      'Our app tells each green card holder when they must renew.',
+      'We help a permanent resident only when they need it most.',
+      'Boundless helps every green card holder who must apply for citizenship.',
+      'Every lawful permanent resident is required to carry their card.',
+    ]) {
+      const a = analyze(text);
+      expect(a.restrictions, text).toEqual([]);
+      expect(a.verdict, text).not.toBe('no');
+    }
+  });
+
+  it('still says NO for singular restrictions, through whichever rule owns the shape', () => {
+    for (const text of [
+      'Green card holder required.',
+      // Words between the noun and the cue: only the narrowed rule reaches these.
+      'Permanent resident status is required.',
+      'Lawful permanent resident status is mandatory for this role.',
+      'Permanent resident or U.S. citizen required.',
+      // "must be" / "only": owned by the other rules, which the narrowing relies on.
+      'Candidate must be a permanent resident.',
+      'Green card holder only.',
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('no');
+      expect(a.restrictions, text).toContain('Permanent resident required');
+    }
+  });
+});
