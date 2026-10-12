@@ -764,6 +764,11 @@ let renderedSig = '';
 // action (the AI check) notice a posting switch happened while it was awaiting
 // and discard its now-stale result instead of clobbering the new badge.
 let badgeGeneration = 0;
+// The posting the visible badge was last built for (see postingKey). Unlike
+// badgeGeneration it does NOT change when the same posting re-renders — the AI
+// check rebuilds the badge with the same meta — so a generator can tell "the
+// user moved to another job" apart from "the badge was redrawn" (#363).
+let renderedPosting = '';
 /**
  * AI results cached per posting so revisiting a job — or a re-render from the
  * watcher — reuses the AI verdict without another call.
@@ -1322,6 +1327,39 @@ function getJobMeta(): { company: string; role: string } {
 }
 
 /**
+ * Identity of a posting as the badge saw it: the URL plus the company/role the
+ * badge was built with. On an SPA board a posting switch changes both; a
+ * re-render of the same posting (the AI check, a settings toggle) changes
+ * neither. JSON so a delimiter inside a company name can't collide.
+ */
+export function postingKey(url: string, meta: JobMeta): string {
+  return JSON.stringify([url, meta.company, meta.role]);
+}
+
+/**
+ * Whether a cover letter / resume that just finished generating still belongs
+ * to the posting on screen, so it is safe to download (#363).
+ *
+ * Not a badgeGeneration check, unlike the AI check beside it: the generation
+ * also moves when the SAME posting re-renders, and the natural "click Generate,
+ * then AI check while waiting" sequence re-renders it — that would silently
+ * throw away a PDF for the right job. A result is stale only if the badge now
+ * shows a different posting, or the URL moved since the click (a switch whose
+ * new badge hasn't rendered yet). A dismissed badge leaves renderedPosting as
+ * it was, so the user still gets the document they asked for.
+ *
+ * Exported as a test seam — the click handler needs a DOM.
+ */
+export function generatorResultIsCurrent(p: {
+  builtFor: string;
+  renderedNow: string;
+  startUrl: string;
+  urlNow: string;
+}): boolean {
+  return p.renderedNow === p.builtFor && p.urlNow === p.startUrl;
+}
+
+/**
  * Generator expander (cover letter or tailored resume): an editable company/role
  * pair pre-filled from the posting, plus a button that asks the AI for the
  * document and downloads it as a PDF.
@@ -1333,6 +1371,9 @@ function buildGeneratorSection(cfg: {
   download: (text: string, company: string, role: string) => void;
 }): HTMLElement {
   const meta = cfg.meta;
+  // Built inside renderBadge, right after it records renderedPosting for this
+  // same URL and meta — so this is the posting this form belongs to.
+  const builtFor = postingKey(location.href, meta);
   const wrap = document.createElement('div');
   wrap.className = 'cl';
 
@@ -1363,8 +1404,22 @@ function buildGeneratorSection(cfg: {
     const orig = gen.textContent;
     gen.textContent = 'Generating…';
     status.textContent = '';
+    const startUrl = location.href;
     try {
       const res = await cfg.request(company.value.trim(), role.value.trim(), getScanText());
+      if (
+        !generatorResultIsCurrent({
+          builtFor,
+          renderedNow: renderedPosting,
+          startUrl,
+          urlNow: location.href,
+        })
+      ) {
+        // The user moved to another posting while this was generating. A PDF
+        // now would be written and named for a job they've left, arriving
+        // unexplained — and this form is detached, so no status would show.
+        return;
+      }
       if (res.error) throw new Error(res.error);
       cfg.download(res.text, company.value.trim(), role.value.trim());
       status.textContent = '✓ Downloaded PDF';
@@ -1407,6 +1462,8 @@ function buildResumeSection(meta: JobMeta): HTMLElement {
  */
 function renderBadge(a: SponsorAnalysis, meta: JobMeta): HTMLElement {
   const s = STYLES[a.verdict];
+  // Before the generator sections are built, which snapshot it (#363).
+  renderedPosting = postingKey(location.href, meta);
 
   const host = document.createElement('div');
   host.id = BANNER_ID;
