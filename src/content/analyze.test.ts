@@ -886,6 +886,10 @@ describe('singular permanent-resident rule vs product copy (#387)', () => {
       // "must be" / "only": owned by the other rules, which the narrowing relies on.
       'Candidate must be a permanent resident.',
       'Green card holder only.',
+      // "only" ending the phrase, after a singular list the builder can't take.
+      'Permanent resident or citizen only.',
+      'Green card holder status only.',
+      'Permanent resident status is a must.',
     ]) {
       const a = analyze(text);
       expect(a.verdict, text).toBe('no');
