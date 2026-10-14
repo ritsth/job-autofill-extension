@@ -145,8 +145,18 @@ const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   // and the idiom "is a must". "Must be a permanent resident" is the rule below.
   // The window treats "u.s." as one unit, or its periods end the sentence
   // mid-phrase: "Permanent resident or U.S. citizen required" (#372, #379).
-  { re: /\b(lawful permanent resident|green card holder|permanent resident)\b(?:u\.s\.|[^.!?]){0,25}\b(?<!not )(?:(?:required|mandatory)\b(?!\s+to\b)|only(?=\s*(?:[.;,:!()]|$))|is a must\b)/i, label: 'Permanent resident required', perClause: true },
-  { re: /\bmust (be|have|hold)\b[^.!?]{0,25}\b(green card|lawful permanent resident|permanent resident)\b/i, label: 'Permanent resident required', perClause: true },
+  // The STATUS nouns too — "permanent residency", bare "green card" — under the
+  // same requirement-shaped cues, because those nouns are also what immigration
+  // companies sell: "We help clients apply for permanent residency" has no cue
+  // and stays unknown (#395). "Green card sponsorship" is the opposite of a
+  // requirement (it's a positive), so it is excluded.
+  { re: /\b(lawful permanent resident|green card holder|permanent residency|permanent resident|green card(?!\s+sponsor))\b(?:u\.s\.|[^.!?]){0,25}\b(?<!not )(?:(?:required|mandatory)\b(?!\s+to\b)|only(?=\s*(?:[.;,:!()]|$))|is a must\b)/i, label: 'Permanent resident required', perClause: true },
+  { re: /\bmust (be|have|hold)\b(?:u\.s\.|[^.!?]){0,25}\b(green card|lawful permanent resident|permanent residen(?:t|cy))\b/i, label: 'Permanent resident required', perClause: true },
+  // Verb-first, only with the ROLE as the subject or as a bare requirement
+  // bullet: "This role requires U.S. permanent residency" / "Requires permanent
+  // resident status." Never a bare "requires … green card" mid-sentence —
+  // "Applying for citizenship requires a green card" is product copy (#395).
+  { re: /(?:\b(?:this|the) (?:role|position|job|opportunity) (?:requires|will require)|^\s*requires)\b(?!\s+(?:no|neither)\b)(?:u\.s\.|[^.!?]){0,20}?\b(?:permanent residen(?:t|cy)|green card(?!\s+sponsor))/i, label: 'Permanent resident required', perClause: true },
   { re: PLURAL_PERMANENT_RESIDENTS_RE, label: 'Permanent resident required', perClause: true },
   // "U.S. person" is an export-control term of art, but "serves U.S. persons
   // and small businesses" is not a restriction — require a cue either side.

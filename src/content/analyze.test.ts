@@ -897,3 +897,63 @@ describe('singular permanent-resident rule vs product copy (#387)', () => {
     }
   });
 });
+
+describe('status nouns: "permanent residency" and bare "green card" (#395)', () => {
+  it('says NO when the posting requires the status rather than naming the person', () => {
+    for (const text of [
+      'Permanent residency required.',
+      'U.S. permanent residency is required for this position.',
+      'Requires permanent resident status.',
+      'This role requires U.S. permanent residency.',
+      'Applicants must have permanent residency.',
+      'Must hold U.S. permanent residency.',
+      'Green card required.',
+      'A valid green card is required.',
+      'The position requires a green card.',
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('no');
+      expect(a.restrictions, text).toContain('Permanent resident required');
+    }
+  });
+
+  it('does not read immigration product copy as a restriction', () => {
+    for (const text of [
+      'We help clients apply for permanent residency.',
+      'Our platform guides families through the permanent residency process.',
+      // Verb-first only with the ROLE as subject, never "X requires a green card".
+      'Applying for citizenship requires a green card.',
+      'Naturalization requires five years of permanent residency.',
+      'A green card is required to re-enter the country after travel.',
+      'Our lawyers handle green card petitions; filing fees are required.',
+      // Waived, not required.
+      'This role requires no green card.',
+      'Permanent residency is not required.',
+    ]) {
+      const a = analyze(text);
+      expect(a.restrictions, text).toEqual([]);
+      expect(a.verdict, text).not.toBe('no');
+    }
+  });
+
+  it('keeps "green card sponsorship" a positive, not a requirement', () => {
+    for (const text of [
+      'Green card sponsorship is available for this role.',
+    ]) {
+      const a = analyze(text);
+      expect(a.restrictions, text).toEqual([]);
+      expect(a.verdict, text).toBe('yes');
+    }
+  });
+
+  it('does not read "requires green card SPONSORSHIP" as requiring a green card', () => {
+    // The employer needs to sponsor: the opposite of a permanent-resident limit.
+    // One case per rule, each with its cue inside that rule's window.
+    for (const text of [
+      'Green card sponsorship is required for this hire.',
+      'The position will require green card sponsorship for the right candidate.',
+    ]) {
+      expect(analyze(text).restrictions, text).not.toContain('Permanent resident required');
+    }
+  });
+});
