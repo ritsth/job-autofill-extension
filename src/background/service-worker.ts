@@ -63,14 +63,6 @@ chrome.runtime.onMessage.addListener((msg: BackgroundMessage, sender, sendRespon
 
 async function handle(msg: BackgroundMessage): Promise<string> {
   const profile = await getProfile();
-  const context = profileToContext(profile);
-
-  if (
-    (msg.type === 'AI_GENERATE_ANSWER' || msg.type === 'AI_GENERATE_RESUME') &&
-      context.trim() === ''
-  ) {
-    throw new AIError('Your profile is empty — add your details in Options first.');
-  }
 
   if (msg.type === 'AI_PARSE_RESUME') {
     // Returns raw JSON text; the options page validates it via parseResumeJson.
@@ -82,6 +74,12 @@ async function handle(msg: BackgroundMessage): Promise<string> {
     // Returns raw JSON; the content script parses it via parseEligibilityJson.
     const provider = await resolveProvider(profile.ai);
     return provider.generate(buildJobEligibilityPrompt(msg.text));
+  }
+
+  // Only answers and tailored resumes consume the profile/document context.
+  const context = msg.type === 'AI_GENERATE_COVER_LETTER' ? '' : profileToContext(profile);
+  if (msg.type !== 'AI_GENERATE_COVER_LETTER' && context.trim() === '') {
+    throw new AIError('Your profile is empty — add your details in Options first.');
   }
 
   // The remaining handlers tailor to a job posting. A saved "active" job wins
