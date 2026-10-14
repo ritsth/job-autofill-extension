@@ -926,9 +926,15 @@ describe('status nouns: "permanent residency" and bare "green card" (#395)', () 
       'Naturalization requires five years of permanent residency.',
       'A green card is required to re-enter the country after travel.',
       'Our lawyers handle green card petitions; filing fees are required.',
-      // Waived, not required.
+      // Waived, not required — negation further back than a bare "not ".
       'This role requires no green card.',
       'Permanent residency is not required.',
+      'Permanent residency is no longer required.',
+      "Permanent residency isn't required.",
+      "A green card won't be required.",
+      'Permanent residency will not be required.',
+      'Green card never required.',
+      'Permanent resident status is no longer required.',
     ]) {
       const a = analyze(text);
       expect(a.restrictions, text).toEqual([]);

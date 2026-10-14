@@ -149,8 +149,9 @@ const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   // same requirement-shaped cues, because those nouns are also what immigration
   // companies sell: "We help clients apply for permanent residency" has no cue
   // and stays unknown (#395). "Green card sponsorship" is the opposite of a
-  // requirement (it's a positive), so it is excluded.
-  { re: /\b(lawful permanent resident|green card holder|permanent residency|permanent resident|green card(?!\s+sponsor))\b(?:u\.s\.|[^.!?]){0,25}\b(?<!not )(?:(?:required|mandatory)\b(?!\s+to\b)|only(?=\s*(?:[.;,:!()]|$))|is a must\b)/i, label: 'Permanent resident required', perClause: true },
+  // requirement (it's a positive), so it is excluded. The negation guard reaches
+  // past a plain "not ": "isn't", "won't be", "no longer" and "never" waive it.
+  { re: /\b(lawful permanent resident|green card holder|permanent residency|permanent resident|green card(?!\s+sponsor))\b(?:u\.s\.|[^.!?]){0,25}\b(?<!(?:\bnot|\bno longer|\bnever|n't)(?:\s+be)?\s)(?:(?:required|mandatory)\b(?!\s+to\b)|only(?=\s*(?:[.;,:!()]|$))|is a must\b)/i, label: 'Permanent resident required', perClause: true },
   { re: /\bmust (be|have|hold)\b(?:u\.s\.|[^.!?]){0,25}\b(green card|lawful permanent resident|permanent residen(?:t|cy))\b/i, label: 'Permanent resident required', perClause: true },
   // Verb-first, only with the ROLE as the subject or as a bare requirement
   // bullet: "This role requires U.S. permanent residency" / "Requires permanent
