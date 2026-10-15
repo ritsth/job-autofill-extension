@@ -19,7 +19,7 @@ By contributing, you agree that your contributions are licensed under the projec
 
 ## Prerequisites
 
-- **Node.js 20+** and npm (the server also targets Node ≥20).
+- **Node.js 22.13+** (or 24+) and npm — `.nvmrc` pins the minimum, so `nvm install && nvm use` gets it. The server targets the same floor.
 - Google Chrome (or another Chromium browser) for loading the unpacked extension.
 
 ## Getting started
