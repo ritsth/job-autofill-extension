@@ -8,7 +8,6 @@ import {
   setActiveJob,
   deleteJob,
   onSavedJobsChanged,
-  isJobTextTruncated,
   type SavedJob,
 } from '../lib/savedJobs';
 import { sendToBackground, sendToTab } from '../lib/messages';
@@ -312,7 +311,7 @@ const copyTimer = useRef<number | null>(null);
         setError('No job posting detected on this page to save.');
         return;
       }
-      const { evicted } = await addJob({
+      const { evicted, truncated, keptExistingText } = await addJob({
         company: cap.company,
         role: cap.role || cap.title,
         url: cap.url,
@@ -320,7 +319,8 @@ const copyTimer = useRef<number | null>(null);
       });
       flashFillMsg(
         saveJobNotice({
-          truncated: isJobTextTruncated(cap.text),
+          truncated,
+          keptExistingText,
           evicted: evicted.length > 0,
         }),
       );

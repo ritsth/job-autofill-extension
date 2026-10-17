@@ -72,6 +72,10 @@ export async function getActiveJob(): Promise<SavedJob | null> {
 }
 
 export interface AddJobResult extends SavedJobsState {
+  /** This save refreshed an existing URL and retained its original posting text. */
+  keptExistingText: boolean;
+  /** A new posting was actually shortened to MAX_TEXT by this save. */
+  truncated: boolean;
   /**
    * Jobs pushed off the end by the MAX_JOBS cap. Reported so the UI can say the
    * oldest save was dropped instead of letting it vanish silently.
@@ -86,6 +90,8 @@ export async function addJob(
   return mutateSavedJobs(async () => {
     const state = await getSavedJobs();
     const existing = state.jobs.find((saved) => saved.url === partial.url);
+    const keptExistingText = existing !== undefined;
+    const truncated = !keptExistingText && isJobTextTruncated(partial.text);
     let job: SavedJob;
     let all: SavedJob[];
     if (existing) {
@@ -103,7 +109,7 @@ export async function addJob(
       // Also heal duplicates created by releases that always minted a new id.
       all = [job, ...state.jobs.filter((saved) => saved.url !== partial.url)];
     } else {
-      if (isJobTextTruncated(partial.text)) {
+      if (truncated) {
         console.warn(
           `[Little AI Helper] Saved posting trimmed from ${partial.text.length} to ${MAX_TEXT} chars for AI context.`,
         );
@@ -123,7 +129,7 @@ export async function addJob(
     await setSavedJobs(next);
     // Computed here rather than by comparing counts in the caller, whose copy of
     // the list can lag behind storage.
-    return { ...next, evicted: all.slice(MAX_JOBS) };
+    return { ...next, keptExistingText, truncated, evicted: all.slice(MAX_JOBS) };
   });
 }
 

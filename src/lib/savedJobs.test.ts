@@ -12,6 +12,7 @@ import {
   type SavedJob,
   type SavedJobsState,
 } from './savedJobs';
+import { saveJobNotice } from '../popup/notices';
 
 const STORAGE_KEY = 'savedJobs';
 
@@ -484,5 +485,88 @@ describe('concurrent saved-job mutations', () => {
       await Promise.all([first, second]);
     }
     expect(persisted()).toEqual({ jobs: [], activeId: null });
+  });
+});
+
+
+describe('addJob — truthful save outcome (#360)', () => {
+  it.each([0, MAX_TEXT, MAX_TEXT + 1])('reports actual trimming for a new %i-character posting', async (length) => {
+    const result = await addJob(partial('a'.repeat(length)));
+
+    expect(result.keptExistingText).toBe(false);
+    expect(result.truncated).toBe(length > MAX_TEXT);
+    expect(persisted().jobs[0].text).toBe('a'.repeat(Math.min(length, MAX_TEXT)));
+    // Outcome flags describe this write, not the persisted storage schema.
+    expect(persisted()).not.toHaveProperty('truncated');
+    expect(persisted()).not.toHaveProperty('keptExistingText');
+  });
+
+  it.each([
+    { kind: 'short', capture: 'short fresh capture' },
+    { kind: 'long', capture: 'b'.repeat(MAX_TEXT + 1) },
+  ])('reports retained text instead of a trim on a $kind re-save', async ({ capture }) => {
+    seed({ jobs: [job({ text: 'original posting' })], activeId: null });
+
+    const result = await addJob(partial(capture));
+    const notice = saveJobNotice({ ...result, evicted: result.evicted.length > 0 });
+
+    expect(result).toMatchObject({ keptExistingText: true, truncated: false });
+    expect(persisted().jobs[0].text).toBe('original posting');
+    expect(notice).toContain('kept the posting text from the first save');
+    expect(notice).not.toContain('trimmed');
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('does not call retained legacy text a new trim', async () => {
+    const original = 'a'.repeat(MAX_TEXT + 1);
+    seed({ jobs: [job({ text: original })], activeId: null });
+
+    const result = await addJob(partial('short replacement'));
+
+    expect(result).toMatchObject({ keptExistingText: true, truncated: false });
+    expect(persisted().jobs[0].text).toBe(original);
+  });
+
+  it('reports both the actual trim and eviction for a new long capture', async () => {
+    seed({
+      jobs: Array.from({ length: MAX_JOBS }, (_, i) => job({ id: `old-${i}`, url: `https://old/${i}` })),
+      activeId: null,
+    });
+
+    const result = await addJob(partial('a'.repeat(MAX_TEXT + 1)));
+    const notice = saveJobNotice({ ...result, evicted: result.evicted.length > 0 });
+
+    expect(result).toMatchObject({ keptExistingText: false, truncated: true });
+    expect(result.evicted.map((saved) => saved.id)).toEqual([`old-${MAX_JOBS - 1}`]);
+    expect(notice).toContain('trimmed');
+    expect(notice).toContain('oldest');
+  });
+
+  it('reports retained text and eviction when healing an oversized stored list', async () => {
+    seed({
+      jobs: [job(), ...Array.from({ length: MAX_JOBS }, (_, i) => job({ id: `old-${i}`, url: `https://old/${i}` }))],
+      activeId: null,
+    });
+
+    const result = await addJob(partial('a'.repeat(MAX_TEXT + 1)));
+    const notice = saveJobNotice({ ...result, evicted: result.evicted.length > 0 });
+
+    expect(result).toMatchObject({ keptExistingText: true, truncated: false });
+    expect(result.evicted.map((saved) => saved.id)).toEqual([`old-${MAX_JOBS - 1}`]);
+    expect(notice).toContain('kept the posting text');
+    expect(notice).toContain('oldest');
+    expect(notice).not.toContain('trimmed');
+  });
+
+  it('rejects a failed save without returning a success outcome or poisoning the next save', async () => {
+    const original = { jobs: [job()], activeId: null };
+    seed(original);
+    vi.mocked(chrome.storage.local.set).mockRejectedValueOnce(new Error('storage full'));
+
+    await expect(addJob(partial('discarded capture'))).rejects.toThrow('storage full');
+    expect(persisted()).toEqual(original);
+    const result = await addJob({ ...partial('new posting'), url: 'https://new' });
+    expect(result).toMatchObject({ keptExistingText: false, truncated: false });
+    expect(persisted().jobs[0].text).toBe('new posting');
   });
 });

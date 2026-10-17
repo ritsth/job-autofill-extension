@@ -13,19 +13,23 @@ export function canGenerateDocuments(company: string, role: string): boolean {
 }
 
 /**
- * Status line shown after saving a job. Both caps can bite on the same save, so
- * the notices are composed rather than chosen — silently dropping either one is
- * how a trimmed posting or an evicted job goes unnoticed.
+ * Status line for the actual save outcome. Re-saves retain the original text;
+ * a new posting can be trimmed. Either can also evict the oldest saved job, so
+ * that notice is composed with the text outcome.
  */
 export function saveJobNotice({
+  keptExistingText,
   truncated,
   evicted,
 }: {
+  keptExistingText: boolean;
   truncated: boolean;
   evicted: boolean;
 }): string {
   const notices: string[] = [];
-  if (truncated) {
+  if (keptExistingText) {
+    notices.push('kept the posting text from the first save');
+  } else if (truncated) {
     notices.push(
       `the posting was long, so it was trimmed to ${MAX_TEXT.toLocaleString()} characters for AI context`,
     );
@@ -35,7 +39,8 @@ export function saveJobNotice({
     // exactly MAX_JOBS, so "under" would be off by one.
     notices.push(`your oldest saved job was dropped to stay within the ${MAX_JOBS}-job limit`);
   }
-  return notices.length === 0 ? 'Job saved.' : `Saved — ${notices.join('; ')}.`;
+  const action = keptExistingText ? 'Updated' : 'Saved';
+  return notices.length === 0 ? 'Job saved.' : `${action} — ${notices.join('; ')}.`;
 }
 
 /**
