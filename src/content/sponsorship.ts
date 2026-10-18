@@ -241,13 +241,22 @@ function splitClauses(prose: string): string[] {
   });
 }
 
+const WAIVER_CUE_ALL = new RegExp(WAIVER_CUE.source, 'gi');
+
 type ClearanceStance = 'required' | 'preferred' | 'waived';
 
 function clearanceStance(clause: string): ClearanceStance {
   // A requirement word in the same clause outranks a preference word
   // ("Active TS/SCI required, polygraph preferred").
   if (PREFERENCE_CUE.test(clause) && !REQUIREMENT_CUE.test(clause)) return 'preferred';
-  if (WAIVER_CUE.test(clause)) return 'waived';
+  // A waiver only removes ITS OWN requirement. "Active Secret clearance
+  // required, though a polygraph is no longer required" still requires the
+  // clearance, so strip the waiver's words and see whether a requirement is
+  // left; in "No security clearance is required" the "required" belongs to the
+  // waiver itself, so nothing is (#408 review).
+  if (WAIVER_CUE.test(clause) && !REQUIREMENT_CUE.test(clause.replace(WAIVER_CUE_ALL, ' '))) {
+    return 'waived';
+  }
   return 'required';
 }
 

@@ -1005,8 +1005,19 @@ describe('a waived restriction is not the restriction (#397)', () => {
       'U.S. citizenship is required and cannot be waived.',
       'If you are not a U.S. citizen, you need not apply.',
       'Secret clearance is mandatory, not optional.',
+      // A waiver removes only its own requirement, not another one in the
+      // same clause.
+      'Active Secret clearance required, though a polygraph is no longer required.',
+      'Security clearance is required, though Top Secret is no longer required.',
+      'Security clearance is required, though Top Secret is not required.',
     ]) {
       expect(analyze(text).verdict, text).toBe('no');
+    }
+  });
+
+  it('still waives when the only "required" in the clause is the waiver\'s own', () => {
+    for (const text of ['No security clearance is required.', "Top Secret isn't required."]) {
+      expect(analyze(text).restrictions, text).toEqual([]);
     }
   });
 });
