@@ -50,6 +50,16 @@ const ADMITS_NON_CITIZENS = String.raw`(?![^.;]*\b(?<!\b(?:no|not|nor|without|ex
 // no ADMITS_NON_CITIZENS guard of its own.
 const STATUS_LIST = String.raw`(?: (?:and|or) (?:u\.?s\.? )?(?:lawful )?(?:permanent residents?|green card holders?|nationals?))?`;
 /**
+ * Placed right before a requirement cue: the cue doesn't count when a negation
+ * governs it — "isn't required", "won't be required", "no longer required",
+ * "has never been required". A bare `(?<!not )` only looked four characters
+ * back, so every other way of WAIVING a restriction read as the restriction
+ * itself (#396, #397). `n't` has no leading `\b`: there is no word boundary
+ * inside "isn't".
+ */
+const NOT_WAIVED = String.raw`(?<!(?:\bnot|\bno longer|\bnever|n't)(?:\s+be(?:en)?)?\s)`;
+
+/**
  * The applicant-facing restriction shapes for a PLURAL group noun ("U.S.
  * citizens", "permanent residents"). Shared so every group gets the same guards.
  * `list` is what may follow the group before a trailing "only".
@@ -63,8 +73,10 @@ function pluralRestrictionRe(group: string, list: string): RegExp {
       // "not limited to permanent residents" removes the restriction.
       String.raw`|(?<!(?:\bnot|n't) )\b(?:open|limited|restricted) (?:only )?to ${group}${ADMITS_NON_CITIZENS}` +
       // "are required TO file taxes" is a fact about the group, not a limit on
-      // who may apply — only "required" with nothing infinitive after it.
-      String.raw`|\b${group} (?:(?:are|is) )?(?<!not )required\b(?!\s+to\b)`,
+      // who may apply — only "required" with nothing infinitive after it. No
+      // negation guard needed: "required" must directly follow the noun or
+      // "are/is", so "are not / no longer required" can never match.
+      String.raw`|\b${group} (?:(?:are|is) )?required\b(?!\s+to\b)`,
     'i',
   );
 }
@@ -88,7 +100,7 @@ const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   // clause (see CLAUSE_BOUNDARY): the 40-char window otherwise runs on into the
   // NEXT requirement in a list — "U.S. citizenship preferred; must have 5 years
   // of Python" read as citizenship REQUIRED (#377).
-  { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b(?<!not )(require|required|must|only|need)/i, label: 'U.S. citizenship required', perClause: true },
+  { re: new RegExp(String.raw`\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.]{0,40}\b${NOT_WAIVED}(require|required|must|only|need)`, 'i'), label: 'U.S. citizenship required', perClause: true },
   { re: /\bcitizenship (is )?required\b/i, label: 'Citizenship required' },
   // The PLURAL restriction phrasings — see PLURAL_CITIZENS_RE (#383).
   { re: PLURAL_CITIZENS_RE, label: 'U.S. citizenship required', perClause: true },
@@ -103,12 +115,12 @@ const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   { re: /\bclearance( level)?( required)?\s*:\s*(top secret|secret|ts\/sci|public trust)\b/i, label: 'Security clearance' },
   { re: /\bpublic trust\b[^.!?]{0,25}\b(clearance|eligib\w*|investigation|position|background|determination|obtain)/i, label: 'Security clearance' },
   { re: /\b(?<!(?:not|n't)\s(?:(?:need|have) to\s)?)(obtain|hold|maintain|possess|active|current|eligib\w* (for|to obtain)|requires?|required|must have)\b[^.!?]{0,25}\b(public trust|secret (security )?clearance)\b/i, label: 'Security clearance' },
-  // `(?<!not )` for the same reason as the citizenship rule above: "clearance
+  // NOT_WAIVED for the same reason as the citizenship rule above: "clearance
   // preferred but not required" is the opposite of a requirement (#373).
-  { re: /\b(security )?clearance\b[^.!?]{0,25}\b(?<!not )(require|required|mandatory|must)\b/i, label: 'Security clearance' },
+  { re: new RegExp(String.raw`\b(security )?clearance\b[^.!?]{0,25}\b${NOT_WAIVED}(require|required|mandatory|must)\b`, 'i'), label: 'Security clearance' },
   { re: /\b(?<!(?:not|n't)\s(?:(?:need|have) to\s)?)(require[sd]?|must have|must hold|must (be able to )?obtain)\b[^.!?]{0,25}\b(security )?clearance\b/i, label: 'Security clearance' },
   // A level stated as required without the word "clearance": "Secret required".
-  { re: /\b(top secret|secret|ts\/sci|public trust)\s+(is )?(?<!not )(required|mandatory)\b/i, label: 'Security clearance' },
+  { re: new RegExp(String.raw`\b(top secret|secret|ts\/sci|public trust)\s+(is )?${NOT_WAIVED}(required|mandatory)\b`, 'i'), label: 'Security clearance' },
   // ITAR / export control only with a governing or requirement cue: a
   // compliance-tooling company names both as the domain it SERVES, which says
   // nothing about who may apply (#370). Windows here are (?:u\.s\.|[^.!?]),
@@ -135,7 +147,7 @@ const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   { re: /\bauthoriz(?:ed|ation) to work\b[^.!?]{0,45}\b(on a permanent basis|on an ongoing basis|indefinitely|without restriction)\b/i, label: 'Must not need sponsorship' },
   // Per clause, for the same reason as the citizenship rule (#377): the window
   // otherwise reaches the next item's "must" — "Permanent resident preferred;
-  // must have a degree" read as REQUIRED (#385). `(?<!not )` likewise.
+  // must have a degree" read as REQUIRED (#385). NOT_WAIVED likewise.
   // Never bare "must" or "only": those read product copy about green card
   // holders as a limit on applicants — "helps every green card holder who must
   // apply for citizenship" (#387), the trap the plural shapes avoid (#383). So:
@@ -151,7 +163,7 @@ const RESTRICTIONS: { re: RegExp; label: string; perClause?: true }[] = [
   // and stays unknown (#395). "Green card sponsorship" is the opposite of a
   // requirement (it's a positive), so it is excluded. The negation guard reaches
   // past a plain "not ": "isn't", "won't be", "no longer" and "never" waive it.
-  { re: /\b(lawful permanent resident|green card holder|permanent residency|permanent resident|green card(?!\s+sponsor))\b(?:u\.s\.|[^.!?]){0,25}\b(?<!(?:\bnot|\bno longer|\bnever|n't)(?:\s+be)?\s)(?:(?:required|mandatory)\b(?!\s+to\b)|only(?=\s*(?:[.;,:!()]|$))|is a must\b)/i, label: 'Permanent resident required', perClause: true },
+  { re: new RegExp(String.raw`\b(lawful permanent resident|green card holder|permanent residency|permanent resident|green card(?!\s+sponsor))\b(?:u\.s\.|[^.!?]){0,25}\b${NOT_WAIVED}(?:(?:required|mandatory)\b(?!\s+to\b)|only(?=\s*(?:[.;,:!()]|$))|is a must\b)`, 'i'), label: 'Permanent resident required', perClause: true },
   { re: /\bmust (be|have|hold)\b(?:u\.s\.|[^.!?]){0,25}\b(green card|lawful permanent resident|permanent residen(?:t|cy))\b/i, label: 'Permanent resident required', perClause: true },
   // Verb-first, only with the ROLE as the subject or as a bare requirement
   // bullet: "This role requires U.S. permanent residency" / "Requires permanent
@@ -201,12 +213,12 @@ const CLEARANCE_CAUTION = 'Clearance preferred';
 const CLAUSE_BOUNDARY = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b/i;
 
 const PREFERENCE_CUE = /\b(prefer(red|ence)?|a plus|nice to have|desired|desirable|bonus)\b/i;
-const REQUIREMENT_CUE = /\b(?<!not )(must|requires?|required|mandatory)\b/i;
+const REQUIREMENT_CUE = new RegExp(String.raw`\b${NOT_WAIVED}(must|requires?|required|mandatory)\b`, 'i');
 // "Not required" / "don't need" — the clause says there is NO requirement.
 // Only requirement VERBS are negated here, never "hold": "Applicants who do
 // not hold an active TS/SCI will not be considered" is a requirement.
 const WAIVER_CUE =
-  /(?:\bnot|n't)\s+(?:(?:need|have) to\s+)?(?:be\s+)?(?:require[sd]?|need(?:ed)?|necessary|mandatory)\b|\bno\s+(?:security\s+)?clearance\s+(?:is\s+)?(?:required|needed|necessary)\b/i;
+  /(?:\bnot|n't|\bno longer|\bnever)\s+(?:(?:need|have) to\s+)?(?:be(?:en)?\s+)?(?:require[sd]?|need(?:ed)?|necessary|mandatory)\b|\bno\s+(?:security\s+)?clearance\s+(?:is\s+)?(?:required|needed|necessary)\b/i;
 
 /**
  * ", and" ends a clause only when the text before it is already a complete

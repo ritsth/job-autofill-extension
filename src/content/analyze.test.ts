@@ -963,3 +963,50 @@ describe('status nouns: "permanent residency" and bare "green card" (#395)', () 
     }
   });
 });
+
+describe('a waived restriction is not the restriction (#397)', () => {
+  it('reads every common way of dropping a requirement as no restriction', () => {
+    for (const text of [
+      // citizenship — the rule's own cue, and the plural shape
+      'U.S. citizenship is no longer required.',
+      "U.S. citizenship isn't required for this role.",
+      "U.S. citizenship won't be required.",
+      'U.S. citizenship will not be required.',
+      'U.S. citizenship has never been required for this team.',
+      'U.S. citizens are no longer required.',
+      // clearance — the rule's own cue, the level form, and the clause check
+      'A security clearance is no longer required.',
+      'Secret clearance is no longer mandatory.',
+      "Top Secret isn't required.",
+    ]) {
+      const a = analyze(text);
+      expect(a.restrictions, text).toEqual([]);
+      expect(a.verdict, text).not.toBe('no');
+    }
+  });
+
+  it('keeps a stated preference when the requirement is waived', () => {
+    for (const text of [
+      // "but" ends the clause, so the waiver sits in its own clause.
+      "Clearance preferred, but it's no longer required.",
+      // Same clause: the waived "required" must not count as a requirement
+      // outranking the preference (REQUIREMENT_CUE). No word "clearance", so
+      // the caution can only come from the clause check, not the CAUTIONS rule.
+      'TS/SCI preferred, though no longer required.',
+    ]) {
+      expect(analyze(text).verdict, text).toBe('caution');
+    }
+  });
+
+  it('still says NO when the negation in the sentence governs something else', () => {
+    for (const text of [
+      'U.S. citizenship required; no exceptions.',
+      'Must not require sponsorship; U.S. citizenship required.',
+      'U.S. citizenship is required and cannot be waived.',
+      'If you are not a U.S. citizen, you need not apply.',
+      'Secret clearance is mandatory, not optional.',
+    ]) {
+      expect(analyze(text).verdict, text).toBe('no');
+    }
+  });
+});
