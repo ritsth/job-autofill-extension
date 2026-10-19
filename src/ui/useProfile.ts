@@ -6,7 +6,8 @@ export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 function profileSaveErrorMessage(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   if (/quota/i.test(msg)) {
-    return 'Could not save — local storage is full. Remove an uploaded document to free space, then edit again.';
+    // Removing a document is itself an edit, so it re-saves on its own.
+    return 'Could not save — local storage is full. Remove an uploaded document to free space.';
   }
   return `Could not save — ${msg}`;
 }
@@ -79,5 +80,15 @@ export function useProfile() {
     });
   }
 
-  return { profile, loaded, saveState, saveError, update, setProfile };
+  /**
+   * Re-saves the current profile after a failure. A failed save is never
+   * retried on its own, so without this the user had to invent an edit (#361).
+   * It is just an identity update: the same debounce, generation guard and
+   * error handling as any other save.
+   */
+  function retrySave(): void {
+    update((prev) => prev);
+  }
+
+  return { profile, loaded, saveState, saveError, update, retrySave, setProfile };
 }

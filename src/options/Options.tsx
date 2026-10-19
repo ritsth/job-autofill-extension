@@ -12,6 +12,7 @@ import {
 import { removeDisabledHost } from '../lib/host';
 import { getSettings, onSettingsChanged, updateSettings, type Settings } from '../lib/settings';
 import { useProfile } from '../ui/useProfile';
+import { unsavedAiNotice } from './unsavedNotice';
 import { extractText, extractTextBatch } from '../lib/documents';
 import { sendToBackground } from '../lib/messages';
 import type { AIResult } from '../lib/messages';
@@ -22,7 +23,7 @@ import { AIError, isOnDeviceAvailable, onDeviceAvailabilityMessage } from '../li
 import { signIn, signOut, reconcileAuthUser, onAuthChanged, getCachedToken, type AuthUser } from '../lib/auth';
 
 export function Options() {
-  const { profile, loaded, saveState, saveError, update } = useProfile();
+  const { profile, loaded, saveState, saveError, update, retrySave } = useProfile();
 
   if (!loaded) return <div className="options">Loading…</div>;
 
@@ -39,6 +40,7 @@ export function Options() {
       p={p}
       saveState={saveState}
       saveError={saveError}
+      retrySave={retrySave}
       setPersonal={setPersonal}
       setPref={setPref}
       setAI={setAI}
@@ -51,6 +53,7 @@ function OptionsView({
   p,
   saveState,
   saveError,
+  retrySave,
   setPersonal,
   setPref,
   setAI,
@@ -59,6 +62,7 @@ function OptionsView({
   p: Profile;
   saveState: ReturnType<typeof useProfile>['saveState'];
   saveError: ReturnType<typeof useProfile>['saveError'];
+  retrySave: ReturnType<typeof useProfile>['retrySave'];
   setPersonal: (k: keyof Profile['personal'], v: string) => void;
   setPref: (k: keyof Profile['preferences'], v: string) => void;
   setAI: (k: keyof Profile['ai'], v: string) => void;
@@ -224,7 +228,12 @@ function OptionsView({
         <h1 style={{ flex: 1 }}>Little AI Helper — Settings</h1>
         {saveState === 'saving' && <span className="help">Saving…</span>}
         {saveState === 'saved' && <span className="saved">✓ Saved</span>}
-        {saveState === 'error' && saveError && <span className="warn">{saveError}</span>}
+        {saveState === 'error' && saveError && (
+          <>
+            <span className="warn">{saveError}</span>
+            <button onClick={retrySave}>Retry save</button>
+          </>
+        )}
       </div>
       <p className="sub">
         Everything here stays on this device (local storage). Your API key is only sent to your
@@ -379,6 +388,9 @@ function OptionsView({
             onChange={(e) => update((prev) => ({ ...prev, resumeText: e.target.value }))}
           />
         </Field>
+        {unsavedAiNotice(saveState) && p.resumeText.trim() && (
+          <p className="warn">{unsavedAiNotice(saveState)}</p>
+        )}
         {contextUsage.resume.usedChars < contextUsage.resume.totalChars && (
           <p className="warn">
             Only {contextUsage.resume.usedChars.toLocaleString()} of{' '}
@@ -549,6 +561,9 @@ function OptionsView({
             update((prev) => ({ ...prev, documents: upsertDocument(prev.documents, name, text) }))
           }
         />
+        {unsavedAiNotice(saveState) && p.documents.length > 0 && (
+          <p className="warn">{unsavedAiNotice(saveState)}</p>
+        )}
         {p.documents.length > 0 && (
           <div style={{ margin: '10px 0' }}>
             {p.documents.map((d) => {
