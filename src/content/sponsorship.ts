@@ -210,7 +210,19 @@ const CLEARANCE_CAUTION = 'Clearance preferred';
  * does not end one: "A Top Secret clearance, while not required, is a plus."
  * ", and" sometimes does — see splitClauses.
  */
-const CLAUSE_BOUNDARY = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b/i;
+// A SPACED dash separates list items as often as a semicolon does ("U.S.
+// citizenship preferred – must have 5 years of Python", #409). normalizeText has
+// already folded en/em dashes into "-"; an unspaced one is a hyphenated word
+// ("full-time", "H-1B") and must not split.
+const CLAUSE_BOUNDARY = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b|\s-+\s/i;
+
+/**
+ * One character that stays inside the current clause — for the rules that scan
+ * the whole posting (CAUTIONS) rather than one clause at a time, so a preference
+ * can't reach across a semicolon or a spaced dash onto the next item: "U.S.
+ * citizenship required – Python preferred" is not a citizenship preference.
+ */
+const IN_CLAUSE = String.raw`(?:(?!\s-+\s)[^.!?;])`;
 
 const PREFERENCE_CUE = /\b(prefer(red|ence)?|a plus|nice to have|desired|desirable|bonus)\b/i;
 const REQUIREMENT_CUE = new RegExp(String.raw`\b${NOT_WAIVED}(must|requires?|required|mandatory)\b`, 'i');
@@ -264,16 +276,16 @@ function clearanceStance(clause: string): ClearanceStance {
 const CAUTIONS: { re: RegExp; label: string }[] = [
   { re: /\bwork authoriz(?:ation|ed)\b[^.!?]{0,20}\b(require[sd]?|must)\b/i, label: WORK_AUTH_CAUTION },
   { re: /\bmust be authorized to work\b[^.!?]{0,40}\b(u\.?s\.?|united states)\b/i, label: WORK_AUTH_CAUTION },
-  { re: /\b(u\.?s\.?|united states)\s+citizen(ship)?\b[^.!?]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'U.S. citizenship preferred' },
-  { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?]{0,30}\b(u\.?s\.?|united states)\s+citizen/i, label: 'U.S. citizenship preferred' },
+  { re: new RegExp(String.raw`\b(u\.?s\.?|united states)\s+citizen(ship)?\b${IN_CLAUSE}{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b`, 'i'), label: 'U.S. citizenship preferred' },
+  { re: new RegExp(String.raw`\b(prefer(red|ence)?|a plus|desired)\b${IN_CLAUSE}{0,30}\b(u\.?s\.?|united states)\s+citizen`, 'i'), label: 'U.S. citizenship preferred' },
   // [^.!?;] — a preference stops at the semicolon, like the rules above it
   // should: "Green card holders required; Python a plus" is not a preference.
   // Bare "green card" — but not "green card sponsorship", which is the
   // opposite of requiring one.
-  { re: /\b(lawful permanent residents?|green card holders?|permanent residents?|green card(?!\s+sponsor))\b[^.!?;]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'Permanent resident preferred' },
-  { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?;]{0,30}\b(lawful permanent residents?|green card holders?|permanent residents?|green card(?!\s+sponsor))\b/i, label: 'Permanent resident preferred' },
-  { re: /\b(security )?clearance\b[^.!?]{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b/i, label: 'Clearance preferred' },
-  { re: /\b(prefer(red|ence)?|a plus|desired)\b[^.!?]{0,30}\b(security )?clearance\b/i, label: 'Clearance preferred' },
+  { re: new RegExp(String.raw`\b(lawful permanent residents?|green card holders?|permanent residents?|green card(?!\s+sponsor))\b${IN_CLAUSE}{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b`, 'i'), label: 'Permanent resident preferred' },
+  { re: new RegExp(String.raw`\b(prefer(red|ence)?|a plus|desired)\b${IN_CLAUSE}{0,30}\b(lawful permanent residents?|green card holders?|permanent residents?|green card(?!\s+sponsor))\b`, 'i'), label: 'Permanent resident preferred' },
+  { re: new RegExp(String.raw`\b(security )?clearance\b${IN_CLAUSE}{0,30}\b(preferred|a plus|is a plus|desired|nice to have)\b`, 'i'), label: 'Clearance preferred' },
+  { re: new RegExp(String.raw`\b(prefer(red|ence)?|a plus|desired)\b${IN_CLAUSE}{0,30}\b(security )?clearance\b`, 'i'), label: 'Clearance preferred' },
 ];
 
 /**

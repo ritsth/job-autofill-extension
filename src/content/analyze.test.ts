@@ -1021,3 +1021,44 @@ describe('a waived restriction is not the restriction (#397)', () => {
     }
   });
 });
+
+describe('a spaced dash separates list items like a semicolon (#409)', () => {
+  it('keeps a preference a preference when the next item after a dash says must/required', () => {
+    for (const text of [
+      'U.S. citizenship preferred – must have 5 years of Python.',
+      'U.S. citizenship preferred — must have 5 years of Python.',
+      'U.S. citizenship preferred - must have 5 years of Python.',
+      'Secret clearance preferred – Python required.',
+    ]) {
+      const a = analyze(text);
+      expect(a.verdict, text).toBe('caution');
+      expect(a.restrictions, text).toEqual([]);
+    }
+  });
+
+  it('does not split hyphenated words', () => {
+    expect(analyze('U.S. citizenship required for full-time roles.').verdict).toBe('no');
+    expect(analyze('U.S. citizenship preferred for this full-time role.').verdict).toBe('caution');
+  });
+
+  it('still says NO for a requirement followed by another item', () => {
+    for (const text of [
+      'U.S. citizenship required – no exceptions.',
+      'Active TS/SCI required – polygraph preferred.',
+    ]) {
+      expect(analyze(text).verdict, text).toBe('no');
+    }
+  });
+
+  it("doesn't attach a preference to the item before the separator", () => {
+    // The CAUTIONS scan the whole posting, so their windows stop at the
+    // separator too — semicolon included, which leaked before #409 as well.
+    for (const [text, label] of [
+      ['U.S. citizenship required – Python preferred.', 'U.S. citizenship preferred'],
+      ['U.S. citizenship required; Python preferred.', 'U.S. citizenship preferred'],
+      ['Security clearance required – AWS a plus.', 'Clearance preferred'],
+    ] as const) {
+      expect(analyze(text).cautions, text).not.toContain(label);
+    }
+  });
+});
