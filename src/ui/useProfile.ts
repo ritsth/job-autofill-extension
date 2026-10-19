@@ -18,6 +18,9 @@ function profileSaveErrorMessage(err: unknown): string {
  */
 export function useProfile() {
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  // What storage actually holds — the profile every AI feature reads. Differs
+  // from `profile` only while a save is pending or has failed (#361).
+  const [savedProfile, setSavedProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [loaded, setLoaded] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveError, setSaveError] = useState('');
@@ -39,9 +42,12 @@ export function useProfile() {
   useEffect(() => {
     getProfile().then((p) => {
       setProfile(p);
+      setSavedProfile(p);
       setLoaded(true);
     });
     return onProfileChanged((p) => {
+      // Storage changed, whoever wrote it — that IS what the AI now reads.
+      setSavedProfile(p);
       if (!editing.current) setProfile(p);
     });
   }, []);
@@ -57,6 +63,7 @@ export function useProfile() {
       saveTimer.current = window.setTimeout(async () => {
         try {
           await saveProfile(next);
+          setSavedProfile(next);
           if (generation === saveGeneration.current) {
             setSaveState('saved');
             // Guarded too: without this, a slow-to-reset save A can flip
@@ -90,5 +97,5 @@ export function useProfile() {
     update((prev) => prev);
   }
 
-  return { profile, loaded, saveState, saveError, update, retrySave, setProfile };
+  return { profile, savedProfile, loaded, saveState, saveError, update, retrySave, setProfile };
 }

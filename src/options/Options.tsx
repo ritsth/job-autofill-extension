@@ -23,7 +23,7 @@ import { AIError, isOnDeviceAvailable, onDeviceAvailabilityMessage } from '../li
 import { signIn, signOut, reconcileAuthUser, onAuthChanged, getCachedToken, type AuthUser } from '../lib/auth';
 
 export function Options() {
-  const { profile, loaded, saveState, saveError, update, retrySave } = useProfile();
+  const { profile, savedProfile, loaded, saveState, saveError, update, retrySave } = useProfile();
 
   if (!loaded) return <div className="options">Loading…</div>;
 
@@ -38,6 +38,7 @@ export function Options() {
   return (
     <OptionsView
       p={p}
+      saved={savedProfile}
       saveState={saveState}
       saveError={saveError}
       retrySave={retrySave}
@@ -51,6 +52,7 @@ export function Options() {
 
 function OptionsView({
   p,
+  saved,
   saveState,
   saveError,
   retrySave,
@@ -60,6 +62,7 @@ function OptionsView({
   update,
 }: {
   p: Profile;
+  saved: Profile;
   saveState: ReturnType<typeof useProfile>['saveState'];
   saveError: ReturnType<typeof useProfile>['saveError'];
   retrySave: ReturnType<typeof useProfile>['retrySave'];
@@ -388,8 +391,8 @@ function OptionsView({
             onChange={(e) => update((prev) => ({ ...prev, resumeText: e.target.value }))}
           />
         </Field>
-        {unsavedAiNotice(saveState) && p.resumeText.trim() && (
-          <p className="warn">{unsavedAiNotice(saveState)}</p>
+        {unsavedAiNotice(saveState, p, saved, 'resumeText') && (
+          <p className="warn">{unsavedAiNotice(saveState, p, saved, 'resumeText')}</p>
         )}
         {contextUsage.resume.usedChars < contextUsage.resume.totalChars && (
           <p className="warn">
@@ -561,8 +564,8 @@ function OptionsView({
             update((prev) => ({ ...prev, documents: upsertDocument(prev.documents, name, text) }))
           }
         />
-        {unsavedAiNotice(saveState) && p.documents.length > 0 && (
-          <p className="warn">{unsavedAiNotice(saveState)}</p>
+        {unsavedAiNotice(saveState, p, saved, 'documents') && (
+          <p className="warn">{unsavedAiNotice(saveState, p, saved, 'documents')}</p>
         )}
         {p.documents.length > 0 && (
           <div style={{ margin: '10px 0' }}>
