@@ -221,8 +221,12 @@ const CLAUSE_BOUNDARY = /(?<!\bu\.s)[.!?;](?=\s|$)|\bbut\b|\s-+\s/i;
  * the whole posting (CAUTIONS) rather than one clause at a time, so a preference
  * can't reach across a semicolon or a spaced dash onto the next item: "U.S.
  * citizenship required – Python preferred" is not a citizenship preference.
+ * It stops at "but" too, where "but" brings in a NEW subject ("U.S.
+ * citizenship not required but Python preferred", #410 review) — but not where
+ * what follows refers back to the same one: "…but not required", "…, but it's
+ * a plus", "…but that's preferred".
  */
-const IN_CLAUSE = String.raw`(?:(?!\s-+\s)[^.!?;])`;
+const IN_CLAUSE = String.raw`(?:(?!\s-+\s|\bbut\b(?!\s+(?:not\s+required|it['’]?s|it\s+is|that['’]?s|that\s+is)\b))[^.!?;])`;
 
 const PREFERENCE_CUE = /\b(prefer(red|ence)?|a plus|nice to have|desired|desirable|bonus)\b/i;
 const REQUIREMENT_CUE = new RegExp(String.raw`\b${NOT_WAIVED}(must|requires?|required|mandatory)\b`, 'i');

@@ -1057,8 +1057,21 @@ describe('a spaced dash separates list items like a semicolon (#409)', () => {
       ['U.S. citizenship required – Python preferred.', 'U.S. citizenship preferred'],
       ['U.S. citizenship required; Python preferred.', 'U.S. citizenship preferred'],
       ['Security clearance required – AWS a plus.', 'Clearance preferred'],
+      // "but" bringing in a new subject ends the window too (#410 review).
+      ['U.S. citizenship not required but Python preferred.', 'U.S. citizenship preferred'],
     ] as const) {
       expect(analyze(text).cautions, text).not.toContain(label);
+    }
+  });
+
+  it('lets a preference cross "but" when what follows refers back to the same thing', () => {
+    for (const [text, label] of [
+      ['U.S. citizenship preferred but not required.', 'U.S. citizenship preferred'],
+      ['Preferred but not required: U.S. citizenship.', 'U.S. citizenship preferred'],
+      ["You don’t need a security clearance, but it’s a plus.", 'Clearance preferred'],
+      ['A clearance is not required, but that is preferred.', 'Clearance preferred'],
+    ] as const) {
+      expect(analyze(text).cautions, text).toContain(label);
     }
   });
 });
