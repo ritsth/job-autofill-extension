@@ -1,5 +1,5 @@
 import { defineManifest } from '@crxjs/vite-plugin';
-import pkg from './package.json';
+import pkg from './package.json' with { type: 'json' };
 
 // Hosts where the full autofill adapters run (standard HTML application forms).
 // Kept for host_permissions; adapters self-detect via their own matches().
