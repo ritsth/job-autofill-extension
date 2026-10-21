@@ -515,9 +515,17 @@ function labeledExperience(lower: string, kind: 'required' | 'preferred'): strin
   // number must either OPEN the value ("3-5", "10+", "at least 2") or be
   // followed by "years"/"yrs" — never just sit somewhere inside a sentence.
   const count = String.raw`(?<!\d)(20|1[0-9]|[1-9])(?!\d)\s*\+?(?:\s*(?:to|–|—|-)\s*(20|1[0-9]|[1-9])(?!\d)\s*\+?)?`;
+  // A count that opens the value must also END it (or be followed by "years",
+  // "or more", or punctuation). Saying what MAY follow, rather than listing
+  // what may not, closes every shape at once (#420 review): "5 days ago",
+  // "6 months", "10 openings", and a range whose end fails the cap ("3-25"),
+  // which would otherwise be read as just its first number.
   const num =
-    v.match(new RegExp(String.raw`^(?:(?:at least|minimum|min\.?|about|around|approx\.?|approximately)\s+)?${count}`)) ??
-    v.match(new RegExp(String.raw`${count}\s*(?:years?|yrs?)\b`));
+    v.match(
+      new RegExp(
+        String.raw`^(?:(?:at least|minimum|min\.?|about|around|approx\.?|approximately)\s+)?${count}(?=\s*(?:$|[,;:()/]|or\s+more\b|(?:years?|yrs?)\b))`,
+      ),
+    ) ?? v.match(new RegExp(String.raw`${count}\s*(?:years?|yrs?)\b`));
   if (num) return num[2] && num[2] !== num[1] ? `${num[1]}–${num[2]} yrs` : `${num[1]}+ yrs`;
   return null;
 }

@@ -1085,6 +1085,14 @@ describe('a labelled experience field reads a year COUNT, not any digits nearby'
       'Years of experience: 2025-2026 academic year',
       'Required years of experience\nApply by November 16, 2026',
       'Years of experience: posted 5 days ago',
+      // A count of something else, even when it opens the value (#420 review).
+      'Years of experience: 5 days ago',
+      'Years of experience: 6 months',
+      'Years of experience: 10 openings',
+      // A range whose end fails the cap is rejected whole, not read as "3+".
+      'Years of experience: 3-25',
+      // Company-age copy: without digit boundaries "25 years" reads as "5+ yrs".
+      'Years of experience\nOver 25 years serving our clients',
     ]) {
       expect(analyze(text).experience.required, text).toBeNull();
     }
@@ -1101,6 +1109,8 @@ describe('a labelled experience field reads a year COUNT, not any digits nearby'
       // No "years" after the number: only the "at least" lead-in reads it.
       ['Years of experience: at least 2', '2+ yrs'],
       ['Years of experience: candidates with 4 years', '4+ yrs'],
+      ['Years of experience: 3 or more', '3+ yrs'],
+      ['Years of experience: 2 (preferred 4)', '2+ yrs'],
       ['Required Years of Experience: None required', 'None'],
     ] as const) {
       expect(analyze(text).experience.required, text).toBe(want);
