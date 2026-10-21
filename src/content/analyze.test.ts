@@ -1075,3 +1075,35 @@ describe('a spaced dash separates list items like a semicolon (#409)', () => {
     }
   });
 });
+
+describe('a labelled experience field reads a year COUNT, not any digits nearby', () => {
+  it('ignores years and dates that page text puts after the label', () => {
+    // Handshake shows these beside every posting; "2027" used to read as "20–27 yrs".
+    for (const text of [
+      'Years of experience\nSummer 2027 Internships',
+      'Experience required\nClass of 2027',
+      'Years of experience: 2025-2026 academic year',
+      'Required years of experience\nApply by November 16, 2026',
+      'Years of experience: posted 5 days ago',
+    ]) {
+      expect(analyze(text).experience.required, text).toBeNull();
+    }
+  });
+
+  it('still reads genuine labelled values', () => {
+    for (const [text, want] of [
+      ['Years of experience\n3-5', '3–5 yrs'],
+      ['Years of experience\n3 – 5', '3–5 yrs'],
+      ['Required Years of Experience: 2', '2+ yrs'],
+      ['Years of experience: 10+', '10+ yrs'],
+      ['Minimum experience: 1 to 3 years', '1–3 yrs'],
+      ['Minimum experience: at least 2 years', '2+ yrs'],
+      // No "years" after the number: only the "at least" lead-in reads it.
+      ['Years of experience: at least 2', '2+ yrs'],
+      ['Years of experience: candidates with 4 years', '4+ yrs'],
+      ['Required Years of Experience: None required', 'None'],
+    ] as const) {
+      expect(analyze(text).experience.required, text).toBe(want);
+    }
+  });
+});

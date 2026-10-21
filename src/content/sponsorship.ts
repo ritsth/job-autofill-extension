@@ -506,7 +506,18 @@ function labeledExperience(lower: string, kind: 'required' | 'preferred'): strin
     return 'None';
   }
   if (/entry[- ]level|new grad/.test(v)) return 'New grad';
-  const num = v.match(/(\d{1,2})\s*\+?\s*(?:to|–|—|-)?\s*(\d{1,2})?/);
+  // A year COUNT, not any digits in the value: the 40-char capture often runs
+  // into page text that merely contains a year or a date — Handshake shows
+  // "Summer 2027 Internships" and "Apply by November 16, 2026" beside the
+  // posting — and the old unguarded `(\d{1,2})…(\d{1,2})?` read "2027" as
+  // "20–27 yrs", on every posting. So: digit boundaries on both sides, a range
+  // only with a real separator, the same ≤20 cap as the prose matcher, and the
+  // number must either OPEN the value ("3-5", "10+", "at least 2") or be
+  // followed by "years"/"yrs" — never just sit somewhere inside a sentence.
+  const count = String.raw`(?<!\d)(20|1[0-9]|[1-9])(?!\d)\s*\+?(?:\s*(?:to|–|—|-)\s*(20|1[0-9]|[1-9])(?!\d)\s*\+?)?`;
+  const num =
+    v.match(new RegExp(String.raw`^(?:(?:at least|minimum|min\.?|about|around|approx\.?|approximately)\s+)?${count}`)) ??
+    v.match(new RegExp(String.raw`${count}\s*(?:years?|yrs?)\b`));
   if (num) return num[2] && num[2] !== num[1] ? `${num[1]}–${num[2]} yrs` : `${num[1]}+ yrs`;
   return null;
 }
