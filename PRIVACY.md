@@ -35,9 +35,7 @@ All of the following is saved **locally on your computer** using Chrome's
   letter, tailored resume), whether you've dismissed the badge's first-run intro, and
   which corner of the screen you've dragged the badge to.
 
-This list is kept in step with the `Profile` type in
-[src/lib/profile.ts](https://github.com/ritsth/job-autofill-extension/blob/main/src/lib/profile.ts) —
-any new field stored there should be added here too.
+This list is kept in step with what the extension writes to `chrome.storage.local`. When you add a stored field, add it here too. The keys are defined in `src/lib/profile.ts` (`profile`), `src/lib/settings.ts` (`settings`), `src/lib/savedJobs.ts` (`savedJobs`), `src/lib/auth.ts` (`auth`, `signedOut`), and `src/content/sponsorship.ts` (`badgeIntroSeen`, `badgeCorner`).
 
 We do **not** use analytics, tracking, advertising, or crash reporting. There is no
 telemetry of any kind.
