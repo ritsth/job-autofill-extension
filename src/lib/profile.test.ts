@@ -3,6 +3,7 @@ import { DEFAULT_MODEL, GEMINI_MODELS } from './ai/models';
 import {
   CONTEXT_TEXT_BUDGET,
   DEFAULT_PROFILE,
+  DOCUMENT_TEXT_CAP,
   RESUME_TEXT_BUDGET,
   computeContextUsage,
   onProfileChanged,
@@ -524,6 +525,55 @@ describe('upsertDocument', () => {
       ['b.pdf', 'b1'],
       ['a.pdf', 'a2'],
     ]);
+  });
+
+  it('caps stored text at DOCUMENT_TEXT_CAP on ingest (#412)', () => {
+    // A few long PDFs used to fill the ~10 MB storage.local quota with text
+    // no feature could ever read: computeContextUsage spends at most
+    // CONTEXT_TEXT_BUDGET across resume + documents.
+    const long = 'x'.repeat(CONTEXT_TEXT_BUDGET + 50_000);
+    const result = upsertDocument([], 'big.pdf', long);
+    expect(result).toHaveLength(1);
+    expect(result[0].text).toHaveLength(DOCUMENT_TEXT_CAP);
+    expect(result[0].text).toBe(long.slice(0, DOCUMENT_TEXT_CAP));
+    expect(result[0].trimmedAtUpload).toBe(true);
+  });
+
+  it('trims leading whitespace before capping an over-cap upload (#412)', () => {
+    // computeContextUsage trims document text before applying the AI budget,
+    // so capping raw text would store leading whitespace and discard a
+    // boundary marker the AI would otherwise have seen.
+    const marker = 'MARKER';
+    const long = '   \n  ' + 'z'.repeat(DOCUMENT_TEXT_CAP - marker.length) + marker + 'tail';
+    const result = upsertDocument([], 'big.pdf', long);
+    expect(result[0].text).toHaveLength(DOCUMENT_TEXT_CAP);
+    expect(result[0].text.endsWith(marker)).toBe(true);
+    expect(result[0].trimmedAtUpload).toBe(true);
+  });
+
+  it('leaves text at or under the cap untouched and unflagged (#412)', () => {
+    const result = upsertDocument([], 'small.pdf', 'short text');
+    expect(result[0].text).toBe('short text');
+    expect(result[0].trimmedAtUpload).toBeUndefined();
+  });
+
+  it('a capped document still contributes its full share of the AI budget (#412)', () => {
+    // The cap must stay at or above CONTEXT_TEXT_BUDGET: with an empty
+    // resume, the single document gets the whole pool.
+    const result = upsertDocument([], 'big.pdf', 'y'.repeat(CONTEXT_TEXT_BUDGET + 10_000));
+    const profile = { ...DEFAULT_PROFILE, resumeText: '', documents: result };
+    const usage = computeContextUsage(profile);
+    expect(usage.documents).toHaveLength(1);
+    expect(usage.documents[0].usedChars).toBe(CONTEXT_TEXT_BUDGET);
+    expect(usage.documents[0].totalChars).toBe(DOCUMENT_TEXT_CAP);
+  });
+
+  it('computeContextUsage is unchanged for documents under the cap (#412)', () => {
+    const result = upsertDocument([], 'small.pdf', 'hello world');
+    const profile = { ...DEFAULT_PROFILE, resumeText: '', documents: result };
+    const usage = computeContextUsage(profile);
+    expect(usage.documents[0].usedChars).toBe('hello world'.length);
+    expect(usage.documents[0].totalChars).toBe('hello world'.length);
   });
 });
 
