@@ -586,6 +586,11 @@ function OptionsView({
                             : `${u!.usedChars.toLocaleString()} of ${u!.totalChars.toLocaleString()} chars used for AI`}
                         </span>
                       )}
+                      {d.trimmedAtUpload && (
+                        <span className="warn">
+                          {' — '}trimmed at upload to {d.text.length.toLocaleString()} chars (storage cap)
+                        </span>
+                      )}
                     </span>
                     <button
                       className="jobtoggle"

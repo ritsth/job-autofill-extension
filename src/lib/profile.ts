@@ -38,6 +38,12 @@ export interface UploadedDoc {
   /** Plain-text extracted from the upload; this is what gets sent to the AI. */
   text: string;
   addedAt: number;
+  /**
+   * True when upsertDocument capped this document's text at
+   * DOCUMENT_TEXT_CAP on ingest (#412). Absent on documents stored before
+   * the cap, which are never retro-trimmed.
+   */
+  trimmedAtUpload?: boolean;
 }
 
 /**
@@ -53,7 +59,23 @@ export interface UploadedDoc {
 export function upsertDocument(docs: UploadedDoc[], name: string, text: string): UploadedDoc[] {
   const norm = normalizeDocName(name);
   const without = docs.filter((d) => normalizeDocName(d.name) !== norm);
-  return [...without, { id: crypto.randomUUID(), name, text, addedAt: Date.now() }];
+  // #412: cap the stored text at DOCUMENT_TEXT_CAP (== CONTEXT_TEXT_BUDGET,
+  // defined with the budgets below). Anything past the budget can never reach
+  // the AI — computeContextUsage spends at most CONTEXT_TEXT_BUDGET across the
+  // resume and all documents — so storing it only burns the ~10 MB
+  // chrome.storage.local quota and makes every profile save re-serialise text
+  // no feature will ever read.
+  const capped = text.slice(0, DOCUMENT_TEXT_CAP);
+  return [
+    ...without,
+    {
+      id: crypto.randomUUID(),
+      name,
+      text: capped,
+      addedAt: Date.now(),
+      ...(capped.length < text.length ? { trimmedAtUpload: true } : {}),
+    },
+  ];
 }
 
 /**
@@ -249,6 +271,18 @@ export function onProfileChanged(cb: (profile: Profile) => void): () => void {
  * comfortably under that ceiling with room to spare for future growth.
  */
 export const CONTEXT_TEXT_BUDGET = 60_000;
+
+/**
+ * Cap on the text stored per uploaded document, applied by upsertDocument on
+ * ingest (#412). Kept equal to CONTEXT_TEXT_BUDGET: anything past the budget
+ * is unreachable by construction (computeContextUsage spends at most
+ * CONTEXT_TEXT_BUDGET across the resume + all documents), so a document
+ * stored at this cap still contributes its full share of the budget, while
+ * storage stops growing with text no feature will ever read. Must never drop
+ * below CONTEXT_TEXT_BUDGET, or a single over-cap document would lose budget
+ * it could actually have used.
+ */
+export const DOCUMENT_TEXT_CAP = CONTEXT_TEXT_BUDGET;
 
 /**
  * The resume is the highest-value context for tailoring, so it gets a generous
