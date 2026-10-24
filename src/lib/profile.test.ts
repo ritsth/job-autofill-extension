@@ -539,6 +539,18 @@ describe('upsertDocument', () => {
     expect(result[0].trimmedAtUpload).toBe(true);
   });
 
+  it('trims leading whitespace before capping an over-cap upload (#412)', () => {
+    // computeContextUsage trims document text before applying the AI budget,
+    // so capping raw text would store leading whitespace and discard a
+    // boundary marker the AI would otherwise have seen.
+    const marker = 'MARKER';
+    const long = '   \n  ' + 'z'.repeat(DOCUMENT_TEXT_CAP - marker.length) + marker + 'tail';
+    const result = upsertDocument([], 'big.pdf', long);
+    expect(result[0].text).toHaveLength(DOCUMENT_TEXT_CAP);
+    expect(result[0].text.endsWith(marker)).toBe(true);
+    expect(result[0].trimmedAtUpload).toBe(true);
+  });
+
   it('leaves text at or under the cap untouched and unflagged (#412)', () => {
     const result = upsertDocument([], 'small.pdf', 'short text');
     expect(result[0].text).toBe('short text');

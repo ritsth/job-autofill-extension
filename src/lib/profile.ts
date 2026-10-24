@@ -65,7 +65,12 @@ export function upsertDocument(docs: UploadedDoc[], name: string, text: string):
   // resume and all documents — so storing it only burns the ~10 MB
   // chrome.storage.local quota and makes every profile save re-serialise text
   // no feature will ever read.
-  const capped = text.slice(0, DOCUMENT_TEXT_CAP);
+  // Over-cap uploads are trimmed first: computeContextUsage trims
+  // document text before applying the budget, so capping raw text
+  // could store leading whitespace while discarding content the
+  // AI would otherwise have seen. At- or under-cap text is untouched.
+  const capped =
+    text.length > DOCUMENT_TEXT_CAP ? text.trim().slice(0, DOCUMENT_TEXT_CAP) : text;
   return [
     ...without,
     {
