@@ -41,7 +41,7 @@
     "mammoth": "^1.12.1",
     "pdfjs-dist": "^6.3.289",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.67.0",
+    "typescript-eslint": "^8.72.1",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
   }
