@@ -25,3 +25,9 @@ updates:
       interval: weekly
     labels:
       - dependencies
+    groups:
+      # init and analyze must run the same version or the CodeQL job fails, so
+      # they have to arrive in one PR.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
