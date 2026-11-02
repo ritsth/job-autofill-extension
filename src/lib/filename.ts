@@ -20,6 +20,8 @@ export function documentFilename(prefix: string, company: string, role: string):
     .filter(Boolean)
     .join('-')
     .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, MAX_SLUG_LENGTH)
