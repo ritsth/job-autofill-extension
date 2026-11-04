@@ -45,13 +45,16 @@ export function parseEligibilityJson(raw: string): SponsorAnalysis {
 
   const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
-  // The prompt asks for a string like "3+ years", but a bare year count is
-  // exactly what a model emits unquoted (#364). Render it in the local
-  // extractor's own "N+ yrs" shape: the badge prints `${required} required`,
-  // so a raw "3" would read as "3 required". Zero, negative and non-finite
-  // counts stay null and fall back to the rules-based read.
-  const years = (v: unknown): string | null =>
-    typeof v === 'number' ? (Number.isFinite(v) && v > 0 ? `${v}+ yrs` : null) : str(v);
+  // Models can return bare year counts as numbers or strings (#364, #436).
+  // Format both like the local extractor and keep descriptive text as-is.
+  // A null count lets the caller fall back to the local extractor.
+  const years = (v: unknown): string | null => {
+    const text = str(v);
+    const count = text && /^\d+\+?$/.test(text) ? Number.parseInt(text, 10) : v;
+    return typeof count === 'number'
+      ? (Number.isFinite(count) && count > 0 ? `${count}+ yrs` : null)
+      : text;
+  };
 
   return {
     verdict,
