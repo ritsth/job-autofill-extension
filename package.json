@@ -1,9 +1,9 @@
 {
   "name": "job-autofill-extension",
   "private": true,
-  "version": "1.1.7",
+  "version": "1.2.0",
   "type": "module",
-  "description": "Autofill job applications on Greenhouse, Lever & Workday and draft AI answers and tailored cover letters from your profile.",
+  "description": "Autofill job applications on Greenhouse, Lever, Workday & Ashby and draft AI answers and tailored cover letters from your profile.",
   "license": "MIT",
   "author": "Ritika Shrestha",
   "repository": {

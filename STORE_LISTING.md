@@ -14,9 +14,9 @@ Little AI Helper
 
 ## Summary (≤132 characters)
 
-> Autofill job applications on Greenhouse, Lever & Workday, draft AI answers and cover letters, and flag work-eligibility at a glance.
+> Autofill Greenhouse, Lever, Workday & Ashby applications, draft AI answers and cover letters, and flag work-eligibility at a glance.
 
-(127 chars.)
+(132 chars, the limit.)
 
 ## Category
 
@@ -36,8 +36,8 @@ English
 > before you waste time on a posting you can't take.
 >
 > **What it does**
-> - **Autofill** standard fields on Greenhouse, Lever, and Workday applications from your
->   saved profile.
+> - **Autofill** standard fields on Greenhouse, Lever, Workday, and Ashby applications from
+>   your saved profile.
 > - **✨ AI answers** — a button appears beside free-text questions and drafts a response
 >   from your resume and uploaded documents.
 > - **Cover letters** — generate a cover letter from your template (company, role, and
@@ -75,8 +75,9 @@ English
 | `activeTab` | Read and fill fields on the job-application page the user is currently on, when they click the extension. |
 | `sidePanel` | The extension's main UI is a side panel that stays open while the user works through an application. |
 | `identity` | Optional Google sign-in (OpenID/email/profile) so users can authenticate to the managed AI proxy, which meters usage per user. |
-| Host access to Greenhouse, Lever, Workday (`*.greenhouse.io`, `jobs.lever.co`, `*.myworkdayjobs.com`, etc.) | Run the autofill content script on supported job-application sites. |
+| Host access to Greenhouse, Lever, Workday, Ashby (`*.greenhouse.io`, `jobs.lever.co`, `*.myworkdayjobs.com`, `jobs.ashbyhq.com`, etc.) | Run the autofill content script on supported job-application sites. |
 | `generativelanguage.googleapis.com` | Send the user's context to Google's Gemini API to generate answers/cover letters when the user supplies their own key. |
+| `www.googleapis.com`, `oauth2.googleapis.com` | Optional Google sign-in for the managed proxy: read the signed-in account's email to show who is signed in, and revoke the token when the user signs out. |
 | `*.run.app` | Send requests to the managed proxy (Cloud Run) that relays to Vertex AI, when the user selects that provider. |
 | Content script on `<all_urls>` (with `all_frames`) | The work-eligibility badge must be able to scan any job posting regardless of which site hosts it. It renders only while the user has scanning enabled (a neutral gray "no eligibility info" card appears when a page has no eligibility wording), and it activates autofill only on the supported job boards above. Additionally, when the user explicitly **saves a job**, the inline "✨ AI answer" button appears beside that application's free-text questions so they can draft answers on any site — this is user-initiated and shows nothing until a job is saved. `all_frames` is required because company career sites embed the ATS application form in an iframe, so the AI-answer button must reach those sub-frames; the badge and popup messaging stay top-frame-only. Users can turn scanning off entirely from the side panel. |
 
