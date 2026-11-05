@@ -598,8 +598,20 @@ const DETAIL_SELECTORS: Record<string, string[]> = {
     '.jobs-search__job-details',
     '.job-view-layout',
   ],
-  'joinhandshake.com': ['[data-hook="details-container"]', 'main', '[role="main"]'],
+  // The split job-search view puts the job list and the filter chips ("No
+  // experience required", "Open to US visa sponsorship") in the same <main> as
+  // the selected posting, so <main> is not a valid source there: the list
+  // dominated the read and the verdict barely changed between jobs.
+  // `right-content` is the posting pane; `details-container` is the older
+  // layout's. A standalone posting with neither falls through to the generic
+  // read below.
+  'joinhandshake.com': ['[data-hook="right-content"]', '[data-hook="details-container"]'],
 };
+
+// Boards whose detail pane, once it exists, is the only valid source even while
+// it is still filling in after a job switch. Falling through to the generic read
+// there would scan the whole job list for a moment and show its verdict.
+const PANE_ONLY_HOSTS = ['joinhandshake.com'];
 
 const MAX_CHARS = 200_000;
 
@@ -784,10 +796,12 @@ export function getScanText(): string {
   const key = Object.keys(DETAIL_SELECTORS).find((d) => hostMatches(host, d));
   if (key) {
     autoExpandDescription(document); // reveal collapsed descriptions before reading
+    const paneOnly = PANE_ONLY_HOSTS.includes(key);
     for (const sel of DETAIL_SELECTORS[key]) {
       const el = document.querySelector<HTMLElement>(sel);
       const t = el?.innerText?.trim();
       if (t && t.length > 80) return t.slice(0, MAX_CHARS);
+      if (el && paneOnly) return '';
     }
     // LinkedIn: the job detail pane is the ONLY valid source. If none of the
     // known containers matched (an unfamiliar layout), try the layout-agnostic
