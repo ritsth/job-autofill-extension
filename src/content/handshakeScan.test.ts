@@ -44,12 +44,24 @@ describe('Handshake scan scope', () => {
     expect(getScanText()).toBe(POSTING);
   });
 
+  it('prefers the posting pane when the older container is also present', () => {
+    const older =
+      'Older layout: the details container holds a different description of ' +
+      'the same role, long enough to pass the 80-character threshold too.';
+    stubHandshake({
+      '[data-hook="right-content"]': POSTING,
+      '[data-hook="details-container"]': older,
+      main: WHOLE_PAGE,
+    });
+    expect(getScanText()).toBe(POSTING);
+  });
+
   it('waits for a pane that is still filling in instead of reading the whole page', () => {
     stubHandshake({ '[data-hook="right-content"]': '', main: WHOLE_PAGE });
     expect(getScanText()).toBe('');
   });
 
-  it('falls back to the page body on a standalone posting with no pane', () => {
+  it('falls back to the generic page read on a standalone posting with no pane', () => {
     stubHandshake({ main: WHOLE_PAGE });
     expect(getScanText()).toBe(WHOLE_PAGE);
   });
