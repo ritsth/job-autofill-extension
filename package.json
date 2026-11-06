@@ -37,7 +37,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^10.13.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.11.0",
+    "globals": "^17.13.0",
     "mammoth": "^1.12.1",
     "pdfjs-dist": "^6.3.289",
     "typescript": "^6.0.3",
