@@ -92,8 +92,12 @@ describe('parseEligibilityJson', () => {
     ['3', '3+ yrs'],
     [' 3 ', '3+ yrs'],
     ['5+', '5+ yrs'],
+    ['003+', '3+ yrs'],
+    ['9007199254740993', '9007199254740993+ yrs'],
+    ['9007199254740993+', '9007199254740993+ yrs'],
     ['0', null],
     ['0+', null],
+    ['000+', null],
   ])('normalizes the quoted year count %j', (count, expected) => {
     const result = parseEligibilityJson(
       JSON.stringify({ experienceRequired: count, experiencePreferred: count }),

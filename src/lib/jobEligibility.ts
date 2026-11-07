@@ -50,9 +50,12 @@ export function parseEligibilityJson(raw: string): SponsorAnalysis {
   // A null count lets the caller fall back to the local extractor.
   const years = (v: unknown): string | null => {
     const text = str(v);
-    const count = text && /^\d+\+?$/.test(text) ? Number.parseInt(text, 10) : v;
-    return typeof count === 'number'
-      ? (Number.isFinite(count) && count > 0 ? `${count}+ yrs` : null)
+    if (text && /^\d+\+?$/.test(text)) {
+      const digits = text.replace(/\+$/, '').replace(/^0+(?=\d)/, '');
+      return digits === '0' ? null : `${digits}+ yrs`;
+    }
+    return typeof v === 'number'
+      ? (Number.isFinite(v) && v > 0 ? `${v}+ yrs` : null)
       : text;
   };
 
