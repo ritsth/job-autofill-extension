@@ -1472,6 +1472,8 @@ function buildGeneratorSection(cfg: {
   gen.textContent = 'Generate & download PDF';
 
   const status = el('div', 'clstatus', '');
+  // A live region, so the result (including a truncation warning) is announced.
+  status.setAttribute('role', 'status');
 
   toggle.addEventListener('click', () => form.classList.toggle('hidden'));
 

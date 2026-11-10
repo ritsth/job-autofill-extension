@@ -263,7 +263,11 @@ async function generateAnswer(q: OpenQuestion, btn: HTMLButtonElement): Promise<
       // The answer sits in the field for the user to read, so a short label is
       // enough; held longer than the plain success so it's actually seen (#240).
       btn.textContent = res.truncated ? '⚠ filled, may be cut off' : '✓ filled';
-      setTimeout(() => (btn.textContent = original), res.truncated ? 6000 : 2000);
+      // Leave the label alone if a click since then armed the replace
+      // confirmation: resetting it would hide the prompt while it's still live.
+      setTimeout(() => {
+        if (!armedButtons.has(btn)) btn.textContent = original;
+      }, res.truncated ? 6000 : 2000);
     }
   } catch (e) {
     // A stale content script (extension reloaded/updated under an open tab) is
