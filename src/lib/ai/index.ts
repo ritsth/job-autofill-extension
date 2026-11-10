@@ -5,7 +5,7 @@ import { OnDeviceProvider } from './onDevice';
 import { ProxyProvider } from './proxy';
 
 export { AIError } from './provider';
-export type { AIProvider, GenerateInput } from './provider';
+export type { AIProvider, GenerateInput, GenerateResult } from './provider';
 export { isOnDeviceAvailable, onDeviceAvailabilityMessage } from './onDevice';
 
 /** Selects the concrete provider from the user's settings. */

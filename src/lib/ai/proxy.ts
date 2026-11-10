@@ -1,4 +1,4 @@
-import { AIError, type AIProvider, type GenerateInput } from './provider';
+import { AIError, type AIProvider, type GenerateInput, type GenerateResult } from './provider';
 import { DEFAULT_MODEL } from './models';
 
 // Managed-proxy provider: posts to the Cloud Run service, which holds the Google
@@ -16,7 +16,7 @@ export class ProxyProvider implements AIProvider {
     private model = DEFAULT_MODEL,
   ) {}
 
-  async generate({ system, prompt, maxOutputTokens, json, thinking, model }: GenerateInput): Promise<string> {
+  async generate({ system, prompt, maxOutputTokens, json, thinking, model }: GenerateInput): Promise<GenerateResult> {
     if (!this.url) {
       throw new AIError('No proxy URL set. Add your Cloud Run URL in the extension options.');
     }
@@ -50,9 +50,11 @@ export class ProxyProvider implements AIProvider {
       throw new AIError(`Proxy error: ${msg}`);
     }
 
-    const data = (await res.json()) as { text?: string };
+    const data = (await res.json()) as { text?: string; truncated?: boolean };
     const text = (data.text || '').trim();
     if (!text) throw new AIError('Proxy returned an empty response. Try again.');
-    return text;
+    // A proxy deployed before #240 never sends `truncated`; that reads as "not
+    // known to be cut off", the same as before.
+    return data.truncated === true ? { text, truncated: true } : { text };
   }
 }

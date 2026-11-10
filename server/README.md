@@ -16,7 +16,10 @@ Extension ──(Bearer Google token)──▶ Cloud Run (this) ─┬─(verify
    (or Bearer PROXY_TOKEN ─ admin, unmetered)
 ```
 
-Endpoint: `POST /generate  { system, prompt, maxOutputTokens? }  ->  { text }`
+Endpoint: `POST /generate  { system, prompt, maxOutputTokens? }  ->  { text, truncated? }`
+
+`truncated: true` means the answer hit the output budget and its end may be missing. The
+extension shows a warning for it (#240).
 
 ---
 

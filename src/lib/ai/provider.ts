@@ -22,9 +22,20 @@ export interface GenerateInput {
   model?: string;
 }
 
+export interface GenerateResult {
+  text: string;
+  /**
+   * True when the model stopped because it ran out of output budget after
+   * forming a substantial answer, so the end of `text` may be missing (#240).
+   * A cut-off that leaves almost nothing is an AIError instead. Omitted when
+   * the provider can't tell, which is always the case on-device.
+   */
+  truncated?: boolean;
+}
+
 export interface AIProvider {
   readonly id: string;
-  generate(input: GenerateInput): Promise<string>;
+  generate(input: GenerateInput): Promise<GenerateResult>;
 }
 
 export class AIError extends Error {}

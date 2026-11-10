@@ -4,7 +4,7 @@
 // boards (LinkedIn, Handshake) by re-checking the selected posting as you switch.
 // The instant result is rules-based; an on-demand "AI check" reads odd wording.
 
-import { sendToBackground } from '../lib/messages';
+import { sendToBackground, TRUNCATED_WARNING } from '../lib/messages';
 import type { AIResult } from '../lib/messages';
 import { parseEligibilityJson } from '../lib/jobEligibility';
 import { downloadLetter } from '../lib/coverLetter';
@@ -1498,7 +1498,11 @@ function buildGeneratorSection(cfg: {
       }
       if (res.error) throw new Error(res.error);
       cfg.download(res.text, company.value.trim(), role.value.trim());
-      status.textContent = '✓ Downloaded PDF';
+      // The PDF downloads with no review step, so a cut-off ending has to be
+      // called out here or the user finds it after sending (#240).
+      status.textContent = res.truncated
+        ? `✓ Downloaded PDF — ⚠ ${TRUNCATED_WARNING}`
+        : '✓ Downloaded PDF';
     } catch (e) {
       status.textContent = '⚠ ' + String((e as Error).message);
     } finally {

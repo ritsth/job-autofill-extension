@@ -1,4 +1,4 @@
-import { AIError, type AIProvider, type GenerateInput } from './provider';
+import { AIError, type AIProvider, type GenerateInput, type GenerateResult } from './provider';
 import { DEFAULT_MODEL } from './models';
 
 // Google Gemini via the Generative Language REST API. The user supplies their
@@ -42,7 +42,7 @@ export class GeminiProvider implements AIProvider {
     private model = DEFAULT_MODEL,
   ) {}
 
-  async generate({ system, prompt, maxOutputTokens, json, thinking, model }: GenerateInput): Promise<string> {
+  async generate({ system, prompt, maxOutputTokens, json, thinking, model }: GenerateInput): Promise<GenerateResult> {
     if (!this.apiKey) {
       throw new AIError('No Gemini API key set. Add one in the extension options.');
     }
@@ -122,13 +122,14 @@ export class GeminiProvider implements AIProvider {
         'Gemini blocked this response because it matched existing content too closely. Try rephrasing.',
       );
     }
-    // MAX_TOKENS with a substantial answer already in hand is left alone —
-    // the codebase spends real effort tuning thinkingBudget to avoid exactly
-    // this (see above), and discarding a mostly-complete answer because the
-    // budget ran out right at the end would be worse than returning it. Only
-    // the case that matches what was actually observed in the wild — the
-    // budget being exhausted before any real answer formed, e.g. a single
-    // word ("Fellow") — gets its own message rather than the generic one.
+    // MAX_TOKENS with a substantial answer already in hand is returned, not
+    // thrown — the codebase spends real effort tuning thinkingBudget to avoid
+    // exactly this (see above), and discarding a mostly-complete answer because
+    // the budget ran out right at the end would be worse than returning it. It
+    // comes back flagged `truncated` so the caller can warn before the user
+    // sends it (#240). Only the case that matches what was actually observed in
+    // the wild — the budget being exhausted before any real answer formed, e.g.
+    // a single word ("Fellow") — gets its own message rather than the generic one.
     if (finishReason === 'MAX_TOKENS' && text.length < MIN_VIABLE_ANSWER_LENGTH) {
       throw new AIError(
         "Gemini's response was cut off before it could really start (ran out of output budget). Try again.",
@@ -137,7 +138,7 @@ export class GeminiProvider implements AIProvider {
     if (!text) {
       throw new AIError('Gemini returned an empty response. Try rephrasing or retry.');
     }
-    return text;
+    return finishReason === 'MAX_TOKENS' ? { text, truncated: true } : { text };
   }
 }
 
