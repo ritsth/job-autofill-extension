@@ -5,7 +5,7 @@
 import { getProfile, profileToContext, type AISettings } from '../lib/profile';
 import { getActiveJob } from '../lib/savedJobs';
 import { getCachedToken } from '../lib/auth';
-import { getProvider, AIError, type AIProvider } from '../lib/ai';
+import { getProvider, AIError, type AIProvider, type GenerateResult } from '../lib/ai';
 import {
   buildAnswerPrompt,
   buildTailoredResumePrompt,
@@ -51,7 +51,9 @@ chrome.runtime.onMessage.addListener((msg: BackgroundMessage, sender, sendRespon
     return false;
   }
   handle(msg)
-    .then((text) => sendResponse({ text } satisfies AIResult))
+    .then(({ text, truncated }) =>
+      sendResponse((truncated ? { text, truncated } : { text }) satisfies AIResult),
+    )
     .catch((e: unknown) =>
       sendResponse({
         text: '',
@@ -61,7 +63,7 @@ chrome.runtime.onMessage.addListener((msg: BackgroundMessage, sender, sendRespon
   return true; // keep the message channel open for the async response
 });
 
-async function handle(msg: BackgroundMessage): Promise<string> {
+async function handle(msg: BackgroundMessage): Promise<GenerateResult> {
   const profile = await getProfile();
 
   if (msg.type === 'AI_PARSE_RESUME') {
@@ -109,7 +111,7 @@ async function handle(msg: BackgroundMessage): Promise<string> {
   // AI_GENERATE_COVER_LETTER — a straight placeholder fill ({{company}}, {{role}},
   // {{date}}). The applicant's wording, including the opening paragraph, is kept
   // verbatim; no AI rewrite. (No API key needed for this path.)
-  return substitutePlaceholders(profile.baseCoverLetter, { company, role });
+  return { text: substitutePlaceholders(profile.baseCoverLetter, { company, role }) };
 }
 
 // Clicking the toolbar icon opens the side panel (which stays open until the

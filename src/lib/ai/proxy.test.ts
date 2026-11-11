@@ -36,7 +36,20 @@ describe('ProxyProvider — error passthrough vs. wrapping (#239)', () => {
 
   it('returns the text unchanged on 200', async () => {
     mockProxyResponse({ text: 'A complete answer.' }, 200);
-    await expect(generate()).resolves.toBe('A complete answer.');
+    await expect(generate()).resolves.toEqual({ text: 'A complete answer.' });
+  });
+
+  it('passes on the proxy\'s truncated flag (#240)', async () => {
+    mockProxyResponse({ text: 'A long answer that ran out of budget at the', truncated: true }, 200);
+    await expect(generate()).resolves.toEqual({
+      text: 'A long answer that ran out of budget at the',
+      truncated: true,
+    });
+  });
+
+  it('only trusts a boolean truncated flag', async () => {
+    mockProxyResponse({ text: 'A complete answer.', truncated: 'yes' }, 200);
+    await expect(generate()).resolves.toEqual({ text: 'A complete answer.' });
   });
 
   it('surfaces the sign-in message verbatim, not double-wrapped', async () => {

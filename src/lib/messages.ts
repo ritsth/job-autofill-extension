@@ -90,7 +90,17 @@ export type AnyMessage = BackgroundMessage | ContentMessage;
 export interface AIResult {
   text: string;
   error?: string;
+  /** The AI ran out of output budget, so the end of `text` may be missing (#240). */
+  truncated?: boolean;
 }
+
+/**
+ * Shown wherever a generated document or answer came back flagged `truncated`.
+ * A tailored resume downloads straight to PDF, so without this the user finds
+ * the missing ending only after sending it.
+ */
+export const TRUNCATED_WARNING =
+  'The AI hit its length limit, so the end may be cut off. Review it before sending.';
 
 /** What a frame should do with a PAGE_INFO / PAGE_FILL message. */
 export type FrameRole = 'answer' | 'answer-late' | 'ignore';

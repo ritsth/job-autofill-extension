@@ -38,7 +38,8 @@ export function classifyFinishReason(finishReason, text) {
   // A short MAX_TOKENS answer means the output budget ran out almost
   // immediately, not that a real answer got clipped near the end — same
   // reasoning and threshold as gemini.ts. A substantial MAX_TOKENS answer is
-  // returned as-is; discarding a mostly-complete reply would be worse.
+  // returned, flagged `truncated` by the caller (#240); discarding a
+  // mostly-complete reply would be worse.
   if (finishReason === 'MAX_TOKENS' && text.length < MIN_VIABLE_ANSWER_LENGTH) {
     return 'The response was cut off before it could really start (ran out of output budget). Try again.';
   }

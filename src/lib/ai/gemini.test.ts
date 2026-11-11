@@ -26,14 +26,14 @@ describe('GeminiProvider — finishReason handling (#182)', () => {
     mockGeminiResponse({
       candidates: [{ content: { parts: [{ text: 'A complete answer.' }] }, finishReason: 'STOP' }],
     });
-    await expect(generate()).resolves.toBe('A complete answer.');
+    await expect(generate()).resolves.toEqual({ text: 'A complete answer.' });
   });
 
   it('still returns the text when finishReason is absent (older/unversioned responses)', async () => {
     // No regression for responses that never carried finishReason at all —
     // this is the entire previous behavior of the function.
     mockGeminiResponse({ candidates: [{ content: { parts: [{ text: 'Some answer.' }] } }] });
-    await expect(generate()).resolves.toBe('Some answer.');
+    await expect(generate()).resolves.toEqual({ text: 'Some answer.' });
   });
 
   it('names the cause when MAX_TOKENS cuts the response off almost immediately', async () => {
@@ -49,14 +49,15 @@ describe('GeminiProvider — finishReason handling (#182)', () => {
   it('does NOT throw for MAX_TOKENS once a substantial answer already formed', async () => {
     // Deliberate: discarding a mostly-complete answer because the budget ran
     // out right at the end would be worse than returning it. This is the
-    // "leave partial-but-real output alone" half of the issue's proposed fix.
+    // "leave partial-but-real output alone" half of the issue's proposed fix,
+    // flagged `truncated` so the caller can warn before it's sent (#240).
     const longAnswer =
       'This is a long, mostly complete answer that ran right up against the ' +
       'output budget and got cut off at the very end without finishing the l';
     mockGeminiResponse({
       candidates: [{ content: { parts: [{ text: longAnswer }] }, finishReason: 'MAX_TOKENS' }],
     });
-    await expect(generate()).resolves.toBe(longAnswer);
+    await expect(generate()).resolves.toEqual({ text: longAnswer, truncated: true });
   });
 
   it('reports a safety block distinctly instead of "empty response"', async () => {

@@ -41,7 +41,7 @@ describe('OnDeviceProvider', () => {
       json: true,
     });
 
-    expect(result).toBe('{"ok":true}');
+    expect(result).toEqual({ text: '{"ok":true}' });
     expect(create).toHaveBeenCalledWith({
       initialPrompts: [{ role: 'system', content: 'Extract structured data.' }],
     });

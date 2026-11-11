@@ -171,7 +171,7 @@ function OptionsView({
       }
       // Connectivity test only — runs on the fast default model.
       const provider = new ProxyProvider(p.ai.proxyUrl, token);
-      const text = await provider.generate({
+      const { text } = await provider.generate({
         system: 'You are a connectivity test. Reply with exactly: OK',
         prompt: 'Reply with OK.',
         maxOutputTokens: 64,

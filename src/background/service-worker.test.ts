@@ -57,7 +57,7 @@ beforeEach(async () => {
   mocks.getActiveJob.mockResolvedValue(null);
   mocks.getCachedToken.mockResolvedValue('synthetic-bearer');
   mocks.getProvider.mockReturnValue({ id: 'synthetic', generate: mocks.generate });
-  mocks.generate.mockResolvedValue('generated result');
+  mocks.generate.mockResolvedValue({ text: 'generated result' });
   vi.stubGlobal('chrome', {
     runtime: {
       id: RUNTIME_ID,
@@ -127,6 +127,11 @@ describe('background message handling — lazy profile context', () => {
         ? { ...buildAnswerPrompt(msg.question, CONTEXT, msg.jobText), model: profile.ai.model }
         : buildTailoredResumePrompt(CONTEXT, msg.jobText, 'Live company', 'Live role'),
     );
+  });
+
+  it.each(tailoredMessages)('$type passes a truncated flag through to the caller (#240)', async (msg) => {
+    mocks.generate.mockResolvedValue({ text: 'cut off at the', truncated: true });
+    expect(await send(msg)).toEqual({ text: 'cut off at the', truncated: true });
   });
 
   it.each(tailoredMessages)('$type still rejects a blank profile before job or provider lookup', async (msg) => {

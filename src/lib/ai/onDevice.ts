@@ -1,4 +1,4 @@
-import { AIError, type AIProvider, type GenerateInput } from './provider';
+import { AIError, type AIProvider, type GenerateInput, type GenerateResult } from './provider';
 
 // Chrome's built-in on-device model (Gemini Nano) via the Prompt API.
 // No key, no network, fully private — but only available on machines/Chrome
@@ -55,7 +55,7 @@ export function onDeviceAvailabilityMessage(available: boolean): string {
 export class OnDeviceProvider implements AIProvider {
   readonly id = 'onDevice';
 
-  async generate({ system, prompt, json }: GenerateInput): Promise<string> {
+  async generate({ system, prompt, json }: GenerateInput): Promise<GenerateResult> {
     const lm = getLanguageModel();
     if (!lm) {
       throw new AIError(
@@ -77,7 +77,9 @@ export class OnDeviceProvider implements AIProvider {
       const request = json ? `${prompt}${JSON_ONLY_INSTRUCTION}` : prompt;
       const text = await session.prompt(request);
       if (!text.trim()) throw new AIError('On-device model returned an empty response.');
-      return text.trim();
+      // The Prompt API reports no finish reason, so a cut-off answer can't be
+      // told apart from a complete one here: `truncated` stays unset (#240).
+      return { text: text.trim() };
     } finally {
       session.destroy?.();
     }

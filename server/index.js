@@ -326,7 +326,9 @@ const server = http.createServer(async (req, res) => {
     const blocked = classifyFinishReason(finishReason, text);
     if (blocked) return send(res, 502, { error: blocked });
     if (!text) return send(res, 502, { error: 'Empty response from Vertex AI' });
-    return send(res, 200, { text });
+    // A substantial answer that hit the output budget passed the check above;
+    // flag it so the extension can warn before the user sends it (#240).
+    return send(res, 200, finishReason === 'MAX_TOKENS' ? { text, truncated: true } : { text });
   } catch (err) {
     // Full detail goes to Cloud Logging only. Vertex error messages can carry
     // internal detail (project/region/quota specifics), so the client gets a

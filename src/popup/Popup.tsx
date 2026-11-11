@@ -10,7 +10,7 @@ import {
   onSavedJobsChanged,
   type SavedJob,
 } from '../lib/savedJobs';
-import { sendToBackground, sendToTab } from '../lib/messages';
+import { sendToBackground, sendToTab, TRUNCATED_WARNING } from '../lib/messages';
 import type { AIResult, CapturedJob, FillResult, PageInfo } from '../lib/messages';
 import { downloadLetter } from '../lib/coverLetter';
 import { downloadResume } from '../lib/resume';
@@ -30,6 +30,7 @@ export function Popup() {
   const [fillMsg, setFillMsg] = useState('');
   const [letter, setLetter] = useState('');
   const [resume, setResume] = useState('');
+  const [resumeTruncated, setResumeTruncated] = useState(false);
   const [busy, setBusy] = useState<'' | 'fill' | 'letter' | 'resume' | 'save'>('');
   const [error, setError] = useState('');
   const [scanEnabled, setScanEnabled] = useState(true);
@@ -285,6 +286,7 @@ const copyTimer = useRef<number | null>(null);
     setBusy('resume');
     setError('');
     setResume('');
+    setResumeTruncated(false);
     try {
       const res = await sendToBackground<AIResult>({
         type: 'AI_GENERATE_RESUME',
@@ -293,7 +295,10 @@ const copyTimer = useRef<number | null>(null);
         jobText: page?.jobText ?? '',
       });
       if (res.error) setError(res.error);
-      else setResume(res.text);
+      else {
+        setResume(res.text);
+        setResumeTruncated(res.truncated === true);
+      }
     } catch (e) {
       setError(`Generation failed: ${(e as Error).message}`);
     } finally {
@@ -590,6 +595,11 @@ const copyTimer = useRef<number | null>(null);
       value={resume}
       onChange={(e) => setResume(e.target.value)}
     />
+    {resumeTruncated && (
+      <p className="warn" role="status" style={{ marginTop: 6 }}>
+        ⚠ {TRUNCATED_WARNING}
+      </p>
+    )}
     <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
       <button
         className="full"
