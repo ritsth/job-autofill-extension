@@ -569,6 +569,47 @@ describe('analyze — experience extraction', () => {
       expect(a.experience.required).toBe('4+ yrs');
     });
   });
+
+  // "N years of experience" in an About-us paragraph is the company's, not a
+  // requirement on the applicant (#432).
+  describe('a company boast is not a requirement (#432)', () => {
+    it('ignores a year count the company claims for itself', () => {
+      for (const text of [
+        'Our founders have over 15 years of experience in logistics.',
+        'With 20 years of experience, we help brands grow.',
+        'With over 15 years of experience, we help brands grow.',
+        'With more than 12 years of experience, our team delivers.',
+        'Our team brings 12 years of experience building payment systems.',
+        'Trusted by clients with 10 years of experience in the market.',
+        'We have 10 years of experience helping retailers grow.',
+        'Our company has 25 years of experience in logistics.',
+      ]) {
+        expect(analyze(text).experience.required, text).toBeNull();
+      }
+    });
+
+    it('still reads requirements written in the company voice', () => {
+      for (const [text, want] of [
+        ["We're looking for someone with 5 years of experience.", '5+ yrs'],
+        ['Our ideal candidate has 3+ years of experience.', '3+ yrs'],
+        ['Join our team if you have 4 years of experience in QA.', '4+ yrs'],
+        ['You bring 6 years of experience in product design.', '6+ yrs'],
+        ['The successful candidate will have 8 years of experience.', '8+ yrs'],
+        ['7+ years of experience in sales.', '7+ yrs'],
+        ['Minimum 5 years of professional experience required.', '5+ yrs'],
+        ['With 5 years of experience, our ideal candidate will lead the engineering team.', '5+ yrs'],
+      ] as const) {
+        expect(analyze(text).experience.required, text).toBe(want);
+      }
+    });
+
+    it('skips the boast but keeps the real requirement in the same posting', () => {
+      const a = analyze(
+        'Our team brings 12 years of experience building payment systems. You bring 6 years of experience in product design.',
+      );
+      expect(a.experience.required).toBe('6+ yrs');
+    });
+  });
 });
 
 describe('the AI eligibility budget survives the downstream prompt cut', () => {

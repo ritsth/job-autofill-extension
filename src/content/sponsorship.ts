@@ -531,6 +531,31 @@ function labeledExperience(lower: string, kind: 'required' | 'preferred'): strin
   return null;
 }
 
+// The company or its people as the owner of a year count: "our founders have
+// over", "our team brings", "we have", "clients with". Each must END right
+// before the number, so a company-voice sentence about the hire doesn't match.
+const BOAST_OWNER =
+  '(?:team|founders?|company|staff|engineers?|leadership|people|experts?|firm|agency|partners?)';
+const BOAST_SUBJECT = new RegExp(
+  String.raw`(?:\bour\s+(?:\w+\s+)?${BOAST_OWNER}\s+(?:has|have|brings?|combines?|offers?)|\bwe\s+(?:have|bring|offer)|\bwe've\s+had|\b(?:clients?|customers?|partners?)\s+with)\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined)\s+)?$`,
+);
+
+/**
+ * True when a "N years of experience" match at [start, end) describes the
+ * company rather than the applicant, judged from its own sentence only.
+ */
+function isCompanyBoast(lower: string, start: number, end: number): boolean {
+  const sentenceStart = Math.max(...['.', '!', '?', '\n'].map((c) => lower.lastIndexOf(c, start - 1))) + 1;
+  const before = lower.slice(sentenceStart, start);
+  if (BOAST_SUBJECT.test(before)) return true;
+  // "With (over) 20 years of experience, we help brands grow." — but not "…, our
+  // ideal candidate will lead", so after "our" the subject must be the company.
+  return (
+    /^\s*with\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined)\s+)?$/.test(before) &&
+    new RegExp(String.raw`^[^.!?\n,]{0,40},\s*(?:we\b|our\s+(?:\w+\s+)?${BOAST_OWNER}\b)`).test(lower.slice(end))
+  );
+}
+
 /** Pulls required / preferred years-of-experience figures from the posting. */
 function extractExperience(text: string): { required: string | null; preferred: string | null } {
   const lower = text.toLowerCase();
@@ -561,9 +586,20 @@ function extractExperience(text: string): { required: string | null; preferred: 
   // bound directly to "experience" (the anchoring cue). The YR cap (≤20) rejects
   // company-age numbers like "50 years…"; "industry" is intentionally NOT a cue
   // here because "30 years of industry experience" is usually a company boast.
+  // The same goes for any count the company claims for itself ("our founders
+  // have over 15 years of experience", "with 20 years of experience, we…") — so
+  // skip a match whose number belongs to the company, not the hire (#432). Only
+  // the subject bound directly to the number counts: "Join our team if you have
+  // 4 years" and "We're looking for someone with 5 years" are still requirements.
   if (!required) {
-    const generic = lower.match(new RegExp(`${YR}\\s+(?:of\\s+)?(?:experience|exp\\b|professional|relevant)\\b`));
-    if (generic) required = fmt(generic);
+    const generic = lower.matchAll(
+      new RegExp(`${YR}\\s+(?:of\\s+)?(?:experience|exp\\b|professional|relevant)\\b`, 'g'),
+    );
+    for (const m of generic) {
+      if (isCompanyBoast(lower, m.index, m.index + m[0].length)) continue;
+      required = fmt(m);
+      break;
+    }
   }
   // Last resort: explicit "no experience" / entry-level phrasing with no number.
   if (!required) {
