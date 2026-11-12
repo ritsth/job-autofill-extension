@@ -534,8 +534,10 @@ function labeledExperience(lower: string, kind: 'required' | 'preferred'): strin
 // The company or its people as the owner of a year count: "our founders have
 // over", "our team brings", "we have", "clients with". Each must END right
 // before the number, so a company-voice sentence about the hire doesn't match.
+const BOAST_OWNER =
+  '(?:team|founders?|company|staff|engineers?|leadership|people|experts?|firm|agency|partners?)';
 const BOAST_SUBJECT = new RegExp(
-  String.raw`(?:\bour\s+(?:\w+\s+)?(?:team|founders?|company|staff|engineers?|leadership|people|experts?|firm|agency|partners?)\s+(?:has|have|brings?|combines?|offers?)|\bwe\s+(?:have|bring|offer)|\bwe've\s+had|\b(?:clients?|customers?|partners?)\s+with)\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined)\s+)?$`,
+  String.raw`(?:\bour\s+(?:\w+\s+)?${BOAST_OWNER}\s+(?:has|have|brings?|combines?|offers?)|\bwe\s+(?:have|bring|offer)|\bwe've\s+had|\b(?:clients?|customers?|partners?)\s+with)\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined)\s+)?$`,
 );
 
 /**
@@ -546,8 +548,12 @@ function isCompanyBoast(lower: string, start: number, end: number): boolean {
   const sentenceStart = Math.max(...['.', '!', '?', '\n'].map((c) => lower.lastIndexOf(c, start - 1))) + 1;
   const before = lower.slice(sentenceStart, start);
   if (BOAST_SUBJECT.test(before)) return true;
-  // "With 20 years of experience, we help brands grow."
-  return /^\s*with\s+$/.test(before) && /^[^.!?\n,]{0,40},\s*(?:we|our)\b/.test(lower.slice(end));
+  // "With (over) 20 years of experience, we help brands grow." — but not "…, our
+  // ideal candidate will lead", so after "our" the subject must be the company.
+  return (
+    /^\s*with\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined)\s+)?$/.test(before) &&
+    new RegExp(String.raw`^[^.!?\n,]{0,40},\s*(?:we\b|our\s+(?:\w+\s+)?${BOAST_OWNER}\b)`).test(lower.slice(end))
+  );
 }
 
 /** Pulls required / preferred years-of-experience figures from the posting. */

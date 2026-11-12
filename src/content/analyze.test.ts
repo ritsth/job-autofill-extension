@@ -577,6 +577,8 @@ describe('analyze — experience extraction', () => {
       for (const text of [
         'Our founders have over 15 years of experience in logistics.',
         'With 20 years of experience, we help brands grow.',
+        'With over 15 years of experience, we help brands grow.',
+        'With more than 12 years of experience, our team delivers.',
         'Our team brings 12 years of experience building payment systems.',
         'Trusted by clients with 10 years of experience in the market.',
         'We have 10 years of experience helping retailers grow.',
@@ -595,6 +597,7 @@ describe('analyze — experience extraction', () => {
         ['The successful candidate will have 8 years of experience.', '8+ yrs'],
         ['7+ years of experience in sales.', '7+ yrs'],
         ['Minimum 5 years of professional experience required.', '5+ yrs'],
+        ['With 5 years of experience, our ideal candidate will lead the engineering team.', '5+ yrs'],
       ] as const) {
         expect(analyze(text).experience.required, text).toBe(want);
       }
