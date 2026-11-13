@@ -477,4 +477,21 @@ describe('RULES — the remaining field rules, against realistic concatenated la
     expect(valueFor('Sponsorial essay')).toBeUndefined();
     expect(valueFor('Authorizationism')).toBeUndefined();
   });
+
+  // Issue #452: "mobile app/development" is a software question, and
+  // "Telephone" is a phone field the `\btel\b` stem never reached.
+  it('fills Telephone and leaves mobile-software questions alone (#452)', () => {
+    expect(valueFor('Mobile app experience: describe a mobile project you shipped')).toBeUndefined();
+    expect(valueFor('Mobile development experience (years)')).toBeUndefined();
+    expect(valueFor('Which mobile platforms have you shipped to?')).toBeUndefined();
+    expect(valueFor('Link to a mobile app you built')).toBeUndefined();
+
+    expect(valueFor('Mobile')).toBe('555-0100');
+    expect(valueFor('Mobile phone')).toBe('555-0100');
+    expect(valueFor('Mobile number')).toBe('555-0100');
+    expect(valueFor('Phone number candidate[phone]')).toBe('555-0100');
+    expect(valueFor('Tel')).toBe('555-0100');
+    expect(valueFor('Telephone')).toBe('555-0100');
+    expect(valueFor('Telephone Number')).toBe('555-0100');
+  });
 });

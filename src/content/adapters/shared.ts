@@ -136,7 +136,15 @@ export const RULES: Rule[] = [
     value: (p) => `${p.personal.firstName} ${p.personal.lastName}`.trim(),
   },
   { test: /\be-?mail\b/, value: (p) => p.personal.email },
-  { test: /\b(phone|mobile|tel)\b/, value: (p) => p.personal.phone },
+  // "Mobile app experience" asks about software, not for a phone number.
+  // `mobile` fills only when the next word is not an app, platform, or other
+  // software noun in the lookahead. Bare "Mobile" and "Mobile number" still
+  // fill. `\btel\b` never matched "telephone" (no boundary before "ephone");
+  // `(?:tele)?phone` covers both "phone" and "telephone".
+  {
+    test: /\b(?:tele)?phone\b|\btel\b|\bmobile\b(?!\s+(?:apps?|applications?|development|developers?|engineering|engineers?|platforms?|devices?|experience|projects?|games?|products?|teams?|ui|ux)\b)/,
+    value: (p) => p.personal.phone,
+  },
   { test: /\blinkedin\b/, value: (p) => p.personal.linkedin },
   { test: /\bgithub\b/, value: (p) => p.personal.github },
   // "Describe A website... you admire" is asking about someone ELSE's site, not
