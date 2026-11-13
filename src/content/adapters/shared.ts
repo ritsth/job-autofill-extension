@@ -136,7 +136,16 @@ export const RULES: Rule[] = [
     value: (p) => `${p.personal.firstName} ${p.personal.lastName}`.trim(),
   },
   { test: /\be-?mail\b/, value: (p) => p.personal.email },
-  { test: /\b(phone|mobile|tel)\b/, value: (p) => p.personal.phone },
+  // "Mobile app experience" asks about software, not for a phone number.
+  // getLabelText appends the field name, id, and placeholder, so a software
+  // question named "mobile" ends in a bare `mobile` token. Any `mobile`
+  // followed by a software noun suppresses that later token. Bare "Mobile",
+  // "Mobile number", and "Telephone" still fill. `(?:tele)?phone` covers
+  // "phone" and "telephone", which `\btel\b` never reached.
+  {
+    test: /\b(?:tele)?phone\b|\btel\b|^(?!.*\bmobile\s+(?:apps?|applications?|development|developers?|engineering|engineers?|platforms?|devices?|experience|projects?|games?|products?|teams?|ui|ux)\b).*\bmobile\b/,
+    value: (p) => p.personal.phone,
+  },
   { test: /\blinkedin\b/, value: (p) => p.personal.linkedin },
   { test: /\bgithub\b/, value: (p) => p.personal.github },
   // "Describe A website... you admire" is asking about someone ELSE's site, not
