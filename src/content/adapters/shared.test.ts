@@ -485,6 +485,11 @@ describe('RULES — the remaining field rules, against realistic concatenated la
     expect(valueFor('Mobile development experience (years)')).toBeUndefined();
     expect(valueFor('Which mobile platforms have you shipped to?')).toBeUndefined();
     expect(valueFor('Link to a mobile app you built')).toBeUndefined();
+    // getLabelText appends name/id/placeholder. A software question named
+    // "mobile" therefore ends in a bare mobile token, which must not fill.
+    expect(valueFor('Mobile development experience (years) mobile')).toBeUndefined();
+    expect(valueFor('Which mobile platforms have you shipped to? mobile')).toBeUndefined();
+    expect(valueFor('Link to a mobile app you built mobile')).toBeUndefined();
 
     expect(valueFor('Mobile')).toBe('555-0100');
     expect(valueFor('Mobile phone')).toBe('555-0100');
@@ -493,5 +498,8 @@ describe('RULES — the remaining field rules, against realistic concatenated la
     expect(valueFor('Tel')).toBe('555-0100');
     expect(valueFor('Telephone')).toBe('555-0100');
     expect(valueFor('Telephone Number')).toBe('555-0100');
+    expect(valueFor('Mobile number mobile')).toBe('555-0100');
+    expect(valueFor('Mobile mobile')).toBe('555-0100');
+    expect(valueFor('Telephone mobile')).toBe('555-0100');
   });
 });

@@ -137,12 +137,13 @@ export const RULES: Rule[] = [
   },
   { test: /\be-?mail\b/, value: (p) => p.personal.email },
   // "Mobile app experience" asks about software, not for a phone number.
-  // `mobile` fills only when the next word is not an app, platform, or other
-  // software noun in the lookahead. Bare "Mobile" and "Mobile number" still
-  // fill. `\btel\b` never matched "telephone" (no boundary before "ephone");
-  // `(?:tele)?phone` covers both "phone" and "telephone".
+  // getLabelText appends the field name, id, and placeholder, so a software
+  // question named "mobile" ends in a bare `mobile` token. Any `mobile`
+  // followed by a software noun suppresses that later token. Bare "Mobile",
+  // "Mobile number", and "Telephone" still fill. `(?:tele)?phone` covers
+  // "phone" and "telephone", which `\btel\b` never reached.
   {
-    test: /\b(?:tele)?phone\b|\btel\b|\bmobile\b(?!\s+(?:apps?|applications?|development|developers?|engineering|engineers?|platforms?|devices?|experience|projects?|games?|products?|teams?|ui|ux)\b)/,
+    test: /\b(?:tele)?phone\b|\btel\b|^(?!.*\bmobile\s+(?:apps?|applications?|development|developers?|engineering|engineers?|platforms?|devices?|experience|projects?|games?|products?|teams?|ui|ux)\b).*\bmobile\b/,
     value: (p) => p.personal.phone,
   },
   { test: /\blinkedin\b/, value: (p) => p.personal.linkedin },
