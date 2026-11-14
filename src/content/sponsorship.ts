@@ -563,30 +563,56 @@ function extractExperience(text: string): { required: string | null; preferred: 
   // match as "5"). This is only a cheap backstop now — the real guard against
   // company-age numbers ("For more than 50 years, we have…") is that we only read
   // a number when it sits next to a requirement cue (findNear) or a labelled field.
-  // `yrs?` is the abbreviation from #434. A following "contract" is a term length,
-  // not experience, so neither spelling may consume it ("3 yr contract required").
-  const YR = '(?<![\\d.])(20|1[0-9]|[1-9])(?!\\d)\\s*\\+?\\s*(?:to|–|—|-)?\\s*(\\d{1,2})?\\+?\\s*(?:years?|yrs?)(?!\\s*contracts?\\b)';
+  // Longer forms come first, and the unit has to end on a word boundary.
+  // Otherwise "yr" matches inside "yrs" / "years" and the contract lookahead
+  // sees a leftover s ("3 yrs contract required", #434 review).
+  const YR =
+    '(?<![\\d.])(20|1[0-9]|[1-9])(?!\\d)\\s*\\+?\\s*(?:to|–|—|-)?\\s*(\\d{1,2})?\\+?\\s*(?:years|yrs|year|yr)\\b(?!\\s*contracts?\\b)';
   const fmt = (m: RegExpMatchArray): string =>
     m[2] && m[2] !== m[1] ? `${m[1]}–${m[2]} yrs` : `${m[1]}+ yrs`;
 
-  const findNear = (cues: string): string | null => {
-    // Prefer "N years <cue>" (the common phrasing) over "<cue> … N years".
-    // Keep the windows tight so a cue binds to the adjacent number, not one a
-    // clause away ("8 years preferred, 5 years required").
-    const accept = (m: RegExpMatchArray | null): string | null =>
-      m && !isCompanyBoast(lower, m.index ?? 0, (m.index ?? 0) + m[0].length) ? fmt(m) : null;
-    const after = lower.match(new RegExp(`${YR}[^.!?]{0,12}?(?:${cues})`));
-    const fromAfter = accept(after);
-    if (fromAfter) return fromAfter;
-    const before = lower.match(new RegExp(`(?:${cues})[^.!?]{0,20}?${YR}`));
-    return accept(before);
+  // A preference word bound to this figure, still in the same clause. Words that
+  // name the kind of experience may sit between the number and that word
+  // ("8 years of relevant experience preferred"). A comma or semicolon already
+  // ended the clause.
+  const preferenceFollows = (end: number): boolean => {
+    const after = lower.slice(end).split(/[.!?\n,;]/, 1)[0] ?? '';
+    return /^\s*(?:(?:of|relevant|professional|experience|exp)\s+)*(?:(?:is|are)\s+)?(?:preferred|a plus|nice to have|ideally|desirable)\b/.test(
+      after,
+    );
   };
 
   // Labelled fields win — they're the explicit answer and catch non-numeric values.
-  let preferred =
-    labeledExperience(lower, 'preferred') ?? findNear('preferred|a plus|nice to have|ideally|desirable');
+  let preferred: string | null = labeledExperience(lower, 'preferred');
+  const findNear = (cues: string, asRequired = false): string | null => {
+    // Prefer "N years <cue>" (the common phrasing) over "<cue> … N years".
+    // Keep the windows tight so a cue binds to the adjacent number, not one a
+    // clause away ("8 years preferred, 5 years required"). Skip a company boast
+    // and keep looking, so the boast does not hide a later requirement.
+    const accept = (m: RegExpMatchArray): string | null => {
+      const start = m.index ?? 0;
+      const end = start + m[0].length;
+      if (isCompanyBoast(lower, start, end)) return null;
+      if (asRequired && preferenceFollows(end)) {
+        preferred ??= fmt(m);
+        return null;
+      }
+      return fmt(m);
+    };
+    for (const m of lower.matchAll(new RegExp(`${YR}[^.!?]{0,12}?(?:${cues})`, 'g'))) {
+      const hit = accept(m);
+      if (hit) return hit;
+    }
+    for (const m of lower.matchAll(new RegExp(`(?:${cues})[^.!?]{0,20}?${YR}`, 'g'))) {
+      const hit = accept(m);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  preferred ??= findNear('preferred|a plus|nice to have|ideally|desirable');
   let required =
-    labeledExperience(lower, 'required') ?? findNear('minimum|min\\.?|at least|required|must have|or more');
+    labeledExperience(lower, 'required') ??
+    findNear('minimum|min\\.?|at least|required|must have|or more', true);
   // "N years of experience" — the common requirement phrasing, where the number is
   // bound directly to "experience" (the anchoring cue). The YR cap (≤20) rejects
   // company-age numbers like "50 years…"; "industry" is intentionally NOT a cue
@@ -606,8 +632,7 @@ function extractExperience(text: string): { required: string | null; preferred: 
       // Only a preference word bound to this figure counts. A comma, semicolon,
       // or sentence end starts a different clause ("5 years of experience,
       // ideally with Python" stays required).
-      const after = lower.slice(m.index + m[0].length).split(/[.!?\n,;]/, 1)[0] ?? '';
-      if (/^\s*(?:(?:is|are)\s+)?(?:preferred|a plus|nice to have|ideally|desirable)\b/.test(after)) {
+      if (preferenceFollows(m.index + m[0].length)) {
         preferred ??= fmt(m);
         continue;
       }
