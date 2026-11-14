@@ -578,6 +578,8 @@ describe('analyze — experience extraction', () => {
         'Our founders have over 15 years of experience in logistics.',
         'With 20 years of experience, we help brands grow.',
         'With over 15 years of experience, we help brands grow.',
+        'With at least 15 years of experience, we help brands grow.',
+        'With at least 15 yrs of experience, we help brands grow.',
         'With more than 12 years of experience, our team delivers.',
         'Our team brings 12 years of experience building payment systems.',
         'Trusted by clients with 10 years of experience in the market.',
@@ -659,6 +661,10 @@ describe('analyze — experience extraction', () => {
       expect(analyze('We are looking for someone with at least 5 years of experience.').experience.required).toBe(
         '5+ yrs',
       );
+      expect(analyze('5 years of experience. Preferred: 8 years of experience.').experience).toEqual({
+        required: '5+ yrs',
+        preferred: '8+ yrs',
+      });
     });
 
     it('still ignores a decimal count and a parenthetical numeral', () => {

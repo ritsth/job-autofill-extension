@@ -551,7 +551,7 @@ function isCompanyBoast(lower: string, start: number, end: number): boolean {
   // "With (over) 20 years of experience, we help brands grow." — but not "…, our
   // ideal candidate will lead", so after "our" the subject must be the company.
   return (
-    /^\s*with\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined)\s+)?$/.test(before) &&
+    /^\s*with\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined|at\s+least)\s+)?$/.test(before) &&
     new RegExp(String.raw`^[^.!?\n,]{0,40},\s*(?:we\b|our\s+(?:\w+\s+)?${BOAST_OWNER}\b)`).test(lower.slice(end))
   );
 }
@@ -605,7 +605,7 @@ function extractExperience(text: string): { required: string | null; preferred: 
       // "8 years of experience preferred" sits outside findNear's short window,
       // so this fallback used to report it as required. A preference cue on this
       // same figure stays preferred. A later requirement cue still wins.
-      const after = lower.slice(m.index + m[0].length, m.index + m[0].length + 40);
+      const after = lower.slice(m.index + m[0].length).split(/[.!?\n]/, 1)[0] ?? '';
       const prefAt = after.search(/\b(?:preferred|a plus|nice to have|ideally|desirable)\b/);
       const reqAt = after.search(/\b(?:required|minimum|must have)\b/);
       if (prefAt !== -1 && (reqAt === -1 || prefAt < reqAt)) {
