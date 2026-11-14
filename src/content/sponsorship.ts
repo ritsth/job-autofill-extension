@@ -599,11 +599,14 @@ function extractExperience(text: string): { required: string | null; preferred: 
       }
       return fmt(m);
     };
-    for (const m of lower.matchAll(new RegExp(`${YR}[^.!?]{0,12}?(?:${cues})`, 'g'))) {
+    // `.` `!` `?` and `;` end the clause. Stop before another year count too,
+    // so "15 yrs; 5 yrs required" is not one match that hides the later figure.
+    const gap = String.raw`(?:(?!\d+\s*\+?\s*(?:to|–|—|-)?\s*(?:\d{1,2})?\+?\s*(?:years|yrs|year|yr)\b)[^.!?;])`;
+    for (const m of lower.matchAll(new RegExp(`${YR}${gap}{0,12}?(?:${cues})`, 'g'))) {
       const hit = accept(m);
       if (hit) return hit;
     }
-    for (const m of lower.matchAll(new RegExp(`(?:${cues})[^.!?]{0,20}?${YR}`, 'g'))) {
+    for (const m of lower.matchAll(new RegExp(`(?:${cues})${gap}{0,20}?${YR}`, 'g'))) {
       const hit = accept(m);
       if (hit) return hit;
     }

@@ -684,6 +684,15 @@ describe('analyze — experience extraction', () => {
       expect(
         analyze('Our founders have at least 15 years in the field. Minimum 5 years in QA.').experience.required,
       ).toBe('5+ yrs');
+      // A semicolon is its own clause. The first count must not swallow the second.
+      expect(analyze('Our founders have 15 yrs; 5 yrs required.').experience).toEqual({
+        required: '5+ yrs',
+        preferred: null,
+      });
+      expect(analyze('3 yrs exp; 8 yrs preferred.').experience).toEqual({
+        required: '3+ yrs',
+        preferred: '8+ yrs',
+      });
     });
 
     it('still ignores a decimal count and a parenthetical numeral', () => {
