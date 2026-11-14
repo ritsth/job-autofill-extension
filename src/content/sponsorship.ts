@@ -537,7 +537,7 @@ function labeledExperience(lower: string, kind: 'required' | 'preferred'): strin
 const BOAST_OWNER =
   '(?:team|founders?|company|staff|engineers?|leadership|people|experts?|firm|agency|partners?)';
 const BOAST_SUBJECT = new RegExp(
-  String.raw`(?:\bour\s+(?:\w+\s+)?${BOAST_OWNER}\s+(?:has|have|brings?|combines?|offers?)|\bwe\s+(?:have|bring|offer)|\bwe've\s+had|\b(?:clients?|customers?|partners?)\s+with)\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined)\s+)?$`,
+  String.raw`(?:\bour\s+(?:\w+\s+)?${BOAST_OWNER}\s+(?:has|have|brings?|combines?|offers?)|\bwe\s+(?:have|bring|offer)|\bwe've\s+had|\b(?:clients?|customers?|partners?)\s+with)\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined|at\s+least)\s+)?$`,
 );
 
 /**
@@ -551,7 +551,7 @@ function isCompanyBoast(lower: string, start: number, end: number): boolean {
   // "With (over) 20 years of experience, we help brands grow." — but not "…, our
   // ideal candidate will lead", so after "our" the subject must be the company.
   return (
-    /^\s*with\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined)\s+)?$/.test(before) &&
+    /^\s*with\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined|at\s+least)\s+)?$/.test(before) &&
     new RegExp(String.raw`^[^.!?\n,]{0,40},\s*(?:we\b|our\s+(?:\w+\s+)?${BOAST_OWNER}\b)`).test(lower.slice(end))
   );
 }
@@ -563,25 +563,59 @@ function extractExperience(text: string): { required: string | null; preferred: 
   // match as "5"). This is only a cheap backstop now — the real guard against
   // company-age numbers ("For more than 50 years, we have…") is that we only read
   // a number when it sits next to a requirement cue (findNear) or a labelled field.
-  const YR = '(?<![\\d.])(20|1[0-9]|[1-9])(?!\\d)\\s*\\+?\\s*(?:to|–|—|-)?\\s*(\\d{1,2})?\\+?\\s*years?';
+  // Longer forms come first, and the unit has to end on a word boundary.
+  // Otherwise "yr" matches inside "yrs" / "years" and the contract lookahead
+  // sees a leftover s ("3 yrs contract required", #434 review).
+  const YR =
+    '(?<![\\d.])(20|1[0-9]|[1-9])(?!\\d)\\s*\\+?\\s*(?:to|–|—|-)?\\s*(\\d{1,2})?\\+?\\s*(?:years|yrs|year|yr)\\b(?!\\s*contracts?\\b)';
   const fmt = (m: RegExpMatchArray): string =>
     m[2] && m[2] !== m[1] ? `${m[1]}–${m[2]} yrs` : `${m[1]}+ yrs`;
 
-  const findNear = (cues: string): string | null => {
-    // Prefer "N years <cue>" (the common phrasing) over "<cue> … N years".
-    // Keep the windows tight so a cue binds to the adjacent number, not one a
-    // clause away ("8 years preferred, 5 years required").
-    const after = lower.match(new RegExp(`${YR}[^.!?]{0,12}?(?:${cues})`));
-    if (after) return fmt(after);
-    const before = lower.match(new RegExp(`(?:${cues})[^.!?]{0,20}?${YR}`));
-    return before ? fmt(before) : null;
+  // A preference word bound to this figure, still in the same clause. Words that
+  // name the kind of experience may sit between the number and that word
+  // ("8 years of relevant experience preferred"). A comma or semicolon already
+  // ended the clause.
+  const preferenceFollows = (end: number): boolean => {
+    const after = lower.slice(end).split(/[.!?\n,;]/, 1)[0] ?? '';
+    return /^\s*(?:(?:of|relevant|professional|experience|exp)\s+)*(?:(?:is|are)\s+)?(?:preferred|a plus|nice to have|ideally|desirable)\b/.test(
+      after,
+    );
   };
 
   // Labelled fields win — they're the explicit answer and catch non-numeric values.
-  const preferred =
-    labeledExperience(lower, 'preferred') ?? findNear('preferred|a plus|nice to have|ideally|desirable');
+  let preferred: string | null = labeledExperience(lower, 'preferred');
+  const findNear = (cues: string, asRequired = false): string | null => {
+    // Prefer "N years <cue>" (the common phrasing) over "<cue> … N years".
+    // Keep the windows tight so a cue binds to the adjacent number, not one a
+    // clause away ("8 years preferred, 5 years required"). Skip a company boast
+    // and keep looking, so the boast does not hide a later requirement.
+    const accept = (m: RegExpMatchArray): string | null => {
+      const start = m.index ?? 0;
+      const end = start + m[0].length;
+      if (isCompanyBoast(lower, start, end)) return null;
+      if (asRequired && preferenceFollows(end)) {
+        preferred ??= fmt(m);
+        return null;
+      }
+      return fmt(m);
+    };
+    // `.` `!` `?` and `;` end the clause. Stop before another year count too,
+    // so "15 yrs; 5 yrs required" is not one match that hides the later figure.
+    const gap = String.raw`(?:(?!\d+\s*\+?\s*(?:to|–|—|-)?\s*(?:\d{1,2})?\+?\s*(?:years|yrs|year|yr)\b)[^.!?;])`;
+    for (const m of lower.matchAll(new RegExp(`${YR}${gap}{0,12}?(?:${cues})`, 'g'))) {
+      const hit = accept(m);
+      if (hit) return hit;
+    }
+    for (const m of lower.matchAll(new RegExp(`(?:${cues})${gap}{0,20}?${YR}`, 'g'))) {
+      const hit = accept(m);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  preferred ??= findNear('preferred|a plus|nice to have|ideally|desirable');
   let required =
-    labeledExperience(lower, 'required') ?? findNear('minimum|min\\.?|at least|required|must have|or more');
+    labeledExperience(lower, 'required') ??
+    findNear('minimum|min\\.?|at least|required|must have|or more', true);
   // "N years of experience" — the common requirement phrasing, where the number is
   // bound directly to "experience" (the anchoring cue). The YR cap (≤20) rejects
   // company-age numbers like "50 years…"; "industry" is intentionally NOT a cue
@@ -597,6 +631,14 @@ function extractExperience(text: string): { required: string | null; preferred: 
     );
     for (const m of generic) {
       if (isCompanyBoast(lower, m.index, m.index + m[0].length)) continue;
+      // "8 years of experience preferred" sits outside findNear's short window.
+      // Only a preference word bound to this figure counts. A comma, semicolon,
+      // or sentence end starts a different clause ("5 years of experience,
+      // ideally with Python" stays required).
+      if (preferenceFollows(m.index + m[0].length)) {
+        preferred ??= fmt(m);
+        continue;
+      }
       required = fmt(m);
       break;
     }
