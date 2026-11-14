@@ -632,6 +632,35 @@ describe('analyze — experience extraction', () => {
       expect(analyze('Our founders have over 15 yrs of experience in logistics.').experience.required).toBeNull();
     });
 
+    it('does not read a contract length or a company at least as experience', () => {
+      for (const text of [
+        '3 yr contract required.',
+        '3 year contract required.',
+        'Our founders have at least 15 yrs of experience in logistics.',
+        'Our founders have at least 15 years of experience in logistics.',
+      ]) {
+        expect(analyze(text).experience.required, text).toBeNull();
+      }
+    });
+
+    it('keeps a preference on the same figure out of the required slot', () => {
+      expect(analyze('8 years of experience preferred.').experience).toEqual({
+        required: null,
+        preferred: '8+ yrs',
+      });
+      expect(analyze('8 yrs of experience preferred.').experience).toEqual({
+        required: null,
+        preferred: '8+ yrs',
+      });
+      expect(analyze('5 years of experience required. 8 years preferred.').experience).toEqual({
+        required: '5+ yrs',
+        preferred: '8+ yrs',
+      });
+      expect(analyze('We are looking for someone with at least 5 years of experience.').experience.required).toBe(
+        '5+ yrs',
+      );
+    });
+
     it('still ignores a decimal count and a parenthetical numeral', () => {
       expect(analyze('1.5 yrs of experience required.').experience.required).toBeNull();
       expect(analyze('Five (5) years of experience required.').experience.required).toBeNull();

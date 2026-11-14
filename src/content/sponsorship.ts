@@ -537,7 +537,7 @@ function labeledExperience(lower: string, kind: 'required' | 'preferred'): strin
 const BOAST_OWNER =
   '(?:team|founders?|company|staff|engineers?|leadership|people|experts?|firm|agency|partners?)';
 const BOAST_SUBJECT = new RegExp(
-  String.raw`(?:\bour\s+(?:\w+\s+)?${BOAST_OWNER}\s+(?:has|have|brings?|combines?|offers?)|\bwe\s+(?:have|bring|offer)|\bwe've\s+had|\b(?:clients?|customers?|partners?)\s+with)\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined)\s+)?$`,
+  String.raw`(?:\bour\s+(?:\w+\s+)?${BOAST_OWNER}\s+(?:has|have|brings?|combines?|offers?)|\bwe\s+(?:have|bring|offer)|\bwe've\s+had|\b(?:clients?|customers?|partners?)\s+with)\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined|at\s+least)\s+)?$`,
 );
 
 /**
@@ -563,7 +563,9 @@ function extractExperience(text: string): { required: string | null; preferred: 
   // match as "5"). This is only a cheap backstop now — the real guard against
   // company-age numbers ("For more than 50 years, we have…") is that we only read
   // a number when it sits next to a requirement cue (findNear) or a labelled field.
-  const YR = '(?<![\\d.])(20|1[0-9]|[1-9])(?!\\d)\\s*\\+?\\s*(?:to|–|—|-)?\\s*(\\d{1,2})?\\+?\\s*(?:years?|yrs?)';
+  // `yrs?` is the abbreviation from #434. A following "contract" is a term length,
+  // not experience, so neither spelling may consume it ("3 yr contract required").
+  const YR = '(?<![\\d.])(20|1[0-9]|[1-9])(?!\\d)\\s*\\+?\\s*(?:to|–|—|-)?\\s*(\\d{1,2})?\\+?\\s*(?:years?|yrs?)(?!\\s*contracts?\\b)';
   const fmt = (m: RegExpMatchArray): string =>
     m[2] && m[2] !== m[1] ? `${m[1]}–${m[2]} yrs` : `${m[1]}+ yrs`;
 
@@ -571,14 +573,17 @@ function extractExperience(text: string): { required: string | null; preferred: 
     // Prefer "N years <cue>" (the common phrasing) over "<cue> … N years".
     // Keep the windows tight so a cue binds to the adjacent number, not one a
     // clause away ("8 years preferred, 5 years required").
+    const accept = (m: RegExpMatchArray | null): string | null =>
+      m && !isCompanyBoast(lower, m.index ?? 0, (m.index ?? 0) + m[0].length) ? fmt(m) : null;
     const after = lower.match(new RegExp(`${YR}[^.!?]{0,12}?(?:${cues})`));
-    if (after) return fmt(after);
+    const fromAfter = accept(after);
+    if (fromAfter) return fromAfter;
     const before = lower.match(new RegExp(`(?:${cues})[^.!?]{0,20}?${YR}`));
-    return before ? fmt(before) : null;
+    return accept(before);
   };
 
   // Labelled fields win — they're the explicit answer and catch non-numeric values.
-  const preferred =
+  let preferred =
     labeledExperience(lower, 'preferred') ?? findNear('preferred|a plus|nice to have|ideally|desirable');
   let required =
     labeledExperience(lower, 'required') ?? findNear('minimum|min\\.?|at least|required|must have|or more');
@@ -597,6 +602,16 @@ function extractExperience(text: string): { required: string | null; preferred: 
     );
     for (const m of generic) {
       if (isCompanyBoast(lower, m.index, m.index + m[0].length)) continue;
+      // "8 years of experience preferred" sits outside findNear's short window,
+      // so this fallback used to report it as required. A preference cue on this
+      // same figure stays preferred. A later requirement cue still wins.
+      const after = lower.slice(m.index + m[0].length, m.index + m[0].length + 40);
+      const prefAt = after.search(/\b(?:preferred|a plus|nice to have|ideally|desirable)\b/);
+      const reqAt = after.search(/\b(?:required|minimum|must have)\b/);
+      if (prefAt !== -1 && (reqAt === -1 || prefAt < reqAt)) {
+        preferred ??= fmt(m);
+        continue;
+      }
       required = fmt(m);
       break;
     }
