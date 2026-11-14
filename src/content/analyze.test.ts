@@ -665,6 +665,8 @@ describe('analyze — experience extraction', () => {
         required: '5+ yrs',
         preferred: '8+ yrs',
       });
+      expect(analyze('5 years of experience, ideally with Python.').experience.required).toBe('5+ yrs');
+      expect(analyze("3+ years of experience; bachelor's degree preferred.").experience.required).toBe('3+ yrs');
     });
 
     it('still ignores a decimal count and a parenthetical numeral', () => {

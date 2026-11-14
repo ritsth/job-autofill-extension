@@ -602,13 +602,12 @@ function extractExperience(text: string): { required: string | null; preferred: 
     );
     for (const m of generic) {
       if (isCompanyBoast(lower, m.index, m.index + m[0].length)) continue;
-      // "8 years of experience preferred" sits outside findNear's short window,
-      // so this fallback used to report it as required. A preference cue on this
-      // same figure stays preferred. A later requirement cue still wins.
-      const after = lower.slice(m.index + m[0].length).split(/[.!?\n]/, 1)[0] ?? '';
-      const prefAt = after.search(/\b(?:preferred|a plus|nice to have|ideally|desirable)\b/);
-      const reqAt = after.search(/\b(?:required|minimum|must have)\b/);
-      if (prefAt !== -1 && (reqAt === -1 || prefAt < reqAt)) {
+      // "8 years of experience preferred" sits outside findNear's short window.
+      // Only a preference word bound to this figure counts. A comma, semicolon,
+      // or sentence end starts a different clause ("5 years of experience,
+      // ideally with Python" stays required).
+      const after = lower.slice(m.index + m[0].length).split(/[.!?\n,;]/, 1)[0] ?? '';
+      if (/^\s*(?:(?:is|are)\s+)?(?:preferred|a plus|nice to have|ideally|desirable)\b/.test(after)) {
         preferred ??= fmt(m);
         continue;
       }
