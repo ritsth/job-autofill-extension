@@ -563,7 +563,7 @@ function extractExperience(text: string): { required: string | null; preferred: 
   // match as "5"). This is only a cheap backstop now — the real guard against
   // company-age numbers ("For more than 50 years, we have…") is that we only read
   // a number when it sits next to a requirement cue (findNear) or a labelled field.
-  const YR = '(?<![\\d.])(20|1[0-9]|[1-9])(?!\\d)\\s*\\+?\\s*(?:to|–|—|-)?\\s*(\\d{1,2})?\\+?\\s*years?';
+  const YR = '(?<![\\d.])(20|1[0-9]|[1-9])(?!\\d)\\s*\\+?\\s*(?:to|–|—|-)?\\s*(\\d{1,2})?\\+?\\s*(?:years?|yrs?)';
   const fmt = (m: RegExpMatchArray): string =>
     m[2] && m[2] !== m[1] ? `${m[1]}–${m[2]} yrs` : `${m[1]}+ yrs`;
 

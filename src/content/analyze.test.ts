@@ -610,6 +610,33 @@ describe('analyze — experience extraction', () => {
       expect(a.experience.required).toBe('6+ yrs');
     });
   });
+
+  // The prose matcher ended on `years?`, so a posting that wrote the unit as
+  // `yrs` or `yr` produced no badge figure. The labelled-field path already
+  // accepted the abbreviation, and the badge itself prints `N+ yrs` (#434).
+  describe('an abbreviated year unit still counts (#434)', () => {
+    it('reads yrs and yr in the same places as years', () => {
+      for (const [text, want] of [
+        ['3+ yrs experience required.', '3+ yrs'],
+        ['Minimum 5 yrs of experience.', '5+ yrs'],
+        ['3-5 yrs experience required.', '3–5 yrs'],
+        ['2 yr experience required.', '2+ yrs'],
+        ['5+ Yrs experience required.', '5+ yrs'],
+        ['3+ years experience required.', '3+ yrs'],
+      ] as const) {
+        expect(analyze(text).experience.required, text).toBe(want);
+      }
+    });
+
+    it('does not treat a company boast written with yrs as a requirement', () => {
+      expect(analyze('Our founders have over 15 yrs of experience in logistics.').experience.required).toBeNull();
+    });
+
+    it('still ignores a decimal count and a parenthetical numeral', () => {
+      expect(analyze('1.5 yrs of experience required.').experience.required).toBeNull();
+      expect(analyze('Five (5) years of experience required.').experience.required).toBeNull();
+    });
+  });
 });
 
 describe('the AI eligibility budget survives the downstream prompt cut', () => {
