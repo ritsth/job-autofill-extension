@@ -13,6 +13,23 @@ describe('documentFilename', () => {
     );
   });
 
+  describe.each(['NFC', 'NFD'] as const)('accented Latin names in %s form', (form) => {
+    it.each([
+      ['Société Générale', 'Ingénieur Logiciel', 'societe-generale-ingenieur-logiciel'],
+      ['Nestlé', 'Engineer', 'nestle-engineer'],
+      ['Zürich Insurance', 'Engineer', 'zurich-insurance-engineer'],
+    ])('preserves the base letters in %s', (company, role, slug) => {
+      expect(documentFilename('cover-letter', company.normalize(form), role.normalize(form))).toBe(
+        `cover-letter-${slug}`,
+      );
+    });
+  });
+
+  it('keeps the existing fallback for names without ASCII base letters', () => {
+    expect(documentFilename('resume', 'トヨタ', '')).toBe('resume');
+    expect(documentFilename('resume', 'トヨタ', 'Engineer')).toBe('resume-engineer');
+  });
+
   it('collapses special characters to single hyphens and trims leading/trailing hyphens', () => {
     expect(documentFilename('doc', 'Acme & Corp!!', 'Software   Engineer')).toBe(
       'doc-acme-corp-software-engineer',
@@ -53,5 +70,17 @@ describe('documentFilename', () => {
     // 59 'a's + '-' + 50 'b's = 110 chars; slice(0, 60) yields 'a'.repeat(59) + '-',
     // a hyphen the earlier trim ran too soon to see.
     expect(documentFilename('doc', 'a'.repeat(59), 'b'.repeat(50))).toBe(`doc-${'a'.repeat(59)}`);
+  });
+
+  it('applies the 60-character slug cap after stripping accents', () => {
+    expect(documentFilename('resume', 'é'.repeat(50), 'ü'.repeat(50))).toBe(
+      `resume-${'e'.repeat(50)}-${'u'.repeat(9)}`,
+    );
+  });
+
+  it('trims a trailing separator exposed by the cap after stripping accents', () => {
+    expect(documentFilename('cover-letter', 'é'.repeat(59), 'Engineer')).toBe(
+      `cover-letter-${'e'.repeat(59)}`,
+    );
   });
 });
