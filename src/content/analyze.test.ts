@@ -581,6 +581,7 @@ describe('analyze — experience extraction', () => {
         'With more than 12 years of experience, our team delivers.',
         'Our software engineering team has over 15 years of experience.',
         'Our full-stack engineers bring 9 years of experience in fintech.',
+        'Founded in 2010, our team has 14 years of experience in retail.',
         'With over 10 years of experience, our design and research team ships fast.',
         'Our team brings 12 years of experience building payment systems.',
         'Trusted by clients with 10 years of experience in the market.',
@@ -602,6 +603,8 @@ describe('analyze — experience extraction', () => {
         ['Minimum 5 years of professional experience required.', '5+ yrs'],
         ['With 5 years of experience, our ideal candidate will lead the engineering team.', '5+ yrs'],
         ['Join our software engineering team if you have 4 years of experience.', '4+ yrs'],
+        ['Candidates for our software engineering team have 4 years of experience.', '4+ yrs'],
+        ['Applicants joining our team have 3 years of experience in QA.', '3+ yrs'],
       ] as const) {
         expect(analyze(text).experience.required, text).toBe(want);
       }
