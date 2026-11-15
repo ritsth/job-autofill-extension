@@ -536,6 +536,7 @@ function labeledExperience(lower: string, kind: 'required' | 'preferred'): strin
 // before the number, so a company-voice sentence about the hire doesn't match.
 // "our …" must also OPEN its clause, so it is the subject and not a phrase
 // inside the applicant's ("Candidates for our engineering team have 4 years").
+// A list bullet may sit before it ("• Our team has 15 years…").
 const BOAST_OWNER =
   '(?:team|founders?|company|staff|engineers?|leadership|people|experts?|firm|agency|partners?)';
 // Up to three words between "our" and the owner: "our software engineering
@@ -543,7 +544,7 @@ const BOAST_OWNER =
 // what makes it a boast, so the modifiers themselves can be anything.
 const BOAST_MODIFIERS = String.raw`(?:[\w-]+\s+){0,3}`;
 const BOAST_SUBJECT = new RegExp(
-  String.raw`(?:(?:^|[,;:]|\b(?:and|but|so)\b)\s*our\s+${BOAST_MODIFIERS}${BOAST_OWNER}\s+(?:has|have|brings?|combines?|offers?)|\bwe\s+(?:have|bring|offer)|\bwe've\s+had|\b(?:clients?|customers?|partners?)\s+with)\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined)\s+)?$`,
+  String.raw`(?:(?:^\s*[-–—•*·▪◦‣]?|[,;:]|\b(?:and|but|so)\b)\s*our\s+${BOAST_MODIFIERS}${BOAST_OWNER}\s+(?:has|have|brings?|combines?|offers?)|\bwe\s+(?:have|bring|offer)|\bwe've\s+had|\b(?:clients?|customers?|partners?)\s+with)\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined)\s+)?$`,
 );
 
 /**
