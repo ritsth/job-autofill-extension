@@ -582,6 +582,8 @@ describe('analyze — experience extraction', () => {
         'Our software engineering team has over 15 years of experience.',
         'Our full-stack engineers bring 9 years of experience in fintech.',
         'Founded in 2010, our team has 14 years of experience in retail.',
+        '• Our team has 15 years of experience.',
+        'About us\n- Our founders have 12 years of experience in logistics.',
         'With over 10 years of experience, our design and research team ships fast.',
         'Our team brings 12 years of experience building payment systems.',
         'Trusted by clients with 10 years of experience in the market.',
