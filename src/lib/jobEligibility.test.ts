@@ -88,6 +88,33 @@ describe('parseEligibilityJson', () => {
     expect(result.experience).toEqual({ required: '3+ yrs', preferred: '5+ yrs' });
   });
 
+  it.each([
+    ['3', '3+ yrs'],
+    [' 3 ', '3+ yrs'],
+    ['5+', '5+ yrs'],
+    ['003+', '3+ yrs'],
+    ['9007199254740993', '9007199254740993+ yrs'],
+    ['9007199254740993+', '9007199254740993+ yrs'],
+    ['0', null],
+    ['0+', null],
+    ['000+', null],
+  ])('normalizes the quoted year count %j', (count, expected) => {
+    const result = parseEligibilityJson(
+      JSON.stringify({ experienceRequired: count, experiencePreferred: count }),
+    );
+    expect(result.experience).toEqual({ required: expected, preferred: expected });
+  });
+
+  it.each(['3+ years', '2-4 years', 'None', 'New grad', '3.5', '-2'])(
+    'keeps the experience description %j',
+    (description) => {
+      const result = parseEligibilityJson(
+        JSON.stringify({ experienceRequired: description, experiencePreferred: description }),
+      );
+      expect(result.experience).toEqual({ required: description, preferred: description });
+    },
+  );
+
   it('treats zero, negative and non-finite year counts as absent', () => {
     // "0+ yrs required" would be noise; null lets the local extractor answer.
     const result = parseEligibilityJson(
