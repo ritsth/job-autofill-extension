@@ -431,6 +431,9 @@ describe('RULES — the remaining field rules, against realistic concatenated la
     'How did you hear about us? company website',
     'How did you hear about us? GitHub',
     'How did you find out about our opening? e.g. portfolio',
+    'How did you hear about Acme? (e.g. LinkedIn)',
+    'How did you learn about Acme? (e.g. GitHub)',
+    'Where did you find Acme’s posting? (e.g. company website)',
   ])('leaves the referral question "%s" unfilled by profile rules', (label) => {
     expect(valueFor(label)).toBeUndefined();
   });

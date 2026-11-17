@@ -121,7 +121,7 @@ interface Rule {
 }
 
 // Referral questions can list sites or "company website" as answer examples.
-const REFERRAL_QUESTION_GUARD = String.raw`^(?!.*\b(?:how|where)\s+did\s+you\s+(?:(?:hear|learn)\s+(?:about|of)|find(?:\s+out\s+about)?)\s+(?:us|this|the|our)\b)`;
+const REFERRAL_QUESTION_GUARD = String.raw`^(?!.*\b(?:how|where)\s+did\s+you\s+(?:(?:hear|learn)\s+(?:about|of)|find)\b)`;
 
 // Ordered: earlier, more specific rules win.
 // Exported for tests: matchRule() needs a real element, so the rule table is the
