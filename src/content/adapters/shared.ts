@@ -120,6 +120,9 @@ interface Rule {
   value: (p: Profile) => string;
 }
 
+// Referral questions can list sites or "company website" as answer examples.
+const REFERRAL_QUESTION_GUARD = String.raw`^(?!.*\b(?:how|where)\s+did\s+you\s+(?:(?:hear|learn)\s+(?:about|of)|find(?:\s+out\s+about)?)\s+(?:us|this|the|our)\b)`;
+
 // Ordered: earlier, more specific rules win.
 // Exported for tests: matchRule() needs a real element, so the rule table is the
 // only way to exercise the regexes and their precedence under `environment: node`.
@@ -146,15 +149,21 @@ export const RULES: Rule[] = [
     test: /\b(?:tele)?phone\b|\btel\b|^(?!.*\bmobile\s+(?:apps?|applications?|development|developers?|engineering|engineers?|platforms?|devices?|experience|projects?|games?|products?|teams?|ui|ux)\b).*\bmobile\b/,
     value: (p) => p.personal.phone,
   },
-  { test: /\blinkedin\b/, value: (p) => p.personal.linkedin },
-  { test: /\bgithub\b/, value: (p) => p.personal.github },
+  {
+    test: new RegExp(String.raw`${REFERRAL_QUESTION_GUARD}.*\blinkedin\b`),
+    value: (p) => p.personal.linkedin,
+  },
+  {
+    test: new RegExp(String.raw`${REFERRAL_QUESTION_GUARD}.*\bgithub\b`),
+    value: (p) => p.personal.github,
+  },
   // "Describe A website... you admire" is asking about someone ELSE's site, not
   // requesting the applicant's own — the referent-flip failure #230 fixed for
   // company/title, recurring here under a different trigger word. "Do you have
   // a website?" must still fill: the indefinite article alone isn't the signal,
   // the opinion verb is.
   {
-    test: /^(?!.*\b(?:admire|inspir\w*|like (?:the )?most)\b).*\b(portfolio|website|personal site)\b/,
+    test: new RegExp(String.raw`${REFERRAL_QUESTION_GUARD}(?!.*\b(?:admire|inspir\w*|like (?:the )?most)\b).*\b(portfolio|website|personal site)\b`),
     value: (p) => p.personal.portfolio,
   },
   // "Which city are you most excited to explore?" and "What city is our office
@@ -188,7 +197,7 @@ export const RULES: Rule[] = [
   // than anchored to one match attempt, closes that gap; "current" is optional
   // inside it for the same reason.
   {
-    test: /^(?!.*\b(?:this|the|that|our|a|an)\s+(?:current\s+)?(?:company|employer)\b).*?\b(current\s*)?(company|employer)\b/,
+    test: new RegExp(String.raw`${REFERRAL_QUESTION_GUARD}(?!.*\b(?:this|the|that|our|a|an)\s+(?:current\s+)?(?:company|employer)\b).*?\b(current\s*)?(company|employer)\b`),
     value: (p) => p.workHistory[0]?.company ?? '',
   },
   {
