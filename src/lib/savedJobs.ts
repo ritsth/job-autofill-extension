@@ -83,13 +83,36 @@ export interface AddJobResult extends SavedJobsState {
   evicted: SavedJob[];
 }
 
+/**
+ * Comparison key for a captured posting URL. Drops the fragment and only the
+ * tracking parameters `utm_*` and `gh_src`. Other query parameters stay, so
+ * `?gh_jid=1` and `?gh_jid=2` are different jobs. A string that does not parse
+ * is returned unchanged. Callers still store the full captured URL.
+ */
+export function jobUrlKey(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  parsed.hash = '';
+  for (const key of [...parsed.searchParams.keys()]) {
+    if (key === 'gh_src' || key.startsWith('utm_')) {
+      parsed.searchParams.delete(key);
+    }
+  }
+  return parsed.toString();
+}
+
 /** Adds or refreshes a captured job (newest first), makes it active, and returns the state. */
 export async function addJob(
   partial: Omit<SavedJob, 'id' | 'savedAt'>,
 ): Promise<AddJobResult> {
   return mutateSavedJobs(async () => {
     const state = await getSavedJobs();
-    const existing = state.jobs.find((saved) => saved.url === partial.url);
+    const incomingKey = jobUrlKey(partial.url);
+    const existing = state.jobs.find((saved) => jobUrlKey(saved.url) === incomingKey);
     const keptExistingText = existing !== undefined;
     const truncated = !keptExistingText && isJobTextTruncated(partial.text);
     let job: SavedJob;
@@ -107,7 +130,7 @@ export async function addJob(
         savedAt: Date.now(),
       };
       // Also heal duplicates created by releases that always minted a new id.
-      all = [job, ...state.jobs.filter((saved) => saved.url !== partial.url)];
+      all = [job, ...state.jobs.filter((saved) => jobUrlKey(saved.url) !== incomingKey)];
     } else {
       if (truncated) {
         console.warn(
