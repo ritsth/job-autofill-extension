@@ -534,10 +534,17 @@ function labeledExperience(lower: string, kind: 'required' | 'preferred'): strin
 // The company or its people as the owner of a year count: "our founders have
 // over", "our team brings", "we have", "clients with". Each must END right
 // before the number, so a company-voice sentence about the hire doesn't match.
+// "our …" must also OPEN its clause, so it is the subject and not a phrase
+// inside the applicant's ("Candidates for our engineering team have 4 years").
+// A list bullet may sit before it ("• Our team has 15 years…").
 const BOAST_OWNER =
   '(?:team|founders?|company|staff|engineers?|leadership|people|experts?|firm|agency|partners?)';
+// Up to three words between "our" and the owner: "our software engineering
+// team", "our full-stack engineers". The owner noun plus the adjacent verb is
+// what makes it a boast, so the modifiers themselves can be anything.
+const BOAST_MODIFIERS = String.raw`(?:[\w-]+\s+){0,3}`;
 const BOAST_SUBJECT = new RegExp(
-  String.raw`(?:\bour\s+(?:\w+\s+)?${BOAST_OWNER}\s+(?:has|have|brings?|combines?|offers?)|\bwe\s+(?:have|bring|offer)|\bwe've\s+had|\b(?:clients?|customers?|partners?)\s+with)\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined|at\s+least)\s+)?$`,
+  String.raw`(?:(?:^\s*[-–—•*·▪◦‣]?|[,;:]|\b(?:and|but|so)\b)\s*our\s+${BOAST_MODIFIERS}${BOAST_OWNER}\s+(?:has|have|brings?|combines?|offers?)|\bwe\s+(?:have|bring|offer)|\bwe've\s+had|\b(?:clients?|customers?|partners?)\s+with)\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined|at\s+least)\s+)?$`,
 );
 
 /**
@@ -552,7 +559,7 @@ function isCompanyBoast(lower: string, start: number, end: number): boolean {
   // ideal candidate will lead", so after "our" the subject must be the company.
   return (
     /^\s*with\s+(?:(?:over|more\s+than|nearly|almost|about|a\s+combined|at\s+least)\s+)?$/.test(before) &&
-    new RegExp(String.raw`^[^.!?\n,]{0,40},\s*(?:we\b|our\s+(?:\w+\s+)?${BOAST_OWNER}\b)`).test(lower.slice(end))
+    new RegExp(String.raw`^[^.!?\n,]{0,40},\s*(?:we\b|our\s+${BOAST_MODIFIERS}${BOAST_OWNER}\b)`).test(lower.slice(end))
   );
 }
 
