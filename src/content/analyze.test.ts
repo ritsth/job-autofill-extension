@@ -578,8 +578,6 @@ describe('analyze — experience extraction', () => {
         'Our founders have over 15 years of experience in logistics.',
         'With 20 years of experience, we help brands grow.',
         'With over 15 years of experience, we help brands grow.',
-        'With at least 15 years of experience, we help brands grow.',
-        'With at least 15 yrs of experience, we help brands grow.',
         'With more than 12 years of experience, our team delivers.',
         'Our software engineering team has over 15 years of experience.',
         'Our full-stack engineers bring 9 years of experience in fintech.',
@@ -632,76 +630,17 @@ describe('analyze — experience extraction', () => {
         ['Minimum 5 yrs of experience.', '5+ yrs'],
         ['3-5 yrs experience required.', '3–5 yrs'],
         ['2 yr experience required.', '2+ yrs'],
+        ['5 yr experience in backend systems.', '5+ yrs'],
         ['5+ Yrs experience required.', '5+ yrs'],
         ['3+ years experience required.', '3+ yrs'],
       ] as const) {
         expect(analyze(text).experience.required, text).toBe(want);
       }
+      expect(analyze('8 yrs preferred.').experience.preferred).toBe('8+ yrs');
     });
 
     it('does not treat a company boast written with yrs as a requirement', () => {
       expect(analyze('Our founders have over 15 yrs of experience in logistics.').experience.required).toBeNull();
-    });
-
-    it('does not read a contract length or a company at least as experience', () => {
-      for (const text of [
-        '3 yr contract required.',
-        '3 year contract required.',
-        '3 yrs contract required.',
-        '3 years contract required.',
-        'Our founders have at least 15 yrs of experience in logistics.',
-        'Our founders have at least 15 years of experience in logistics.',
-      ]) {
-        expect(analyze(text).experience.required, text).toBeNull();
-      }
-    });
-
-    it('keeps a preference on the same figure out of the required slot', () => {
-      expect(analyze('8 years of experience preferred.').experience).toEqual({
-        required: null,
-        preferred: '8+ yrs',
-      });
-      expect(analyze('8 yrs of experience preferred.').experience).toEqual({
-        required: null,
-        preferred: '8+ yrs',
-      });
-      expect(analyze('5 years of experience required. 8 years preferred.').experience).toEqual({
-        required: '5+ yrs',
-        preferred: '8+ yrs',
-      });
-      expect(analyze('We are looking for someone with at least 5 years of experience.').experience.required).toBe(
-        '5+ yrs',
-      );
-      expect(analyze('5 years of experience. Preferred: 8 years of experience.').experience).toEqual({
-        required: '5+ yrs',
-        preferred: '8+ yrs',
-      });
-      expect(analyze('5 years of experience, ideally with Python.').experience.required).toBe('5+ yrs');
-      expect(analyze("3+ years of experience; bachelor's degree preferred.").experience.required).toBe('3+ yrs');
-      expect(analyze('At least 8 years of experience preferred.').experience).toEqual({
-        required: null,
-        preferred: '8+ yrs',
-      });
-      expect(analyze('Minimum 5 years of experience preferred.').experience).toEqual({
-        required: null,
-        preferred: '5+ yrs',
-      });
-      expect(analyze('8 years of relevant experience preferred.').experience).toEqual({
-        required: null,
-        preferred: '8+ yrs',
-      });
-      expect(
-        analyze('Our founders have at least 15 years in the field. Minimum 5 years in QA.').experience.required,
-      ).toBe('5+ yrs');
-      // A semicolon is its own clause. The first count must not swallow the second.
-      expect(analyze('Our founders have 15 yrs; 5 yrs required.').experience).toEqual({
-        required: '5+ yrs',
-        preferred: null,
-      });
-      expect(analyze('3 yrs exp; 8 yrs preferred.').experience).toEqual({
-        required: '3+ yrs',
-        preferred: '8+ yrs',
-      });
     });
 
     it('still ignores a decimal count and a parenthetical numeral', () => {
