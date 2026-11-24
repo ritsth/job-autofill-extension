@@ -424,6 +424,34 @@ describe('RULES — the remaining field rules, against realistic concatenated la
     expect(valueFor('Portfolio portfolio')).toBe('ada.dev');
   });
 
+  it.each([
+    'How did you hear about us? LinkedIn, Indeed, referral, other',
+    'Where did you find this posting? (e.g. LinkedIn, company website)',
+    'How did you learn about this role? e.g. LinkedIn',
+    'How did you hear about us? company website',
+    'How did you hear about us? GitHub',
+    'How did you find out about our opening? e.g. portfolio',
+    'How did you hear about Acme? (e.g. LinkedIn)',
+    'How did you learn about Acme? (e.g. GitHub)',
+    'Where did you find Acme’s posting? (e.g. company website)',
+  ])('leaves the referral question "%s" unfilled by profile rules', (label) => {
+    expect(valueFor(label)).toBeUndefined();
+  });
+
+  it.each([
+    ['LinkedIn', 'linkedin.com/in/ada'],
+    ['LinkedIn profile URL', 'linkedin.com/in/ada'],
+    ['LinkedIn URL', 'linkedin.com/in/ada'],
+    ['GitHub profile', 'github.com/ada'],
+    ['Website', 'ada.dev'],
+    ['Portfolio', 'ada.dev'],
+    ['Do you have a website?', 'ada.dev'],
+    ['Where can we find the URL for your GitHub profile?', 'github.com/ada'],
+    ['Current Company', 'Acme'],
+  ])('still fills the standard profile field "%s"', (label, expected) => {
+    expect(valueFor(label)).toBe(expected);
+  });
+
   it('resolves the location rules', () => {
     expect(valueFor('City city candidate[city]')).toBe('Granville');
     expect(valueFor('State state candidate[state]')).toBe('Ohio');
