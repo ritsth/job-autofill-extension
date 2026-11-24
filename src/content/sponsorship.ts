@@ -501,8 +501,13 @@ function labeledExperience(lower: string, kind: 'required' | 'preferred'): strin
       : 'preferred\\s+years?\\s+of\\s+experience|years?\\s+of\\s+experience\\s+preferred';
   // The value can sit after a colon or on the next line, so \s* spans the newline.
   const m = lower.match(new RegExp(`(?:${label})\\s*[:\\-]?\\s*([^\\n.]{1,40})`));
-  const v = m?.[1]?.trim();
-  if (!v) return null;
+  const v = m?.[1]?.trim() ?? '';
+  // Genuine ATS values follow ":" or a newline (e.g. "Required Years of
+  // Experience: Bachelor's degree, 3-5 years"). If the capture begins with a
+  // comma, the label matched mid-prose after an inline year count
+  // ("5 years of experience, 8 years…") and the next figure is another clause,
+  // not this field's value (#469 / PR review).
+  if (!v || /^,/.test(v)) return null;
   if (/^(none|no)\b/.test(v) || /\bno experience\b/.test(v) || /\bnot? (required|necessary)\b/.test(v)) {
     return 'None';
   }

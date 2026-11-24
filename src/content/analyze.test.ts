@@ -705,11 +705,24 @@ describe('analyze — experience extraction', () => {
     });
 
     it('keeps separate experience figures in their own roles', () => {
-      // Second phrase carries the attached preference; labelled-required prose
-      // still reads the trailing figure the way main does today.
+      // First "years of experience" is the requirement; the comma-separated
+      // second figure is preferred. labelledExperience must not swallow the
+      // later count as the required field's value.
       expect(analyze('5 years of experience, 8 years of experience preferred.').experience).toEqual({
-        required: '8+ yrs',
+        required: '5+ yrs',
         preferred: '8+ yrs',
+      });
+    });
+
+    it('still reads ATS labelled ranges after a degree clause', () => {
+      // Explicit field labels keep comma tails like "Bachelor's degree, 3-5 years".
+      expect(analyze("Required Years of Experience: Bachelor's degree, 3-5 years.").experience).toEqual({
+        required: '3–5 yrs',
+        preferred: null,
+      });
+      expect(analyze("Preferred Years of Experience: Bachelor's degree, 3-5 years.").experience).toEqual({
+        required: '3–5 yrs',
+        preferred: '3–5 yrs',
       });
     });
 
