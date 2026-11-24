@@ -563,6 +563,13 @@ function isCompanyBoast(lower: string, start: number, end: number): boolean {
   );
 }
 
+// Preference cue immediately after a full experience noun phrase (#469).
+// Horizontal whitespace only - never a broad window across newlines/parens.
+const EXPERIENCE_PREF_CUE =
+  String.raw`(?:preferred|is[ \t]+a[ \t]+plus|a[ \t]+plus|nice[ \t]+to[ \t]+have|would[ \t]+be[ \t]+nice|ideally|desirable|bonus)`;
+const EXPERIENCE_NOUN_PHRASE =
+  String.raw`(?:[ \t]+of)?[ \t]+(?:(?:relevant|professional)[ \t]+)?experience`;
+
 /** Pulls required / preferred years-of-experience figures from the posting. */
 function extractExperience(text: string): { required: string | null; preferred: string | null } {
   const lower = text.toLowerCase();
@@ -574,6 +581,19 @@ function extractExperience(text: string): { required: string | null; preferred: 
   const fmt = (m: RegExpMatchArray): string =>
     m[2] && m[2] !== m[1] ? `${m[1]}–${m[2]} yrs` : `${m[1]}+ yrs`;
 
+  // Shared attached cue: count + experience NP + horizontal ws + preference cue.
+  // Used in the forward preferred scan and to keep the generic required fallback
+  // from claiming the same figure (#469).
+  const SHORT_PREF_CUES = 'preferred|a plus|nice to have|ideally|desirable';
+  const attachedPrefRe = new RegExp(
+    `${YR}${EXPERIENCE_NOUN_PHRASE}[ \\t]+${EXPERIENCE_PREF_CUE}\\b`,
+  );
+  const attachedPrefAtRe = new RegExp(
+    `^${YR}${EXPERIENCE_NOUN_PHRASE}[ \\t]+${EXPERIENCE_PREF_CUE}\\b`,
+  );
+  const isAttachedExperiencePreference = (fromIndex: number): boolean =>
+    attachedPrefAtRe.test(lower.slice(fromIndex));
+
   const findNear = (cues: string): string | null => {
     // Prefer "N years <cue>" (the common phrasing) over "<cue> … N years".
     // Keep the windows tight so a cue binds to the adjacent number, not one a
@@ -584,9 +604,28 @@ function extractExperience(text: string): { required: string | null; preferred: 
     return before ? fmt(before) : null;
   };
 
+  // Forward preferred: attached phrase and legacy short-form compete; earliest
+  // start wins so a later "N years of experience preferred" cannot outrank an
+  // earlier "N years preferred" (#469 review).
+  const forwardPreferred = (): RegExpMatchArray | null => {
+    const attached = lower.match(attachedPrefRe);
+    const shortAfter = lower.match(new RegExp(`${YR}[^.!?]{0,12}?(?:${SHORT_PREF_CUES})`));
+    if (attached && shortAfter) {
+      return (attached.index ?? 0) <= (shortAfter.index ?? 0) ? attached : shortAfter;
+    }
+    return attached ?? shortAfter;
+  };
+
   // Labelled fields win — they're the explicit answer and catch non-numeric values.
   const preferred =
-    labeledExperience(lower, 'preferred') ?? findNear('preferred|a plus|nice to have|ideally|desirable');
+    labeledExperience(lower, 'preferred') ??
+    (() => {
+      const forward = forwardPreferred();
+      if (forward) return fmt(forward);
+      // Legacy backwards fallback only when no forward cue matched.
+      const before = lower.match(new RegExp(`(?:${SHORT_PREF_CUES})[^.!?]{0,20}?${YR}`));
+      return before ? fmt(before) : null;
+    })();
   let required =
     labeledExperience(lower, 'required') ?? findNear('minimum|min\\.?|at least|required|must have|or more');
   // "N years of experience" — the common requirement phrasing, where the number is
@@ -598,12 +637,14 @@ function extractExperience(text: string): { required: string | null; preferred: 
   // skip a match whose number belongs to the company, not the hire (#432). Only
   // the subject bound directly to the number counts: "Join our team if you have
   // 4 years" and "We're looking for someone with 5 years" are still requirements.
+  // Skip when the same figure is an attached experience preference (#469).
   if (!required) {
     const generic = lower.matchAll(
       new RegExp(`${YR}\\s+(?:of\\s+)?(?:experience|exp\\b|professional|relevant)\\b`, 'g'),
     );
     for (const m of generic) {
       if (isCompanyBoast(lower, m.index, m.index + m[0].length)) continue;
+      if (isAttachedExperiencePreference(m.index ?? 0)) continue;
       required = fmt(m);
       break;
     }
