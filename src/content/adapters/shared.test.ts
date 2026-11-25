@@ -434,6 +434,14 @@ describe('RULES — the remaining field rules, against realistic concatenated la
     'How did you hear about Acme? (e.g. LinkedIn)',
     'How did you learn about Acme? (e.g. GitHub)',
     'Where did you find Acme’s posting? (e.g. company website)',
+    // #468: adverb / alternate-verb / referral-source variants of the same ask
+    'how did you first hear about us? (e.g. linkedin)',
+    'how did you originally hear about this role? e.g. github',
+    'where did you see this job posted? linkedin, indeed',
+    'how did you come across this role? e.g. linkedin',
+    'how did you discover us? (e.g. company website)',
+    'referral source (e.g. linkedin, company website)',
+    'how were you referred to us? linkedin',
   ])('leaves the referral question "%s" unfilled by profile rules', (label) => {
     expect(valueFor(label)).toBeUndefined();
   });
@@ -448,6 +456,10 @@ describe('RULES — the remaining field rules, against realistic concatenated la
     ['Do you have a website?', 'ada.dev'],
     ['Where can we find the URL for your GitHub profile?', 'github.com/ada'],
     ['Current Company', 'Acme'],
+    // Adjacent phrasing that mentions "see" / a site name but asks for a profile
+    ['LinkedIn profile (so we can see your experience)', 'linkedin.com/in/ada'],
+    ["Where can we see your portfolio?", 'ada.dev'],
+    ["GitHub (we'd love to see your projects)", 'github.com/ada'],
   ])('still fills the standard profile field "%s"', (label, expected) => {
     expect(valueFor(label)).toBe(expected);
   });
