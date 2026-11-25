@@ -121,7 +121,16 @@ interface Rule {
 }
 
 // Referral questions can list sites or "company website" as answer examples.
-const REFERRAL_QUESTION_GUARD = String.raw`^(?!.*\b(?:how|where)\s+did\s+you\s+(?:(?:hear|learn)\s+(?:about|of)|find)\b)`;
+// Alternatives stay separate so adverb variants ("first hear"), more discovery
+// verbs ("see" / "come across" / "discover"), and bare "referral source" labels
+// stay readable (#468). Leading negative lookahead only - rules themselves
+// keep matching genuine LinkedIn / GitHub / portfolio / current-employer fields.
+const REFERRAL_QUESTION_CUES = [
+  String.raw`(?:how|where)\s+did\s+you\s+(?:(?:first|originally|initially)\s+)?(?:(?:hear|learn)\s+(?:about|of)|find|see|discover|come\s+across)\b`,
+  String.raw`how\s+were\s+you\s+referred\b`,
+  String.raw`(?:referral\s+source|source\s+of\s+referral)\b`,
+] as const;
+const REFERRAL_QUESTION_GUARD = `^(?!.*(?:${REFERRAL_QUESTION_CUES.join('|')}))`;
 
 // Ordered: earlier, more specific rules win.
 // Exported for tests: matchRule() needs a real element, so the rule table is the
