@@ -648,6 +648,103 @@ describe('analyze — experience extraction', () => {
       expect(analyze('Five (5) years of experience required.').experience.required).toBeNull();
     });
   });
+
+  // "8 years of experience preferred" used to miss the preference cue (the
+  // findNear window is only 12 chars after the unit, and " of experience "
+  // is 15), then the generic "N years of experience" matcher claimed it as
+  // required (#469).
+  describe('a preference after "of experience" is not required (#469)', () => {
+    it('puts the figure in preferred, not required', () => {
+      for (const [text, want] of [
+        ['8 years of experience preferred.', '8+ yrs'],
+        ['5 years of experience is a plus.', '5+ yrs'],
+        ['5 years of experience would be nice.', '5+ yrs'],
+        ['3+ years of relevant experience preferred.', '3+ yrs'],
+        ['3+ years of professional experience is a plus.', '3+ yrs'],
+        ['Looking for someone with 8 years of experience preferred for this team.', '8+ yrs'],
+        ['8 years  of  experience   preferred.', '8+ yrs'],
+      ] as const) {
+        const a = analyze(text);
+        expect(a.experience.preferred, text).toBe(want);
+        expect(a.experience.required, text).toBeNull();
+      }
+    });
+
+    it('keeps short preferred forms and real requirements as they are today', () => {
+      expect(analyze('8 years preferred.').experience).toEqual({
+        required: null,
+        preferred: '8+ yrs',
+      });
+      expect(analyze('Experience: 5 years preferred').experience).toEqual({
+        required: null,
+        preferred: '5+ yrs',
+      });
+      expect(analyze('5 years of experience required.').experience).toEqual({
+        required: '5+ yrs',
+        preferred: null,
+      });
+      expect(analyze('8 years preferred, 5 years required.').experience).toEqual({
+        required: '5+ yrs',
+        preferred: '8+ yrs',
+      });
+    });
+
+    it('does not bind an unrelated preferred subject near the experience phrase', () => {
+      for (const text of [
+        '5 years of experience. Python preferred.',
+        '5 years of experience, Python preferred.',
+        '5 years of experience\nAWS preferred.',
+        '5 years of experience\r\nAWS preferred.',
+        '5 years of experience (AWS preferred).',
+      ]) {
+        expect(analyze(text).experience, text).toEqual({
+          required: '5+ yrs',
+          preferred: null,
+        });
+      }
+    });
+
+    it('keeps separate experience figures in their own roles', () => {
+      // First "years of experience" is the requirement; the comma-separated
+      // second figure is preferred. labelledExperience must not swallow the
+      // later count as the required field's value.
+      expect(analyze('5 years of experience, 8 years of experience preferred.').experience).toEqual({
+        required: '5+ yrs',
+        preferred: '8+ yrs',
+      });
+    });
+
+    it('still reads ATS labelled ranges after a degree clause', () => {
+      // Explicit field labels keep comma tails like "Bachelor's degree, 3-5 years".
+      expect(analyze("Required Years of Experience: Bachelor's degree, 3-5 years.").experience).toEqual({
+        required: '3–5 yrs',
+        preferred: null,
+      });
+      expect(analyze("Preferred Years of Experience: Bachelor's degree, 3-5 years.").experience).toEqual({
+        required: '3–5 yrs',
+        preferred: '3–5 yrs',
+      });
+    });
+
+    it('keeps the earliest forward preference when short and attached forms mix', () => {
+      // Short-form first must not lose to a later attached phrase.
+      expect(
+        analyze('8 years preferred, 5 years required. 3 years of relevant experience preferred.')
+          .experience,
+      ).toEqual({
+        required: '5+ yrs',
+        preferred: '8+ yrs',
+      });
+      // Attached first must not lose to a later short form.
+      expect(
+        analyze('3 years of relevant experience preferred. 8 years preferred, 5 years required.')
+          .experience,
+      ).toEqual({
+        required: '5+ yrs',
+        preferred: '3+ yrs',
+      });
+    });
+  });
 });
 
 describe('the AI eligibility budget survives the downstream prompt cut', () => {
