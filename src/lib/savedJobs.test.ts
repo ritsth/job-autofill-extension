@@ -5,6 +5,7 @@ import {
   getActiveJob,
   getSavedJobs,
   isJobTextTruncated,
+  jobUrlKey,
   MAX_JOBS,
   MAX_TEXT,
   onSavedJobsChanged,
@@ -221,6 +222,84 @@ describe('addJob — duplicate URL', () => {
     expect(result.jobs[0].id).toBe('duplicate');
     expect(result.evicted).toEqual([]);
     expect(result.jobs.some((saved) => saved.id === 'old-0')).toBe(true);
+  });
+});
+
+describe('addJob — fragment and tracking parameters (#447)', () => {
+  const board = 'https://job-boards.greenhouse.io/acme/jobs/123';
+
+  it('saves the #app and tracking variants as one job', async () => {
+    const urls = [
+      board,
+      `${board}#app`,
+      `${board}?gh_src=abc&utm_source=linkedin`,
+    ];
+    let firstId = '';
+    for (const url of urls) {
+      const result = await addJob({ company: 'Acme', role: 'Engineer', url, text: 'posting' });
+      firstId ||= result.jobs[0].id;
+    }
+
+    const saved = persisted().jobs;
+    expect(saved).toHaveLength(1);
+    expect(saved[0].id).toBe(firstId);
+    // Comparison uses the key. Storage keeps the full URL from the last capture.
+    expect(saved[0].url).toBe(`${board}?gh_src=abc&utm_source=linkedin`);
+  });
+
+  it('keeps different gh_jid values as two jobs', async () => {
+    await addJob({
+      company: 'Acme',
+      role: 'Engineer',
+      url: `${board}?gh_jid=1`,
+      text: 'one',
+    });
+    await addJob({
+      company: 'Acme',
+      role: 'Engineer',
+      url: `${board}?gh_jid=2`,
+      text: 'two',
+    });
+
+    expect(persisted().jobs).toHaveLength(2);
+    expect(persisted().jobs.map((saved) => saved.url).sort()).toEqual([
+      `${board}?gh_jid=1`,
+      `${board}?gh_jid=2`,
+    ]);
+  });
+
+  it('drops utm_* and gh_src but still stores the captured gh_jid URL', async () => {
+    await addJob({
+      company: 'Acme',
+      role: 'Engineer',
+      url: `${board}?gh_jid=1&utm_source=linkedin&gh_src=abc#app`,
+      text: 'one',
+    });
+    await addJob({
+      company: 'Acme',
+      role: 'Engineer',
+      url: `${board}?gh_jid=1`,
+      text: 'again',
+    });
+    await addJob({
+      company: 'Acme',
+      role: 'Engineer',
+      url: `${board}?gh_jid=2&utm_medium=email`,
+      text: 'two',
+    });
+
+    const saved = persisted().jobs;
+    expect(saved).toHaveLength(2);
+    expect(saved.map((job) => job.url).sort()).toEqual([
+      `${board}?gh_jid=1`,
+      `${board}?gh_jid=2&utm_medium=email`,
+    ]);
+  });
+});
+
+describe('jobUrlKey (#447)', () => {
+  it('returns the input when the string does not parse', () => {
+    expect(jobUrlKey('not a url')).toBe('not a url');
   });
 });
 
